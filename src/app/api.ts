@@ -16,14 +16,23 @@ export const hooks = { onUnauthorized: (): void => {} };
 const base = (): string => window.VALET.coreUrl.replace(/\/+$/, "");
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${base()}${path}`, {
-    method,
-    credentials: "include",
-    ...(body === undefined
-      ? {}
-      : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
-  });
-  const text = await res.text();
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`${base()}${path}`, {
+      method,
+      credentials: "include",
+      signal: AbortSignal.timeout(15_000),
+      ...(body === undefined
+        ? {}
+        : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+    });
+    text = await res.text();
+  } catch {
+    // Timeout (AbortError) or dead network (TypeError) — on a dead tailnet
+    // fetch hangs forever without this, and the caller never hears back.
+    throw new ApiError(0, "Network unreachable, try again");
+  }
   let data: unknown;
   try {
     data = text === "" ? undefined : JSON.parse(text);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { trackSeq } from "../src/app/ws";
+import { heartbeatStale, trackSeq } from "../src/app/ws";
 
 describe("trackSeq", () => {
   test("the first frame for a topic is not a gap", () => {
@@ -38,5 +38,17 @@ describe("trackSeq", () => {
     expect(trackSeq(seqs, "t", 5)).toBe(false);
     expect(trackSeq(seqs, "t", 6)).toBe(false);
     expect(seqs.get("t")).toBe(6);
+  });
+});
+
+describe("heartbeatStale", () => {
+  test("a frame inside the window keeps the socket alive", () => {
+    expect(heartbeatStale(10_000, 10_000)).toBe(false);
+    expect(heartbeatStale(10_000, 34_999)).toBe(false);
+  });
+
+  test("25s of silence is stale", () => {
+    expect(heartbeatStale(10_000, 35_000)).toBe(true);
+    expect(heartbeatStale(0, 25_000)).toBe(true);
   });
 });

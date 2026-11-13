@@ -384,6 +384,11 @@ async function startApp(): Promise<void> {
     onModel: (provider, model) => {
       const view = app.view;
       if (view === null) return;
+      if (!app.socket.open) {
+        toast("Offline: model not changed");
+        scheduleRender();
+        return;
+      }
       if (view.activeRunId !== null) toast("Model change applies from the next message");
       api
         .setSessionModel(view.session, provider, model)
@@ -392,7 +397,11 @@ async function startApp(): Promise<void> {
           app.sessions = upsertSession(app.sessions, session);
           scheduleRender();
         })
-        .catch((e: unknown) => toast(e instanceof Error ? e.message : "model change failed"));
+        .catch((e: unknown) => {
+          toast(e instanceof Error ? e.message : "model change failed");
+          // The select already moved; re-render resets it to the persisted model.
+          scheduleRender();
+        });
     },
     onToggleNav: toggleNav,
   });

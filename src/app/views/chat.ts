@@ -24,9 +24,26 @@ const STICK_PX = 80;
 const fmtTokens = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const cap = (s: string): string => (s === "" ? s : s.charAt(0).toUpperCase() + s.slice(1));
 
-function elapsed(createdAt: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - createdAt) / 1000));
+function fmtDuration(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+const elapsed = (createdAt: number): string => fmtDuration(Date.now() - createdAt);
+
+/** Header status for a tool step: `running 0:12` while it runs; a finished
+ * step shows `done · exit 0 · 0:12` — the exit code only when the result's
+ * meta reports one, the run time from createdAt -> updatedAt. */
+export function toolStatus(part: Part): string {
+  const d = part.data;
+  if (d.type !== "tool-call") return "";
+  if (d.status === "running") return `running ${elapsed(part.createdAt)}`;
+  if (d.status === "pending") return d.status;
+  const bits: string[] = [d.status];
+  const exit = (d.result as { meta?: { exitCode?: unknown } } | undefined)?.meta?.exitCode;
+  if (typeof exit === "number") bits.push(`exit ${exit}`);
+  bits.push(fmtDuration(part.updatedAt - part.createdAt));
+  return bits.join(" · ");
 }
 
 interface PartUi {
@@ -95,18 +112,16 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
         ui,
         el("pre", { text: d.text }),
       );
-    case "tool-call": {
-      const statusLabel = d.status === "running" ? `running ${elapsed(part.createdAt)}` : d.status;
+    case "tool-call":
       return partRow(
         part,
         d.title ?? d.name,
         d.status,
-        statusLabel,
+        toolStatus(part),
         d.status === "running" || part.status === "streaming",
         ui,
         ...toolBody(part, d.input, d.output ?? "", ui),
       );
-    }
     case "notice":
       return el("div", { class: `part-notice ${d.level}`, text: d.text });
     case "compaction-summary":
