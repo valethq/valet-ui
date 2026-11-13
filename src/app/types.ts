@@ -73,7 +73,7 @@ export type PartData =
     }
   | { type: "file"; blobId: string; name: string; mime: string }
   | { type: "notice"; level: "info" | "warn" | "error"; text: string }
-  | { type: "compaction-summary"; text: string; coversThroughSeq: number };
+  | { type: "compaction"; by: string; coversThroughSeq: number; summary?: string };
 
 export interface Part {
   id: string;

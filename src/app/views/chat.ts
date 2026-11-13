@@ -186,8 +186,6 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
       );
     case "notice":
       return el("div", { class: `part-notice ${d.level}`, text: d.text });
-    case "compaction-summary":
-      return el("div", { class: "part-summary", text: `Context compacted — ${d.text}` });
     case "file":
       return fileNode(d);
     default:
@@ -227,7 +225,7 @@ function messageSig(cm: ChatMessage, view: SessionView, showAll: Map<string, boo
         ? d.text.length
         : d.type === "tool-call"
           ? `${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
-          : d.type === "notice" || d.type === "compaction-summary"
+          : d.type === "notice"
             ? d.text.length
             : 0;
     return `${p.id}:${p.status}:${d.type}:${size}`;
@@ -258,6 +256,13 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
     if (d.type === "notice" && d.level !== "error") {
       bubble = null;
       out.push(el("div", { class: `divider ${d.level}${fx}` }, el("span", { text: d.text })));
+      continue;
+    }
+    if (d.type === "compaction") {
+      bubble = null;
+      // valet's own compaction reads "Compacted"; a harness marker names the harness
+      const label = d.by === "valet" ? "Compacted" : `Compacted (by ${d.by})`;
+      out.push(el("div", { class: `divider info${fx}` }, el("span", { text: label })));
       continue;
     }
     const node = renderPart(part, ui);
