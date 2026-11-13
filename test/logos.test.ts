@@ -25,6 +25,10 @@ describe("logoFor", () => {
     ["Muse Spark", "meta"],
     ["Muse Wonder", "meta"],
     ["meta-llama/llama-3.3-70b-instruct", "meta"],
+    ["swe-2-high", "devin"],
+    ["SWE-1.5", "devin"],
+    ["SWE 1.6 Fast", "devin"],
+    ["cognition/swe-grep", "devin"],
     ["Mistral Large", "mistral"],
     ["mistralai/codestral-2508", "mistral"],
     ["Devstral Medium", "mistral"],
@@ -34,6 +38,7 @@ describe("logoFor", () => {
     ["z-ai/glm-4.5-air", "zai"],
     ["Z.ai GLM 5", "zai"],
     ["Polo 2", undefined],
+    ["Sweetwater 7B", undefined],
   ];
   for (const [name, want] of cases) {
     test(`${name} -> ${want ?? "none"}`, () => expect(logoFor(name)).toBe(want as never));
@@ -44,5 +49,6 @@ describe("logoFor", () => {
     expect(logoFor("Llama 4", "openai")).toBe("meta");
     expect(logoFor("mystery", "openrouter")).toBeUndefined();
     expect(logoFor("large-2", "zai")).toBe("zai");
+    expect(logoFor("high", "devin")).toBe("devin");
   });
 });

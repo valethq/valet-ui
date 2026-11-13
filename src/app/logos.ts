@@ -1,6 +1,7 @@
 import { el } from "./dom";
 import claude from "./logos/claude.svg" with { type: "text" };
 import deepseek from "./logos/deepseek.svg" with { type: "text" };
+import devin from "./logos/devin.svg" with { type: "text" };
 import gemini from "./logos/gemini.svg" with { type: "text" };
 import grok from "./logos/grok.svg" with { type: "text" };
 import meta from "./logos/meta.svg" with { type: "text" };
@@ -20,7 +21,8 @@ export type LogoId =
   | "qwen"
   | "meta"
   | "zai"
-  | "mistral";
+  | "mistral"
+  | "devin";
 
 /** Black-on-transparent marks render through a mask in the text colour. */
 const LOGOS: Record<LogoId, { svg: string; mono: boolean }> = {
@@ -34,11 +36,13 @@ const LOGOS: Record<LogoId, { svg: string; mono: boolean }> = {
   meta: { svg: meta, mono: false },
   zai: { svg: zai, mono: true },
   mistral: { svg: mistral, mono: false },
+  devin: { svg: devin, mono: true },
 };
 
 // First hit wins: open-weight labs come first so distills like
 // "DeepSeek R1 Distill Llama" or "Qwen3 Coder" keep their own mark.
 const RULES: [RegExp, LogoId][] = [
+  [/\bswe\b|devin|cognition/i, "devin"],
   [/deepseek/i, "deepseek"],
   [/qwen|qwq|tongyi|alibaba|dashscope/i, "qwen"],
   [/kimi|moonshot/i, "moonshot"],
