@@ -3,12 +3,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": [
-      "ESNext"
-    ],
-    "types": [
-      "bun"
-    ],
+    "lib": ["ESNext"],
+    "types": ["bun"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "isolatedModules": true,
@@ -17,8 +13,5 @@
     "noEmit": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": [
-    "src",
-    "test"
-  ]
+  "include": ["src", "test"]
 }
