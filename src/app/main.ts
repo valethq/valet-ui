@@ -6,8 +6,10 @@ import {
   applyMessageComplete,
   applyMessageCreate,
   applyRunEnd,
+  applyRunInfo,
   applyRunStart,
   applyRunStatus,
+  colorIndex,
   newSessionView,
   replaceMessages,
   type SessionView,
@@ -45,7 +47,6 @@ interface App {
   projects: Project[];
   projectId: string | null;
   sessions: Session[];
-  unread: Set<string>;
   providers: ProviderModels[];
   view: SessionView | null;
 }
@@ -57,7 +58,6 @@ const app: App = {
   projects: [],
   projectId: null,
   sessions: [],
-  unread: new Set(),
   providers: [],
   view: null,
 };
@@ -70,18 +70,52 @@ const closeNav = (): void => {
   appEl?.classList.remove("nav-open");
 };
 
+// `valet-ui.seen.<sessionId>` stores the last seen lastMessageAt so unread
+// dots survive a reload.
+const seenKey = (sessionId: string): string => `valet-ui.seen.${sessionId}`;
+
+function seenAt(sessionId: string): number {
+  try {
+    return Number(localStorage.getItem(seenKey(sessionId)) ?? 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function noteSeen(sessionId: string, at: number): void {
+  if (at <= 0) return;
+  try {
+    if (at > seenAt(sessionId)) localStorage.setItem(seenKey(sessionId), String(at));
+  } catch {
+    // private mode
+  }
+}
+
+function unreadSessions(): Set<string> {
+  const openId = app.view?.session.id ?? null;
+  const out = new Set<string>();
+  for (const s of app.sessions) {
+    if (s.id !== openId && s.lastMessageAt !== null && s.lastMessageAt > seenAt(s.id)) {
+      out.add(s.id);
+    }
+  }
+  return out;
+}
+
 let renderQueued = false;
 function scheduleRender(): void {
   if (renderQueued) return;
   renderQueued = true;
   requestAnimationFrame(() => {
     renderQueued = false;
+    const open = app.view?.session;
+    if (open !== undefined && open.lastMessageAt !== null) noteSeen(open.id, open.lastMessageAt);
     renderSidebar(app.sidebar, {
       projects: app.projects,
       projectId: app.projectId,
       sessions: app.sessions,
-      openId: app.view?.session.id ?? null,
-      unread: app.unread,
+      openId: open?.id ?? null,
+      unread: unreadSessions(),
       onProject: (id) => {
         closeNav();
         void switchProject(id);
@@ -93,6 +127,10 @@ function scheduleRender(): void {
       onNew: () => {
         closeNav();
         void newSession();
+      },
+      onLogout: () => {
+        closeNav();
+        void logout();
       },
     });
     app.chat?.update(app.view, app.providers);
@@ -126,7 +164,7 @@ function refetchMessagesSoon(): void {
 
 async function loadSessions(): Promise<void> {
   if (app.projectId === null) return;
-  app.sessions = await api.listSessions(app.projectId);
+  app.sessions = (await api.listSessions(app.projectId)).sort((a, b) => b.createdAt - a.createdAt);
   syncTopics();
 }
 
@@ -166,18 +204,31 @@ async function openSession(id: string): Promise<void> {
   const session = app.sessions.find((s) => s.id === id);
   if (session === undefined) return;
   const seq = ++openSeq;
-  app.unread.delete(id);
   const messages = await api.listMessages(id).catch(() => []);
   if (seq !== openSeq) return;
   app.view = newSessionView(session, messages);
+  noteSeen(id, Math.max(session.lastMessageAt ?? 0, ...messages.map((cm) => cm.message.createdAt)));
   try {
     localStorage.setItem(sessionKey(session.projectId), id);
   } catch {
     // private mode; selection simply isn't remembered
   }
   history.replaceState(null, "", `#s=${encodeURIComponent(id)}`);
-  document.documentElement.style.setProperty("--accent", sessionColor(session));
+  document.documentElement.style.setProperty("--accent", sessionColor(session, colorIndex(app.sessions, id)));
   scheduleRender();
+
+  const lastRunId = [...messages].reverse().find((cm) => cm.message.runId !== null)?.message.runId;
+  if (lastRunId !== undefined && lastRunId !== null) {
+    api
+      .getRun(lastRunId)
+      .then((run) => {
+        if (app.view !== null && app.view.session.id === id) {
+          applyRunInfo(app.view, run);
+          scheduleRender();
+        }
+      })
+      .catch(() => {});
+  }
 }
 
 async function switchProject(id: string): Promise<void> {
@@ -233,6 +284,7 @@ function onEvent(topic: string, name: string, data: unknown): void {
       case "message.create": {
         const p = data as { message: Message; parts: Part[] };
         applyMessageCreate(view, p.message, p.parts);
+        noteSeen(id, p.message.createdAt);
         break;
       }
       case "message.delta":
@@ -258,7 +310,6 @@ function onEvent(topic: string, name: string, data: unknown): void {
         return;
     }
   } else if (name === "message.create") {
-    app.unread.add(id);
     const s = app.sessions.find((x) => x.id === id);
     if (s !== undefined) {
       app.sessions = upsertSession(app.sessions, {
@@ -279,21 +330,42 @@ function onGap(_topic: string): void {
   });
 }
 
+function showLogin(): void {
+  app.socket.close();
+  renderAuth(root, { needsSetup: false, authenticated: false }, async ({ password }) => {
+    await api.login(password);
+    await startApp();
+  });
+}
+
+async function logout(): Promise<void> {
+  await api.logout().catch(() => {});
+  showLogin();
+}
+
 async function startApp(): Promise<void> {
+  app.view = null;
+  app.sessions = [];
+  app.projects = [];
+  app.providers = [];
+  app.projectId = null;
+
   const chatRoot = el("div", { class: "chat-root" });
   app.chat = createChat(chatRoot, {
-    onSend: (text) => {
+    onSend: async (text, clientMessageId) => {
       const view = app.view;
-      if (view === null) return;
-      api
-        .sendMessage(view.session.id, text)
-        .then((cm) => {
-          if (app.view?.session.id === view.session.id) {
-            applyMessageCreate(view, cm.message, cm.parts);
-            scheduleRender();
-          }
-        })
-        .catch((e: unknown) => toast(e instanceof Error ? e.message : "send failed"));
+      if (view === null) return false;
+      try {
+        const cm = await api.sendMessage(view.session.id, text, clientMessageId);
+        if (app.view?.session.id === view.session.id) {
+          applyMessageCreate(view, cm.message, cm.parts);
+          scheduleRender();
+        }
+        return true;
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "send failed");
+        return false;
+      }
     },
     onStop: () => {
       const runId = app.view?.activeRunId;
@@ -303,6 +375,7 @@ async function startApp(): Promise<void> {
     onModel: (provider, model) => {
       const view = app.view;
       if (view === null) return;
+      if (view.activeRunId !== null) toast("Model change applies from the next message");
       api
         .setSessionModel(view.session, provider, model)
         .then((session) => {
@@ -323,6 +396,8 @@ async function startApp(): Promise<void> {
   app.socket.onEvent = onEvent;
   app.socket.onGap = onGap;
   app.socket.onDenied = (_topic, message) => toast(`subscription denied: ${message}`);
+  app.socket.onState = (open) => app.chat?.setConnection(open);
+  app.socket.onUnauthorized = showLogin;
   app.socket.start();
 
   app.projects = await api.listProjects();
@@ -340,6 +415,13 @@ async function startApp(): Promise<void> {
   if (target !== undefined) await openSession(target.id);
   else scheduleRender();
 }
+
+api.hooks.onUnauthorized = showLogin;
+
+window.addEventListener("hashchange", () => {
+  const id = sessionFromHash();
+  if (id !== null && id !== app.view?.session.id) void openSession(id);
+});
 
 async function boot(): Promise<void> {
   let status: api.AuthStatus | null = null;

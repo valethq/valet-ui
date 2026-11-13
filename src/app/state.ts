@@ -7,6 +7,10 @@ export interface SessionView {
   runStatus: string | null;
   /** From run usage, when a run reports it. */
   contextTokens: number | null;
+  /** Context window the run reported via usage.contextWindow, when known. */
+  contextWindow: number | null;
+  /** run.id -> run.error, remembered for error rendering. */
+  runErrors: Map<string, string>;
 }
 
 export function newSessionView(session: Session, messages: ChatMessage[]): SessionView {
@@ -18,12 +22,20 @@ export function newSessionView(session: Session, messages: ChatMessage[]): Sessi
       activeRunId = cm.message.runId;
     }
   }
-  return { session, messages, activeRunId, runStatus: null, contextTokens: null };
+  return {
+    session,
+    messages,
+    activeRunId,
+    runStatus: null,
+    contextTokens: null,
+    contextWindow: null,
+    runErrors: new Map(),
+  };
 }
 
 export function upsertSession(list: Session[], session: Session): Session[] {
   const next = list.filter((s) => s.id !== session.id).concat(session);
-  next.sort((a, b) => (b.lastMessageAt ?? b.createdAt) - (a.lastMessageAt ?? a.createdAt));
+  next.sort((a, b) => b.createdAt - a.createdAt);
   return next;
 }
 
@@ -94,16 +106,60 @@ export function applyMessageComplete(view: SessionView, message: Message): boole
   return false;
 }
 
+/** A refetched snapshot can be older than deltas already applied locally, so
+ * locally-streaming content that extends the snapshot's wins, and local
+ * parts/messages the snapshot doesn't know yet are kept. */
 export function replaceMessages(view: SessionView, messages: ChatMessage[]): void {
+  const local = new Map(view.messages.map((cm) => [cm.message.id, cm]));
+  for (const cm of messages) {
+    const l = local.get(cm.message.id);
+    local.delete(cm.message.id);
+    if (l === undefined) continue;
+    const snapPartIds = new Set(cm.parts.map((p) => p.id));
+    for (const p of cm.parts) {
+      const lp = l.parts.find((x) => x.id === p.id);
+      if (lp === undefined || lp.status !== "streaming") continue;
+      if (
+        (p.data.type === "text" || p.data.type === "reasoning") &&
+        (lp.data.type === "text" || lp.data.type === "reasoning") &&
+        lp.data.text.length > p.data.text.length &&
+        lp.data.text.startsWith(p.data.text)
+      ) {
+        p.data = { ...p.data, text: lp.data.text };
+        p.status = lp.status;
+      } else if (
+        p.data.type === "tool-call" &&
+        lp.data.type === "tool-call" &&
+        (lp.data.output ?? "").length > (p.data.output ?? "").length &&
+        (lp.data.output ?? "").startsWith(p.data.output ?? "")
+      ) {
+        p.data = { ...p.data, output: lp.data.output };
+        p.status = lp.status;
+      }
+    }
+    for (const lp of l.parts) {
+      if (lp.status === "streaming" && !snapPartIds.has(lp.id)) cm.parts.push(lp);
+    }
+    cm.parts.sort((a, b) => a.idx - b.idx);
+  }
+  for (const l of local.values()) messages.push(l);
+  messages.sort((a, b) => a.message.seq - b.message.seq);
   view.messages = messages;
+}
+
+function applyUsage(view: SessionView, run: Run): void {
+  const tokens = run.usage?.contextTokens;
+  if (typeof tokens === "number") view.contextTokens = tokens;
+  const win = run.usage?.contextWindow;
+  if (typeof win === "number" && win > 0) view.contextWindow = win;
+  if (typeof run.error === "string" && run.error !== "") view.runErrors.set(run.id, run.error);
 }
 
 export function applyRunStart(view: SessionView, run: Run): void {
   if (run.sessionId !== view.session.id) return;
   view.activeRunId = run.id;
   view.runStatus = "running";
-  const tokens = run.usage?.contextTokens;
-  if (typeof tokens === "number") view.contextTokens = tokens;
+  applyUsage(view, run);
 }
 
 export function applyRunEnd(view: SessionView, run: Run): void {
@@ -112,20 +168,31 @@ export function applyRunEnd(view: SessionView, run: Run): void {
     view.activeRunId = null;
     view.runStatus = null;
   }
-  const tokens = run.usage?.contextTokens;
-  if (typeof tokens === "number") view.contextTokens = tokens;
+  applyUsage(view, run);
+}
+
+/** Seeds the view from a fetched run row (context bar + error after reload). */
+export function applyRunInfo(view: SessionView, run: Run): void {
+  if (run.sessionId !== view.session.id) return;
+  if (run.status === "running" || run.status === "queued") view.activeRunId = run.id;
+  applyUsage(view, run);
 }
 
 export function applyRunStatus(view: SessionView, runId: string, status: string): void {
   if (view.activeRunId === runId || view.activeRunId === null) view.runStatus = status;
 }
 
-/** Deterministic fallback accent when the session has no color yet. */
-const PALETTE = ["#7aa2f7", "#9ece6a", "#e0af68", "#bb9af7", "#7dcfff", "#f7768e", "#73daca"];
+/** Deterministic fallback accents when the session has no color yet. */
+export const PALETTE = ["#7aa2f7", "#9ece6a", "#e0af68", "#bb9af7", "#7dcfff", "#f7768e", "#73daca"];
 
-export function sessionColor(session: Session): string {
+/** Position of `id` in the sessions' createdAt order (oldest first). */
+export function colorIndex(sessions: Session[], id: string): number {
+  const i = [...sessions].sort((a, b) => a.createdAt - b.createdAt).findIndex((s) => s.id === id);
+  return Math.max(i, 0);
+}
+
+export function sessionColor(session: Session, index: number): string {
   if (session.color !== null) return session.color;
-  let h = 0;
-  for (let i = 0; i < session.id.length; i++) h = (h * 31 + session.id.charCodeAt(i)) | 0;
-  return PALETTE[Math.abs(h) % PALETTE.length] as string;
+  const i = ((index % PALETTE.length) + PALETTE.length) % PALETTE.length;
+  return PALETTE[i] as string;
 }

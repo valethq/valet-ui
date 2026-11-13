@@ -11,6 +11,7 @@ export interface SidebarProps {
   onProject(id: string): void;
   onSession(id: string): void;
   onNew(): void;
+  onLogout(): void;
 }
 
 export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
@@ -21,6 +22,9 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   if (p.projectId !== null) picker.value = p.projectId;
   picker.addEventListener("change", () => p.onProject(picker.value));
 
+  const order = new Map(
+    [...p.sessions].sort((a, b) => a.createdAt - b.createdAt).map((s, i) => [s.id, i] as const),
+  );
   const list = el("div", { class: "sessions" });
   for (const session of p.sessions) {
     const row = el("button", {
@@ -28,7 +32,7 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
       title: session.title ?? "Untitled",
     });
     const dot = el("span", { class: "dot" });
-    dot.style.background = sessionColor(session);
+    dot.style.background = sessionColor(session, order.get(session.id) ?? 0);
     row.append(dot, el("span", { class: "title", text: session.title ?? "Untitled" }));
     if (p.unread.has(session.id)) row.append(el("span", { class: "unread" }));
     row.addEventListener("click", () => p.onSession(session.id));
@@ -40,5 +44,8 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   add.disabled = p.projectId === null;
   add.addEventListener("click", () => p.onNew());
 
-  node.replaceChildren(el("div", { class: "project-picker" }, picker), list, add);
+  const logout = el("button", { class: "logout", text: "Log out" });
+  logout.addEventListener("click", () => p.onLogout());
+
+  node.replaceChildren(el("div", { class: "project-picker" }, picker), list, add, logout);
 }

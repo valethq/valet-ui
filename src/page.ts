@@ -73,6 +73,8 @@ select, input[type=text], input[type=password] {
 .session-row .title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .session-row .unread { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #7aa2f7); }
 .sidebar .new-session { margin: 8px; }
+.sidebar .logout { margin: 0 8px 8px; font-size: 12.5px; color: #8a94a1; background: transparent; }
+.sidebar .logout:hover { background: #181d25; }
 
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .chat-header {
@@ -156,6 +158,8 @@ select, input[type=text], input[type=password] {
 .part-row .status.error, .part-row .status.denied { color: #d97a7a; }
 .part-row .body { border-top: 1px solid #232b36; padding: 8px 11px; max-height: 320px; overflow-y: auto; }
 .part-row .body pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; color: #b6bfca; }
+.part-row .trunc { color: #6f7885; }
+.part-row .show-all { font-size: 11px; padding: 1px 8px; margin-left: 8px; }
 .part-notice { font-size: 12.5px; color: #98a1ad; padding: 2px 4px; }
 .part-notice.warn { color: #cfa75f; }
 .part-notice.error { color: #d97a7a; }
@@ -199,6 +203,7 @@ select, input[type=text], input[type=password] {
 
 .empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #59636f; }
 .hint { font-size: 12px; color: #59636f; padding: 4px 10px; }
+.hint.conn { padding: 6px 16px 0; }
 
 @media (max-width: 720px) {
   .app { grid-template-columns: 1fr; }

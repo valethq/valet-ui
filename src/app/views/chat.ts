@@ -5,7 +5,8 @@ import type { SessionView } from "../state";
 import type { ChatMessage, Part, ProviderModels } from "../types";
 
 export interface ChatCallbacks {
-  onSend(text: string): void;
+  /** Resolves true when the POST succeeded; the draft is kept on failure. */
+  onSend(text: string, clientMessageId: string): Promise<boolean>;
   onStop(): void;
   onModel(provider: string, model: string): void;
   onToggleNav(): void;
@@ -13,52 +14,96 @@ export interface ChatCallbacks {
 
 export interface ChatHandle {
   update(view: SessionView | null, providers: ProviderModels[]): void;
+  setConnection(open: boolean): void;
 }
+
+const MAX_OUTPUT_LINES = 400;
+const STICK_PX = 80;
 
 const fmtTokens = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const cap = (s: string): string => (s === "" ? s : s.charAt(0).toUpperCase() + s.slice(1));
 
+function elapsed(createdAt: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - createdAt) / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+interface PartUi {
+  openState: Map<string, boolean>;
+  showAll: Map<string, boolean>;
+  refresh(): void;
+}
+
 function partRow(
   part: Part,
   title: string,
-  status: string,
-  body: string,
+  statusClass: string,
+  statusLabel: string,
   defaultOpen: boolean,
-  openState: Map<string, boolean>,
+  ui: PartUi,
+  ...bodyChildren: (Node | string)[]
 ): HTMLElement {
   const details = el("details", { class: "part-row", "data-part-id": part.id });
-  details.open = openState.get(part.id) ?? defaultOpen;
+  details.open = ui.openState.get(part.id) ?? defaultOpen;
   const summary = el(
     "summary",
     {},
     el("span", { text: title }),
-    el("span", { class: `status ${status}`, text: status }),
+    el("span", { class: `status ${statusClass}`, text: statusLabel }),
   );
-  summary.addEventListener("click", () => openState.set(part.id, !details.open));
-  details.append(summary, el("div", { class: "body" }, el("pre", { text: body })));
+  summary.addEventListener("click", () => ui.openState.set(part.id, !details.open));
+  details.append(summary, el("div", { class: "body" }, ...bodyChildren));
   return details;
 }
 
-function renderPart(part: Part, openState: Map<string, boolean>): HTMLElement | null {
+function toolBody(part: Part, input: unknown, output: string, ui: PartUi): HTMLElement[] {
+  const head =
+    typeof input === "object" &&
+    input !== null &&
+    typeof (input as Record<string, unknown>).command === "string"
+      ? `$ ${(input as Record<string, unknown>).command as string}`
+      : (JSON.stringify(input, null, 2) ?? "");
+  const lines = output === "" ? [] : output.split("\n");
+  const hidden = ui.showAll.get(part.id) === true ? 0 : Math.max(0, lines.length - MAX_OUTPUT_LINES);
+  const children: (Node | string)[] = [];
+  if (head !== "") children.push(head, "\n");
+  if (hidden > 0) {
+    const showAll = el("button", { class: "show-all", text: "Show all" });
+    showAll.addEventListener("click", () => {
+      ui.showAll.set(part.id, true);
+      ui.refresh();
+    });
+    children.push(el("span", { class: "trunc" }, `… ${hidden} earlier lines hidden `, showAll), "\n");
+  }
+  children.push(lines.slice(hidden).join("\n"));
+  return [el("pre", {}, ...children)];
+}
+
+function renderPart(part: Part, ui: PartUi): HTMLElement | null {
   const d = part.data;
   switch (d.type) {
     case "text":
       return renderMarkdown(d.text);
     case "reasoning":
-      return partRow(part, "Reasoning", part.status, d.text, part.status === "streaming", openState);
-    case "tool-call": {
-      const title = d.title ?? d.name;
-      const body = [
-        `input: ${typeof d.input === "string" ? d.input : JSON.stringify(d.input)}`,
-        ...(d.output === undefined || d.output === "" ? [] : [`output: ${d.output}`]),
-      ].join("\n");
       return partRow(
         part,
-        title,
+        "Reasoning",
+        part.status,
+        part.status,
+        part.status === "streaming",
+        ui,
+        el("pre", { text: d.text }),
+      );
+    case "tool-call": {
+      const statusLabel = d.status === "running" ? `running ${elapsed(part.createdAt)}` : d.status;
+      return partRow(
+        part,
+        d.title ?? d.name,
         d.status,
-        body,
+        statusLabel,
         d.status === "running" || part.status === "streaming",
-        openState,
+        ui,
+        ...toolBody(part, d.input, d.output ?? "", ui),
       );
     }
     case "notice":
@@ -72,19 +117,41 @@ function renderPart(part: Part, openState: Map<string, boolean>): HTMLElement | 
   }
 }
 
-function renderMessage(cm: ChatMessage, openState: Map<string, boolean>): HTMLElement {
+function metaModel(cm: ChatMessage): { provider: string; model: string } | undefined {
+  const m = cm.message.meta.model;
+  if (typeof m !== "object" || m === null) return undefined;
+  const r = m as Record<string, unknown>;
+  return typeof r.provider === "string" && typeof r.model === "string"
+    ? { provider: r.provider, model: r.model }
+    : undefined;
+}
+
+function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView): HTMLElement {
   const msg = el("div", { class: `msg ${cm.message.role}` });
   const bubble = el("div", { class: "bubble" });
   for (const part of cm.parts) {
-    const node = renderPart(part, openState);
+    const node = renderPart(part, ui);
     if (node !== null) bubble.append(node);
   }
-  if (cm.parts.length === 0 && cm.message.status === "streaming") {
-    bubble.append(el("span", { class: "hint", text: "…" }));
+  if (cm.parts.length === 0) {
+    if (cm.message.status === "error") {
+      const runError = cm.message.runId === null ? undefined : view.runErrors.get(cm.message.runId);
+      bubble.append(
+        el("div", {
+          class: "part-notice error",
+          text: runError === undefined ? "Error" : `Error — ${runError}`,
+        }),
+      );
+    } else if (cm.message.status === "streaming") {
+      bubble.append(el("span", { class: "hint", text: "…" }));
+    }
   }
   msg.append(bubble);
-  const status = cm.message.status === "complete" ? "" : ` · ${cm.message.status}`;
-  msg.append(el("div", { class: "meta", text: `${cm.message.role}${status}` }));
+  const meta: string[] = [cm.message.role];
+  const model = metaModel(cm)?.model;
+  if (cm.message.role === "assistant" && model !== undefined && model !== "") meta.push(model);
+  if (cm.message.status !== "complete") meta.push(cm.message.status);
+  msg.append(el("div", { class: "meta", text: meta.join(" · ") }));
   return msg;
 }
 
@@ -94,6 +161,26 @@ function pickVariant(f: ModelFamily): ModelVariant {
     f.variants.find((v) => v.effort === "medium") ??
     (f.variants[0] as ModelVariant)
   );
+}
+
+function contextWindow(view: SessionView, providers: ProviderModels[]): number | undefined {
+  let sel = view.session.settings.model;
+  for (let i = view.messages.length - 1; i >= 0; i--) {
+    const cm = view.messages[i] as ChatMessage;
+    if (cm.message.role !== "assistant") continue;
+    const m = metaModel(cm);
+    if (m !== undefined) {
+      sel = m;
+      break;
+    }
+  }
+  if (sel !== undefined) {
+    const win = providers
+      .find((p) => p.provider === sel.provider)
+      ?.models.find((m) => m.id === sel.model)?.contextWindow;
+    if (win !== undefined && win > 0) return win;
+  }
+  return view.contextWindow ?? undefined;
 }
 
 export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
@@ -106,6 +193,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const usageLabel = el("div", { class: "label" });
   const contextBar = el("div", { class: "context-bar" }, el("div", { class: "track" }, fill), usageLabel);
   const messages = el("div", { class: "messages" });
+  const connLine = el("div", { class: "hint conn", text: "Reconnecting…" });
   const textarea = el("textarea", { placeholder: "Message…", rows: "1", enterkeyhint: "enter" });
   const send = el("button", { class: "send", text: "Send" });
   const stop = el("button", { class: "stop", text: "Stop" });
@@ -114,16 +202,28 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   let current: SessionView | null = null;
   let sessionId: string | null = null;
   const openState = new Map<string, boolean>();
+  const showAll = new Map<string, boolean>();
+  const bodyStick = new Map<string, boolean>();
   let stickToBottom = true;
+  let connOpen = false;
+  let draftId: string | null = null;
   let families: ModelFamily[] = [];
   let activeFamily: ModelFamily | null = null;
+  let tick: ReturnType<typeof setInterval> | undefined;
 
   const doSend = (): void => {
     const text = textarea.value.trim();
     if (text === "" || current === null) return;
-    textarea.value = "";
-    textarea.style.height = "";
-    cb.onSend(text);
+    draftId ??= crypto.randomUUID();
+    const id = draftId;
+    void cb.onSend(text, id).then((ok) => {
+      if (!ok) return;
+      if (textarea.value.trim() === text) {
+        textarea.value = "";
+        textarea.style.height = "";
+      }
+      if (draftId === id) draftId = null;
+    });
   };
   send.addEventListener("click", doSend);
   stop.addEventListener("click", () => cb.onStop());
@@ -142,7 +242,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
   });
   messages.addEventListener("scroll", () => {
-    stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
+    stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
   });
   modelPicker.addEventListener("change", () => {
     const f = families[Number(modelPicker.value)];
@@ -160,9 +260,65 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     { class: "main" },
     el("div", { class: "chat-header" }, navToggle, title, runHint, contextBar, modelPicker, effortPicker),
     messages,
+    connLine,
     el("div", { class: "composer" }, textarea, stop, send),
   );
   root.replaceChildren(main);
+
+  function renderMessages(view: SessionView): void {
+    const scrollTops = new Map<string, number>();
+    for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
+      const body = row.querySelector<HTMLElement>(".body");
+      const pid = row.dataset.partId;
+      if (body !== null && pid !== undefined && body.scrollTop > 0) {
+        scrollTops.set(pid, body.scrollTop);
+      }
+    }
+    const runningTools = new Set<string>();
+    for (const cm of view.messages) {
+      for (const p of cm.parts) {
+        if (p.data.type === "tool-call" && p.data.status === "running") runningTools.add(p.id);
+      }
+    }
+    const ui: PartUi = { openState, showAll, refresh: () => renderMessages(view) };
+    clear(messages);
+    for (const cm of view.messages) messages.append(renderMessage(cm, ui, view));
+    if (view.messages.length === 0) {
+      messages.append(el("div", { class: "empty", text: "No messages yet" }));
+    }
+    for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
+      const pid = row.dataset.partId;
+      const body = row.querySelector<HTMLElement>(".body");
+      if (pid === undefined || body === null) continue;
+      body.addEventListener("scroll", () => {
+        bodyStick.set(pid, body.scrollHeight - body.scrollTop - body.clientHeight < STICK_PX);
+      });
+      if (runningTools.has(pid) && (bodyStick.get(pid) ?? true)) {
+        body.scrollTop = body.scrollHeight;
+      } else {
+        const st = scrollTops.get(pid);
+        if (st !== undefined) body.scrollTop = st;
+      }
+    }
+    if (stickToBottom) messages.scrollTop = messages.scrollHeight;
+    syncTick(runningTools.size > 0);
+  }
+
+  function syncTick(anyRunning: boolean): void {
+    if (anyRunning && tick === undefined) {
+      tick = setInterval(() => {
+        if (!main.isConnected) {
+          clearInterval(tick);
+          tick = undefined;
+          return;
+        }
+        if (current !== null) renderMessages(current);
+      }, 1000);
+    } else if (!anyRunning && tick !== undefined) {
+      clearInterval(tick);
+      tick = undefined;
+    }
+  }
 
   function rebuildModels(view: SessionView, providers: ProviderModels[]): void {
     const selected = view.session.settings.model;
@@ -226,6 +382,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     effortPicker.disabled = sel === undefined;
   }
 
+  connLine.style.display = connOpen ? "none" : "";
+
   return {
     update(view, providers) {
       current = view;
@@ -233,6 +391,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       if (sid !== sessionId) {
         sessionId = sid;
         openState.clear();
+        showAll.clear();
+        bodyStick.clear();
         stickToBottom = true;
       }
 
@@ -250,6 +410,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         stop.style.display = "none";
         usageLabel.textContent = "";
         fill.style.width = "0%";
+        syncTick(false);
         return;
       }
 
@@ -258,12 +419,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       rebuildModels(view, providers);
       stop.style.display = view.activeRunId === null ? "none" : "";
 
-      const ctxWindow = (() => {
-        const sel = view.session.settings.model;
-        if (sel === undefined) return undefined;
-        return providers.find((p) => p.provider === sel.provider)?.models.find((m) => m.id === sel.model)
-          ?.contextWindow;
-      })();
+      const ctxWindow = contextWindow(view, providers);
       if (view.contextTokens !== null) {
         const pct =
           ctxWindow !== undefined && ctxWindow > 0
@@ -273,32 +429,17 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         usageLabel.textContent =
           ctxWindow === undefined
             ? `${fmtTokens(view.contextTokens)} tok`
-            : `${fmtTokens(view.contextTokens)} / ${fmtTokens(ctxWindow)}`;
+            : `${fmtTokens(view.contextTokens)} / ${fmtTokens(ctxWindow)} tok`;
       } else {
         fill.style.width = "0%";
         usageLabel.textContent = "";
       }
 
-      const scrollTops = new Map<string, number>();
-      for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
-        const body = row.querySelector<HTMLElement>(".body");
-        const pid = row.dataset.partId;
-        if (body !== null && pid !== undefined && body.scrollTop > 0) {
-          scrollTops.set(pid, body.scrollTop);
-        }
-      }
-      clear(messages);
-      for (const cm of view.messages) messages.append(renderMessage(cm, openState));
-      if (view.messages.length === 0) {
-        messages.append(el("div", { class: "empty", text: "No messages yet" }));
-      }
-      for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
-        const pid = row.dataset.partId;
-        const st = pid === undefined ? undefined : scrollTops.get(pid);
-        const body = row.querySelector<HTMLElement>(".body");
-        if (st !== undefined && body !== null) body.scrollTop = st;
-      }
-      if (stickToBottom) messages.scrollTop = messages.scrollHeight;
+      renderMessages(view);
+    },
+    setConnection(open) {
+      connOpen = open;
+      connLine.style.display = open ? "none" : "";
     },
   };
 }

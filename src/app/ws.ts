@@ -9,6 +9,9 @@ export class CoreSocket {
   onEvent: (topic: string, name: string, data: unknown) => void = () => {};
   onGap: (topic: string) => void = () => {};
   onDenied: (topic: string, message: string) => void = () => {};
+  onState: (open: boolean) => void = () => {};
+  /** Close code 4401: the socket's principal is gone (logged out). */
+  onUnauthorized: () => void = () => {};
 
   readonly #url: string;
   readonly #wanted = new Set<string>();
@@ -26,6 +29,10 @@ export class CoreSocket {
   start(): void {
     this.#closed = false;
     this.#connect();
+  }
+
+  get open(): boolean {
+    return this.#ws?.readyState === WebSocket.OPEN;
   }
 
   close(): void {
@@ -50,12 +57,19 @@ export class CoreSocket {
     this.#ws = ws;
     ws.onopen = () => {
       this.#backoff = 500;
+      this.onState(true);
       this.#subscribe([...this.#wanted]);
       this.#ping = setInterval(() => this.#send({ type: "ping" }), PING_MS);
     };
     ws.onmessage = (ev) => this.#onFrame(ev.data as string);
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       if (this.#ping !== undefined) clearInterval(this.#ping);
+      this.onState(false);
+      if (ev.code === 4401) {
+        this.#closed = true;
+        this.onUnauthorized();
+        return;
+      }
       if (!this.#closed) {
         this.#retry = setTimeout(() => this.#connect(), this.#backoff);
         this.#backoff = Math.min(this.#backoff * 2, MAX_BACKOFF_MS);

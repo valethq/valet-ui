@@ -1,4 +1,4 @@
-import type { ChatMessage, Project, ProviderModels, Session } from "./types";
+import type { ChatMessage, Project, ProviderModels, Run, Session } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -9,6 +9,9 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+
+/** Called when a non-auth request comes back 401 (session expired). */
+export const hooks = { onUnauthorized: (): void => {} };
 
 const base = (): string => window.VALET.coreUrl.replace(/\/+$/, "");
 
@@ -28,6 +31,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
     data = undefined;
   }
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith("/plugins/valet-auth/")) hooks.onUnauthorized();
     const err = data as { error?: { message?: string; reason?: string } } | undefined;
     throw new ApiError(res.status, err?.error?.reason ?? err?.error?.message ?? `HTTP ${res.status}`);
   }
@@ -56,6 +60,8 @@ export const setup = (token: string, password: string): Promise<unknown> =>
 export const login = (password: string): Promise<unknown> =>
   req("POST", "/plugins/valet-auth/login", { password });
 
+export const logout = (): Promise<unknown> => req("POST", "/plugins/valet-auth/logout");
+
 // ---- core REST (10.1) ----
 
 export const listProjects = (): Promise<Project[]> => get("/api/core/projects");
@@ -69,11 +75,14 @@ export const createSession = (projectId: string): Promise<Session> =>
 export const listMessages = (sessionId: string, limit = 200): Promise<ChatMessage[]> =>
   get(`/api/core/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}`);
 
-export const sendMessage = (sessionId: string, text: string): Promise<ChatMessage> =>
+export const sendMessage = (sessionId: string, text: string, clientMessageId: string): Promise<ChatMessage> =>
   req("POST", `/api/core/sessions/${encodeURIComponent(sessionId)}/messages`, {
     role: "user",
     parts: [{ type: "text", text }],
+    clientMessageId,
   });
+
+export const getRun = (runId: string): Promise<Run> => get(`/api/core/runs/${encodeURIComponent(runId)}`);
 
 // settings are replaced wholesale by PATCH, so merge client-side.
 export const updateSession = (

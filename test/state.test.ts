@@ -4,8 +4,13 @@ import {
   applyMessageComplete,
   applyMessageCreate,
   applyRunEnd,
+  applyRunInfo,
   applyRunStart,
+  colorIndex,
   newSessionView,
+  PALETTE,
+  replaceMessages,
+  sessionColor,
   upsertSession,
 } from "../src/app/state";
 import type { ChatMessage, Message, MessageDelta, Part, PartData, Run, Session } from "../src/app/types";
@@ -179,13 +184,124 @@ describe("runs", () => {
     ]);
     expect(view.activeRunId).toBe("run_7");
   });
+
+  test("run.end error is remembered by run id", () => {
+    const view = viewWith([]);
+    applyRunStart(view, run("run_1"));
+    applyRunEnd(view, run("run_1", { status: "error", error: "boom" }));
+    expect(view.runErrors.get("run_1")).toBe("boom");
+  });
+
+  test("applyRunInfo seeds usage and error from a fetched run", () => {
+    const view = viewWith([]);
+    applyRunInfo(
+      view,
+      run("run_9", {
+        status: "complete",
+        error: "nope",
+        usage: { contextTokens: 1200, contextWindow: 200000 },
+      }),
+    );
+    expect(view.contextTokens).toBe(1200);
+    expect(view.contextWindow).toBe(200000);
+    expect(view.runErrors.get("run_9")).toBe("nope");
+    applyRunInfo(view, run("run_8", { status: "running" }));
+    expect(view.activeRunId).toBe("run_8");
+  });
+});
+
+describe("replaceMessages", () => {
+  test("keeps longer local text when the snapshot is a prefix of it", () => {
+    const view = viewWith([
+      {
+        message: message("msg_1", 1),
+        parts: [part("prt_1", "msg_1", 0, { type: "text", text: "items 38 39 40 41" })],
+      },
+    ]);
+    replaceMessages(view, [
+      {
+        message: message("msg_1", 1),
+        parts: [part("prt_1", "msg_1", 0, { type: "text", text: "items 38" })],
+      },
+    ]);
+    const p = view.messages[0]?.parts[0];
+    expect(p?.data).toEqual({ type: "text", text: "items 38 39 40 41" });
+    expect(p?.status).toBe("streaming");
+  });
+
+  test("replaces when the local part is not an extension of the snapshot", () => {
+    const view = viewWith([
+      {
+        message: message("msg_1", 1),
+        parts: [part("prt_1", "msg_1", 0, { type: "text", text: "different" })],
+      },
+    ]);
+    replaceMessages(view, [
+      {
+        message: message("msg_1", 1),
+        parts: [{ ...part("prt_1", "msg_1", 0, { type: "text", text: "final text" }), status: "complete" }],
+      },
+    ]);
+    const p = view.messages[0]?.parts[0];
+    expect(p?.data).toEqual({ type: "text", text: "final text" });
+    expect(p?.status).toBe("complete");
+  });
+
+  test("keeps locally-streaming parts the snapshot does not know yet", () => {
+    const view = viewWith([
+      {
+        message: message("msg_1", 1),
+        parts: [
+          part("prt_1", "msg_1", 0, { type: "text", text: "hello" }),
+          part("prt_2", "msg_1", 1, { type: "reasoning", text: "streamed" }),
+        ],
+      },
+    ]);
+    replaceMessages(view, [
+      {
+        message: message("msg_1", 1),
+        parts: [part("prt_1", "msg_1", 0, { type: "text", text: "hello" })],
+      },
+    ]);
+    expect(view.messages[0]?.parts.map((p) => p.id)).toEqual(["prt_1", "prt_2"]);
+  });
+
+  test("keeps locally-known messages missing from the snapshot", () => {
+    const view = viewWith([
+      { message: message("msg_1", 1), parts: [] },
+      {
+        message: message("msg_2", 2),
+        parts: [part("prt_9", "msg_2", 0, { type: "text", text: "new" })],
+      },
+    ]);
+    replaceMessages(view, [{ message: message("msg_1", 1), parts: [] }]);
+    expect(view.messages.map((cm) => cm.message.id)).toEqual(["msg_1", "msg_2"]);
+  });
 });
 
 describe("upsertSession", () => {
-  test("sorts by lastMessageAt desc and replaces in place", () => {
+  test("sorts by createdAt desc and replaces in place", () => {
     let list = [session({ id: "a", createdAt: 1 })];
     list = upsertSession(list, session({ id: "b", createdAt: 2 }));
     list = upsertSession(list, session({ id: "a", createdAt: 1, lastMessageAt: 5 }));
-    expect(list.map((s) => s.id)).toEqual(["a", "b"]);
+    expect(list.map((s) => s.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("sessionColor", () => {
+  test("uses the explicit color when set", () => {
+    expect(sessionColor(session({ color: "#123456" }), 0)).toBe("#123456");
+  });
+
+  test("falls back to the palette by createdAt index", () => {
+    const sessions = [
+      session({ id: "a", createdAt: 1 }),
+      session({ id: "b", createdAt: 2 }),
+      session({ id: "c", createdAt: 3 }),
+    ];
+    expect(sessionColor(sessions[0] as Session, colorIndex(sessions, "a"))).toBe(PALETTE[0] as string);
+    expect(sessionColor(sessions[1] as Session, colorIndex(sessions, "b"))).toBe(PALETTE[1] as string);
+    expect(sessionColor(sessions[2] as Session, colorIndex(sessions, "c"))).toBe(PALETTE[2] as string);
+    expect(PALETTE[0]).not.toBe(PALETTE[1]);
   });
 });
