@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { ApiError, listProjects, sendMessage } from "../src/app/api";
+import { ApiError, authStatus, listProjects, sendMessage } from "../src/app/api";
 
 const g = globalThis as Record<string, unknown>;
 const realFetch = g.fetch;
@@ -47,5 +47,14 @@ describe("sendMessage failure", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(0);
     expect((err as ApiError).message).toBe("Network unreachable, try again");
+  });
+});
+
+describe("authStatus", () => {
+  test("valet-auth's setupRequired means first-boot setup", async () => {
+    stubFetch(() => new Response('{"setupRequired":true}', { status: 200 }));
+    expect((await authStatus()).needsSetup).toBe(true);
+    stubFetch(() => new Response('{"setupRequired":false}', { status: 200 }));
+    expect((await authStatus()).needsSetup).toBe(false);
   });
 });

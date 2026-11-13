@@ -59,7 +59,12 @@ export interface AuthStatus {
 
 export async function authStatus(): Promise<AuthStatus> {
   const d = (await get("/plugins/valet-auth/status")) as Record<string, unknown>;
-  const needsSetup = d.setup === true || d.needsSetup === true || d.status === "setup" || d.mode === "setup";
+  const needsSetup =
+    d.setupRequired === true ||
+    d.setup === true ||
+    d.needsSetup === true ||
+    d.status === "setup" ||
+    d.mode === "setup";
   return { needsSetup, authenticated: d.authenticated === true };
 }
 
