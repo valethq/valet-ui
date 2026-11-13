@@ -250,7 +250,7 @@ select, input[type=text], input[type=password] {
   .app.nav-open .nav-backdrop { display: block; }
   .nav-toggle { display: inline-flex; }
   .chat-header { flex-wrap: wrap; padding-top: max(10px, env(safe-area-inset-top)); }
-  .chat-header .session-title { flex: 1 1 0; min-width: 0; }
+  .chat-header .session-title { flex: 1 1 calc(100% - 68px); min-width: 0; }
   .chat-header .model-picker, .chat-header .effort-picker { max-width: 100%; min-width: 0; flex: 1 1 auto; }
   .context-bar { width: 80px; }
   .msg { max-width: 92%; }
