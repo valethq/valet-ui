@@ -249,7 +249,7 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
     const assistant = cm.message.role === "assistant";
     const mm = metaModel(cm);
     const shown = assistant && mm !== undefined && mm.model !== "" ? mm : undefined;
-    const meta: string[] = assistant ? [] : [cm.message.role];
+    const meta: string[] = [];
     if (shown !== undefined) meta.push(shown.model);
     if (cm.message.status !== "complete") meta.push(cm.message.status);
     if (meta.length > 0) {
