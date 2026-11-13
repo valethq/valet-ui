@@ -645,9 +645,25 @@ button.chip:active:not(:disabled) { transform: none; }
 .modal:focus { outline: none; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 8px 24px; }
 .modal-head h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; }
-.modal-body { overflow-y: auto; padding: 4px 24px 24px; }
-.settings-section { padding: 16px 0; }
-.settings-section + .settings-section, .plugin-sections > .settings-section:first-child { border-top: 1px solid var(--border); }
+.modal-body { overflow-y: auto; padding: 0 0 24px; }
+.settings-tabs { display: flex; gap: 2px; overflow-x: auto; padding: 0 24px; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.settings-tabs::-webkit-scrollbar { display: none; }
+.settings-tab {
+  flex: none;
+  margin-bottom: -1px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.settings-tab:hover { color: var(--text); }
+.settings-tab[aria-selected=true] { color: var(--text); border-bottom-color: var(--text); }
+.settings-panels { padding: 16px 24px 0; }
+.settings-section { padding: 0; }
 .settings-section h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 13.5px; font-weight: 600; }
 .settings-section .plugin-id { font-size: 11.5px; font-weight: 400; color: var(--faint); font-family: var(--mono); }
 .section-desc { margin: -6px 0 14px; font-size: 13px; color: var(--muted); }
@@ -811,7 +827,9 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   .modal-backdrop.leaving .modal { animation-name: sheet-out; }
   @keyframes sheet-in { from { transform: translateY(40px); opacity: .4; } }
   @keyframes sheet-out { to { transform: translateY(40px); opacity: 0; } }
-  .modal-body { padding: 4px 18px 20px; }
+  .modal-body { padding: 0 0 20px; }
+  .settings-tabs { padding: 0 18px; }
+  .settings-panels { padding: 16px 18px 0; }
   .modal-head { padding-left: 18px; }
   .theme-grid { grid-template-columns: repeat(2, 1fr); }
   .part-row summary { min-height: 32px; }

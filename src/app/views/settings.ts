@@ -32,7 +32,7 @@ function themeSection(): HTMLElement {
     grid.append(b);
   }
   paint();
-  return el("section", { class: "settings-section" }, el("h3", { text: "Theme" }), grid);
+  return el("section", { class: "settings-section" }, grid);
 }
 
 function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
@@ -76,13 +76,68 @@ function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
   return section;
 }
 
-/** Opens the settings dialog: the theme, then one form per plugin panel
+interface Tab {
+  label: string;
+  panel: HTMLElement;
+}
+
+/** A tab strip with one visible panel at a time. Arrow, Home and End keys move
+ * between tabs (WAI-ARIA tabs pattern). */
+function tabbed(tabs: Tab[]): HTMLElement {
+  const bar = el("div", { class: "settings-tabs", role: "tablist", "aria-label": "Settings sections" });
+  const body = el("div", { class: "settings-panels" });
+  const buttons = tabs.map((t, i) => {
+    const id = `settings-tab-${i}`;
+    const pid = `settings-panel-${i}`;
+    t.panel.id = pid;
+    t.panel.setAttribute("role", "tabpanel");
+    t.panel.setAttribute("aria-labelledby", id);
+    body.append(t.panel);
+    return el("button", { class: "settings-tab", role: "tab", id, "aria-controls": pid, text: t.label });
+  });
+  const select = (i: number, focus = false): void => {
+    tabs.forEach((t, j) => {
+      const on = j === i;
+      const b = buttons[j];
+      if (b !== undefined) {
+        b.setAttribute("aria-selected", String(on));
+        b.tabIndex = on ? 0 : -1;
+      }
+      t.panel.hidden = !on;
+    });
+    if (focus) buttons[i]?.focus();
+  };
+  buttons.forEach((b, i) => {
+    b.addEventListener("click", () => select(i));
+    b.addEventListener("keydown", (ev) => {
+      const n = buttons.length;
+      const next =
+        ev.key === "ArrowRight"
+          ? (i + 1) % n
+          : ev.key === "ArrowLeft"
+            ? (i - 1 + n) % n
+            : ev.key === "Home"
+              ? 0
+              : ev.key === "End"
+                ? n - 1
+                : -1;
+      if (next < 0) return;
+      ev.preventDefault();
+      select(next, true);
+    });
+    bar.append(b);
+  });
+  select(0);
+  return el("div", { class: "settings-tabbed" }, bar, body);
+}
+
+/** Opens the settings dialog: a Theme tab, then one tab per plugin panel
  * registered on the `settings` scope. */
 export function openSettings(deps: SettingsDeps): void {
   if (document.querySelector(".modal-backdrop:not(.leaving)") !== null) return;
   const opener = document.activeElement as HTMLElement | null;
   const close = iconButton("close", "Close");
-  const plugins = el("div", { class: "plugin-sections" }, el("div", { class: "hint", text: "Loading…" }));
+  const content = el("div", { class: "modal-body" }, tabbed([{ label: "Theme", panel: themeSection() }]));
   const dialog = el(
     "div",
     {
@@ -93,7 +148,7 @@ export function openSettings(deps: SettingsDeps): void {
       tabindex: "-1",
     },
     el("div", { class: "modal-head" }, el("h2", { id: "settings-title", text: "Settings" }), close),
-    el("div", { class: "modal-body" }, themeSection(), plugins),
+    content,
   );
   const backdrop = el("div", { class: "modal-backdrop" }, dialog);
   const onKey = (ev: KeyboardEvent): void => {
@@ -114,9 +169,15 @@ export function openSettings(deps: SettingsDeps): void {
 
   deps
     .load()
-    .then((entries) => plugins.replaceChildren(...entries.map((e) => panelSection(e, deps))))
+    .then((entries) => {
+      const tabs = [
+        { label: "Theme", panel: themeSection() },
+        ...entries.map((e) => ({ label: e.title, panel: panelSection(e, deps) })),
+      ];
+      content.replaceChildren(tabbed(tabs));
+    })
     .catch((e: unknown) =>
-      plugins.replaceChildren(
+      content.append(
         el("div", { class: "hint error", text: `Plugin settings unavailable: ${errorText(e)}` }),
       ),
     );
