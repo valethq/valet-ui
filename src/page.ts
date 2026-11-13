@@ -257,6 +257,12 @@ button.chip:active:not(:disabled) { transform: none; }
 .sidebar .project-picker .chip:hover { background: var(--tint); color: var(--text); }
 .sidebar .project-picker select { width: 100%; font-size: 13.5px; border-radius: var(--r-md); }
 .sidebar .sessions { flex: 1; overflow-y: auto; padding: 2px 6px; display: flex; flex-direction: column; gap: 4px; }
+.sidebar .sessions {
+  -webkit-mask: linear-gradient(to bottom, transparent, #000 22px, #000 calc(100% - 22px), transparent);
+  mask: linear-gradient(to bottom, transparent, #000 22px, #000 calc(100% - 22px), transparent);
+  padding-block: 22px;
+  margin-block: -22px;
+}
 .session-row {
   display: flex;
   align-items: center;
