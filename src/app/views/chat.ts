@@ -364,6 +364,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       return [...sections.values(), ...(more.items.length > 0 ? [more] : [])];
     },
     "model-pop",
+    true,
   );
   const effortMenu = popover(
     effortChip.button,

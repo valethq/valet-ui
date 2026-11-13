@@ -15,13 +15,19 @@ export interface MenuSection {
 
 /** A click-to-open menu anchored above `trigger`. Sections are rebuilt on
  * every open; outside pointerdown or Escape closes it, arrows move focus. */
-export function popover(trigger: HTMLButtonElement, sections: () => MenuSection[], cls = ""): HTMLElement {
+export function popover(
+  trigger: HTMLButtonElement,
+  sections: () => MenuSection[],
+  cls = "",
+  searchable = false,
+): HTMLElement {
   const root = el("span", { class: `pop ${cls}`.trim() }, trigger);
   trigger.setAttribute("aria-haspopup", "menu");
   trigger.setAttribute("aria-expanded", "false");
   let menu: HTMLElement | null = null;
 
-  const items = (): HTMLElement[] => [...(menu?.querySelectorAll<HTMLElement>(".menu-item") ?? [])];
+  const items = (): HTMLElement[] =>
+    [...(menu?.querySelectorAll<HTMLElement>(".menu-item") ?? [])].filter((b) => b.style.display !== "none");
   const onDoc = (ev: Event): void => {
     if (!root.contains(ev.target as Node)) close();
   };
@@ -49,8 +55,16 @@ export function popover(trigger: HTMLButtonElement, sections: () => MenuSection[
 
   function open(): void {
     const m = el("div", { class: "menu", role: "menu" });
+    const search = searchable
+      ? el("input", { class: "menu-search", type: "search", placeholder: "Search", "aria-label": "Search" })
+      : null;
+    const empty = el("div", { class: "menu-empty", text: "No matches" });
+    empty.style.display = "none";
+    if (search !== null) m.append(search);
+    const groups: { title: string; group: HTMLElement }[] = [];
     for (const s of sections()) {
       const group = el("div", { class: "menu-section" });
+      groups.push({ title: s.title ?? "", group });
       if (s.title !== undefined) group.append(el("div", { class: "menu-title", text: s.title }));
       for (const it of s.items) {
         const b = el("button", {
@@ -71,6 +85,29 @@ export function popover(trigger: HTMLButtonElement, sections: () => MenuSection[
       }
       m.append(group);
     }
+    m.append(empty);
+    const filter = (): void => {
+      const q = search?.value.trim().toLowerCase() ?? "";
+      let total = 0;
+      for (const { title, group } of groups) {
+        const inTitle = title.toLowerCase().includes(q);
+        let any = false;
+        for (const b of group.querySelectorAll<HTMLElement>(".menu-item")) {
+          const hit = q === "" || inTitle || (b.textContent ?? "").toLowerCase().includes(q);
+          b.style.display = hit ? "" : "none";
+          any ||= hit;
+        }
+        group.style.display = any ? "" : "none";
+        if (any) total++;
+      }
+      empty.style.display = total === 0 ? "" : "none";
+    };
+    search?.addEventListener("input", filter);
+    search?.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      items()[0]?.click();
+    });
     menu = m;
     root.append(m);
     // Layout sizes, not the menu's rect: its entrance transform would skew that.
@@ -80,8 +117,9 @@ export function popover(trigger: HTMLButtonElement, sections: () => MenuSection[
     trigger.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", onDoc, true);
     document.addEventListener("keydown", onKey);
+    if (search !== null) search.focus({ preventScroll: true });
     const first = m.querySelector<HTMLElement>(".selected") ?? items()[0];
-    first?.focus({ preventScroll: true });
+    if (search === null) first?.focus({ preventScroll: true });
     first?.scrollIntoView({ block: "nearest" });
   }
 
