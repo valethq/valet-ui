@@ -59,7 +59,7 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
   const bundle = await build.outputs[0]?.text();
   if (bundle === undefined) throw new Error("valet-ui bundle produced no output");
 
-  const font = await Bun.file(join(import.meta.dir, "app", "fonts", "inter-var.woff2")).arrayBuffer();
+  const font = await Bun.file(join(import.meta.dir, "app", "fonts", "public-sans-var.woff2")).arrayBuffer();
   const html = indexHtml(coreUrl);
   const headers = { "content-security-policy": csp(coreUrl) };
 
@@ -77,7 +77,7 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
           headers: { "content-type": "text/javascript; charset=utf-8", ...headers },
         });
       }
-      if (path === "/fonts/inter.woff2") {
+      if (path === "/fonts/public-sans.woff2") {
         return new Response(font, {
           headers: { "content-type": "font/woff2", "cache-control": "public, max-age=86400", ...headers },
         });

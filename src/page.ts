@@ -19,8 +19,8 @@ ${themeCss()}
   --tint-strong: color-mix(in srgb, var(--text) 10%, transparent);
 }
 @font-face {
-  font-family: "Inter";
-  src: url("/fonts/inter.woff2") format("woff2");
+  font-family: "Public Sans";
+  src: url("/fonts/public-sans.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }
@@ -28,7 +28,7 @@ ${themeCss()}
 html, body { height: 100%; }
 body {
   margin: 0;
-  font: 14px/1.55 "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.55 "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-feature-settings: "cv11", "ss03";
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
@@ -330,7 +330,7 @@ button.chip:active:not(:disabled) { transform: none; }
   pointer-events: none;
 }
 .chat-header > * { pointer-events: auto; }
-.chat-header .session-title { font-weight: 600; font-size: 15px; line-height: 1.35; letter-spacing: -0.01em; flex: 0 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.chat-header .session-title { font-weight: 400; font-size: 15px; line-height: 1.35; letter-spacing: -0.01em; flex: 0 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .chat-header .suffix { flex: none; color: var(--faint); }
 @keyframes pulse { 50% { opacity: .3; } }
 

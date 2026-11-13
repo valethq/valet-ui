@@ -29,7 +29,7 @@ describe("ui server", () => {
   });
 
   test("serves the bundled font and allows it in the CSP", async () => {
-    const res = await fetch(`${base}/fonts/inter.woff2`);
+    const res = await fetch(`${base}/fonts/public-sans.woff2`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("font/woff2");
     expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(10_000);
