@@ -17,9 +17,14 @@ export interface ChatCallbacks {
   onToggleNav(): void;
 }
 
+export interface ModelSel {
+  provider: string;
+  model: string;
+}
+
 export interface ChatHandle {
   /** `titleSuffix` is the session's duplicate-title number, when it has one. */
-  update(view: SessionView | null, providers: ProviderModels[], titleSuffix?: number): void;
+  update(view: SessionView | null, providers: ProviderModels[], titleSuffix?: number, draft?: ModelSel): void;
   setConnection(open: boolean): void;
   setSendError(message: string | null): void;
 }
@@ -292,6 +297,13 @@ function contextWindow(view: SessionView, providers: ProviderModels[]): number |
   return view.contextWindow ?? undefined;
 }
 
+/** The landing page's model: the user's pick, else the first provider's first family. */
+function draftPick(draft: ModelSel | undefined, providers: ProviderModels[]): ModelSel | undefined {
+  if (draft !== undefined) return draft;
+  const first = groupModels(providers).find((f) => !f.more);
+  return first === undefined ? undefined : { provider: first.provider, model: pickVariant(first).id };
+}
+
 export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const navToggle = iconButton("sidebar", "Sessions", "nav-toggle");
   const title = el("span", { class: "session-title" });
@@ -524,8 +536,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     }
   }
 
-  function rebuildModels(view: SessionView, providers: ProviderModels[]): void {
-    const selected = view.session.settings.model;
+  function rebuildModels(selected: ModelSel | undefined, providers: ProviderModels[]): void {
     families = groupModels(providers);
     let sel =
       selected === undefined
@@ -587,7 +598,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   };
 
   return {
-    update(view, providers, titleSuffix) {
+    update(view, providers, titleSuffix, draft) {
       current = view;
       const sid = view?.session.id ?? null;
       if (sid !== sessionId) {
@@ -604,8 +615,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         title.textContent = "";
         titleNum.style.display = "none";
         sessionMenu.style.display = "none";
-        families = [];
-        setModels(null, null);
+        rebuildModels(draftPick(draft, providers), providers);
         if (messages.querySelector(".landing") === null) {
           clear(messages);
           messages.append(
@@ -630,7 +640,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       } else {
         titleNum.style.display = "none";
       }
-      rebuildModels(view, providers);
+      rebuildModels(view.session.settings.model, providers);
       stop.style.display = view.activeRunId === null ? "none" : "";
 
       setContext(view.contextTokens, contextWindow(view, providers));

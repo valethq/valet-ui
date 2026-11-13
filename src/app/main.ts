@@ -210,7 +210,7 @@ function scheduleRender(): void {
       });
     }
     const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
-    app.chat?.update(app.view, app.providers, suffix);
+    app.chat?.update(app.view, app.providers, suffix, draftModel);
   });
 }
 
@@ -334,6 +334,9 @@ function newSession(): void {
   scheduleRender();
 }
 
+// The landing page's model pick; applied to the session when it is first created.
+let draftModel: { provider: string; model: string } | undefined;
+
 async function createSessionForDraft(): Promise<boolean> {
   if (app.projectId === null) return false;
   const session = await api.createSession(app.projectId).catch((e: unknown) => {
@@ -341,7 +344,15 @@ async function createSessionForDraft(): Promise<boolean> {
     return undefined;
   });
   if (session === undefined) return false;
-  app.sessions = upsertSession(app.sessions, session);
+  const pick = draftModel;
+  const configured =
+    pick === undefined
+      ? session
+      : await api.setSessionModel(session, pick.provider, pick.model).catch((e: unknown) => {
+          toast(e instanceof Error ? e.message : "could not set model");
+          return session;
+        });
+  app.sessions = upsertSession(app.sessions, configured);
   syncTopics();
   await openSession(session.id);
   return app.view !== null;
@@ -520,7 +531,11 @@ async function startApp(): Promise<void> {
     },
     onModel: (provider, model) => {
       const view = app.view;
-      if (view === null) return;
+      if (view === null) {
+        draftModel = { provider, model };
+        scheduleRender();
+        return;
+      }
       if (!app.socket.open) {
         toast("Offline: model not changed");
         scheduleRender();
