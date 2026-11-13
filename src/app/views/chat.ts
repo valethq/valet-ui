@@ -193,6 +193,21 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
   }
 }
 
+/** valet's own compaction reads "Compacted"; a harness names itself. */
+function compactionLabel(d: Extract<PartData, { type: "compaction" }>): string {
+  const by = d.by === "valet" ? "" : ` (by ${d.by})`;
+  switch (d.status) {
+    case "in_progress":
+      return `Compacting${by}…`;
+    case "completed":
+      return `Compacted${by}`;
+    case "failed":
+      return `Compaction failed${by}${d.error ? `: ${d.error}` : ""}`;
+    case "cancelled":
+      return `Compaction cancelled${by}`;
+  }
+}
+
 function fileNode(d: Extract<PartData, { type: "file" }>): HTMLElement {
   if (!d.mime.startsWith("image/")) {
     return el("div", { class: "part-file" }, icon("file"), el("span", { text: d.name }));
@@ -227,7 +242,9 @@ function messageSig(cm: ChatMessage, view: SessionView, showAll: Map<string, boo
           ? `${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
           : d.type === "notice"
             ? d.text.length
-            : 0;
+            : d.type === "compaction"
+              ? d.status
+              : 0;
     return `${p.id}:${p.status}:${d.type}:${size}`;
   });
   const err = cm.message.runId === null ? "" : (view.runErrors.get(cm.message.runId) ?? "");
@@ -260,9 +277,13 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
     }
     if (d.type === "compaction") {
       bubble = null;
-      // valet's own compaction reads "Compacted"; a harness marker names the harness
-      const label = d.by === "valet" ? "Compacted" : `Compacted (by ${d.by})`;
-      out.push(el("div", { class: `divider info${fx}` }, el("span", { text: label })));
+      out.push(
+        el(
+          "div",
+          { class: `divider ${d.status === "failed" ? "warn" : "info"}${fx}` },
+          el("span", { text: compactionLabel(d) }),
+        ),
+      );
       continue;
     }
     const node = renderPart(part, ui);
