@@ -776,7 +776,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
     filter: blur(16px);
     opacity: 0;
     pointer-events: none;
-    transition-timing-function: var(--sb-ease-out);
+    transition: transform .6s var(--sb-ease), filter .6s var(--sb-ease), opacity .8s ease-in-out;
     transition-delay: 0s;
   }
   .app.nav-open .sidebar, .app.nav-open.collapsed .sidebar {
