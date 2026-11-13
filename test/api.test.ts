@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { ApiError, authStatus, listProjects, listSettings, saveSettings, sendMessage } from "../src/app/api";
+import {
+  ApiError,
+  authStatus,
+  deleteSession,
+  listProjects,
+  listSettings,
+  saveSettings,
+  sendMessage,
+  updateSession,
+} from "../src/app/api";
 
 const g = globalThis as Record<string, unknown>;
 const realFetch = g.fetch;
@@ -71,6 +80,34 @@ describe("settings", () => {
     const err = await listSettings().catch((e: unknown) => e);
     expect((err as ApiError).status).toBe(422);
     expect((err as ApiError).message).toBe("port is taken");
+  });
+});
+
+describe("session management", () => {
+  test("deleteSession sends DELETE to the core session route", async () => {
+    let seen: { url: string; method?: string } = { url: "" };
+    g.window = { VALET: { coreUrl: "http://core.test/" } };
+    g.fetch = ((url: string, init: RequestInit) => {
+      seen = { url, method: init.method };
+      return Promise.resolve(new Response('{"id":"ses_1"}'));
+    }) as unknown as typeof fetch;
+    await deleteSession("ses_1");
+    expect(seen).toEqual({ url: "http://core.test/api/core/sessions/ses_1", method: "DELETE" });
+  });
+
+  test("updateSession renames with a PATCH carrying only the title", async () => {
+    let seen: { url: string; method?: string; body?: unknown } = { url: "" };
+    g.window = { VALET: { coreUrl: "http://core.test/" } };
+    g.fetch = ((url: string, init: RequestInit) => {
+      seen = { url, method: init.method, body: init.body };
+      return Promise.resolve(new Response('{"id":"ses_1"}'));
+    }) as unknown as typeof fetch;
+    await updateSession("ses_1", { title: "Renamed" });
+    expect(seen).toEqual({
+      url: "http://core.test/api/core/sessions/ses_1",
+      method: "PATCH",
+      body: '{"title":"Renamed"}',
+    });
   });
 });
 

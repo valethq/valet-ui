@@ -316,6 +316,35 @@ async function newSession(): Promise<void> {
   await openSession(session.id);
 }
 
+async function renameSession(id: string, title: string): Promise<void> {
+  const session = await api.updateSession(id, { title }).catch((e: unknown) => {
+    toast(e instanceof Error ? e.message : "rename failed");
+    return undefined;
+  });
+  if (session === undefined) return;
+  app.sessions = upsertSession(app.sessions, session);
+  if (app.view?.session.id === id) app.view.session = session;
+  scheduleRender();
+}
+
+async function deleteSession(id: string): Promise<void> {
+  if (!window.confirm("Delete this session and its messages? This cannot be undone.")) return;
+  const deleted = await api.deleteSession(id).then(
+    () => true,
+    (e: unknown) => {
+      toast(e instanceof Error ? e.message : "delete failed");
+      return false;
+    },
+  );
+  if (!deleted) return;
+  app.sessions = app.sessions.filter((s) => s.id !== id);
+  if (app.view?.session.id === id) app.view = null;
+  syncTopics();
+  const next = pickSession(false);
+  if (next !== undefined) await openSession(next.id);
+  else scheduleRender();
+}
+
 function onEvent(topic: string, name: string, data: unknown): void {
   const sep = topic.indexOf(":");
   const id = topic.slice(sep + 1);
@@ -442,6 +471,15 @@ async function startApp(): Promise<void> {
         toast(message);
         return false;
       }
+    },
+    onRename: () => {
+      const session = app.view?.session;
+      if (session === undefined) return;
+      const title = window.prompt("Rename session", session.title ?? "")?.trim();
+      if (title) void renameSession(session.id, title);
+    },
+    onDelete: () => {
+      if (app.view !== null) void deleteSession(app.view.session.id);
     },
     onStop: () => {
       const runId = app.view?.activeRunId;

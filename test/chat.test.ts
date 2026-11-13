@@ -150,6 +150,8 @@ describe("send error line", () => {
         onSend: () => Promise.resolve(true),
         onStop() {},
         onModel() {},
+        onRename() {},
+        onDelete() {},
         onToggleNav() {},
       });
       const errNode = findByClass(root, "send-error") as FakeEl;
@@ -239,6 +241,8 @@ describe("tool output rendering", () => {
         onSend: () => Promise.resolve(true),
         onStop() {},
         onModel() {},
+        onRename() {},
+        onDelete() {},
         onToggleNav() {},
       });
       const part = toolPart({

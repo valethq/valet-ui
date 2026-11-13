@@ -12,6 +12,8 @@ export interface ChatCallbacks {
   onSend(text: string, clientMessageId: string): Promise<boolean>;
   onStop(): void;
   onModel(provider: string, model: string): void;
+  onRename(): void;
+  onDelete(): void;
   onToggleNav(): void;
 }
 
@@ -382,10 +384,24 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
   });
 
+  const sessionMenu = popover(
+    iconButton("more", "Session actions", "session-menu"),
+    () => [
+      {
+        items: [
+          { label: "Rename", lead: icon("pencil"), onSelect: () => cb.onRename() },
+          { label: "Delete", lead: icon("trash"), onSelect: () => cb.onDelete() },
+        ],
+      },
+    ],
+    "session-actions",
+  );
+  sessionMenu.style.display = "none";
+
   const main = el(
     "div",
     { class: "main" },
-    el("div", { class: "chat-header" }, navToggle, sessionDot, title, titleNum),
+    el("div", { class: "chat-header" }, navToggle, sessionDot, title, titleNum, sessionMenu),
     messages,
     el(
       "div",
@@ -539,6 +555,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       if (view === null) {
         title.textContent = "";
         titleNum.style.display = "none";
+        sessionMenu.style.display = "none";
         families = [];
         setModels(null, null);
         clear(messages);
@@ -551,6 +568,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       }
 
       title.textContent = view.session.title ?? "Untitled";
+      sessionMenu.style.display = "";
       if (titleSuffix !== undefined) {
         titleNum.textContent = `#${titleSuffix}`;
         titleNum.style.display = "";

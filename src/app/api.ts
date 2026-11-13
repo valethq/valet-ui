@@ -110,6 +110,9 @@ export const updateSession = (
   patch: { title?: string | null; color?: string | null; settings?: Session["settings"] },
 ): Promise<Session> => req("PATCH", `/api/core/sessions/${encodeURIComponent(sessionId)}`, patch);
 
+export const deleteSession = (sessionId: string): Promise<Session> =>
+  req("DELETE", `/api/core/sessions/${encodeURIComponent(sessionId)}`);
+
 export const setSessionModel = (session: Session, provider: string, model: string): Promise<Session> =>
   updateSession(session.id, {
     settings: { ...session.settings, model: { provider, model } },
