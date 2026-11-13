@@ -64,6 +64,7 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   const logout = iconButton("logout", "Log out", "logout");
   logout.addEventListener("click", () => p.onLogout());
 
+  const scrollTop = node.querySelector<HTMLElement>(".sessions")?.scrollTop ?? 0;
   node.replaceChildren(
     el(
       "div",
@@ -79,4 +80,5 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
     list,
     el("div", { class: "sidebar-foot" }, settings, logout),
   );
+  list.scrollTop = scrollTop;
 }

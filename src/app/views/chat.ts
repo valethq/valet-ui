@@ -179,6 +179,25 @@ function metaModel(cm: ChatMessage): { provider: string; model: string } | undef
     : undefined;
 }
 
+/** Changes whenever a message would render differently, so unchanged messages
+ * keep their DOM (selection, scroll and hover survive streaming elsewhere). */
+function messageSig(cm: ChatMessage, view: SessionView, showAll: Map<string, boolean>): string {
+  const parts = cm.parts.map((p) => {
+    const d = p.data;
+    const size =
+      d.type === "text" || d.type === "reasoning"
+        ? d.text.length
+        : d.type === "tool-call"
+          ? `${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
+          : d.type === "notice" || d.type === "compaction-summary"
+            ? d.text.length
+            : 0;
+    return `${p.id}:${p.status}:${d.type}:${size}`;
+  });
+  const err = cm.message.runId === null ? "" : (view.runErrors.get(cm.message.runId) ?? "");
+  return `${cm.message.status}|${cm.message.updatedAt}|${err}|${parts.join(",")}`;
+}
+
 /** Renders a message as one or more flow elements: non-error notice parts
  * break out of the bubble into a full-width divider, splitting the message
  * into a new `.msg` chunk on either side. */
@@ -290,6 +309,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const openState = new Map<string, boolean>();
   const showAll = new Map<string, boolean>();
   const bodyStick = new Map<string, boolean>();
+  const cache = new Map<string, { sig: string; nodes: HTMLElement[] }>();
   let stickToBottom = true;
   let connOpen = false;
   let draftId: string | null = null;
@@ -437,7 +457,19 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     }
     const ui: PartUi = { openState, showAll, refresh: () => renderMessages(view) };
     clear(messages);
-    for (const cm of view.messages) messages.append(...renderMessage(cm, ui, view));
+    const live = new Set<string>();
+    for (const cm of view.messages) {
+      const id = cm.message.id;
+      const sig = messageSig(cm, view, showAll);
+      let hit = cache.get(id);
+      if (hit === undefined || hit.sig !== sig) {
+        hit = { sig, nodes: renderMessage(cm, ui, view) };
+        cache.set(id, hit);
+      }
+      live.add(id);
+      messages.append(...hit.nodes);
+    }
+    for (const id of cache.keys()) if (!live.has(id)) cache.delete(id);
     if (view.messages.length === 0) {
       messages.append(el("div", { class: "empty", text: "No messages yet" }));
     }
@@ -445,9 +477,12 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       const pid = row.dataset.partId;
       const body = row.querySelector<HTMLElement>(".body");
       if (pid === undefined || body === null) continue;
-      body.addEventListener("scroll", () => {
-        bodyStick.set(pid, body.scrollHeight - body.scrollTop - body.clientHeight < STICK_PX);
-      });
+      if (body.dataset.bound !== "1") {
+        body.setAttribute("data-bound", "1");
+        body.addEventListener("scroll", () => {
+          bodyStick.set(pid, body.scrollHeight - body.scrollTop - body.clientHeight < STICK_PX);
+        });
+      }
       if (runningTools.has(pid) && (bodyStick.get(pid) ?? true)) {
         body.scrollTop = body.scrollHeight;
       } else {
@@ -542,6 +577,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         openState.clear();
         showAll.clear();
         bodyStick.clear();
+        cache.clear();
         stickToBottom = true;
       }
 

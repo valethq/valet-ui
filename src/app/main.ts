@@ -149,6 +149,23 @@ function indicatorFor(s: Session): Indicator {
   );
 }
 
+let lastSidebarSig = "";
+function sidebarSig(
+  open: Session | undefined,
+  unread: Set<string>,
+  indicators: Map<string, Indicator>,
+): string {
+  return JSON.stringify([
+    app.projectId,
+    app.projects.map((p) => [p.id, p.name]),
+    open?.id,
+    Math.floor(Date.now() / 60_000),
+    [...unread],
+    [...indicators],
+    app.sessions.map((s) => [s.id, s.title, s.status, s.lastMessageAt, s.updatedAt]),
+  ]);
+}
+
 let renderQueued = false;
 function scheduleRender(): void {
   if (renderQueued) return;
@@ -157,35 +174,41 @@ function scheduleRender(): void {
     renderQueued = false;
     const open = app.view?.session;
     if (open !== undefined && open.lastMessageAt !== null) noteSeen(open.id, open.lastMessageAt);
-    renderSidebar(app.sidebar, {
-      projects: app.projects,
-      projectId: app.projectId,
-      sessions: app.sessions,
-      openId: open?.id ?? null,
-      unread: unreadSessions(),
-      indicators: new Map(app.sessions.map((s) => [s.id, indicatorFor(s)])),
-      onProject: (id) => {
-        closeNav();
-        void switchProject(id);
-      },
-      onSession: (id) => {
-        closeNav();
-        void openSession(id);
-      },
-      onNew: () => {
-        closeNav();
-        void newSession();
-      },
-      onLogout: () => {
-        closeNav();
-        void logout();
-      },
-      onCollapse: toggleNav,
-      onSettings: () => {
-        closeNav();
-        openSettings({ load: api.listSettings, save: api.saveSettings });
-      },
-    });
+    const unread = unreadSessions();
+    const indicators = new Map(app.sessions.map((s) => [s.id, indicatorFor(s)]));
+    const sig = sidebarSig(open, unread, indicators);
+    if (sig !== lastSidebarSig) {
+      lastSidebarSig = sig;
+      renderSidebar(app.sidebar, {
+        projects: app.projects,
+        projectId: app.projectId,
+        sessions: app.sessions,
+        openId: open?.id ?? null,
+        unread,
+        indicators,
+        onProject: (id) => {
+          closeNav();
+          void switchProject(id);
+        },
+        onSession: (id) => {
+          closeNav();
+          void openSession(id);
+        },
+        onNew: () => {
+          closeNav();
+          void newSession();
+        },
+        onLogout: () => {
+          closeNav();
+          void logout();
+        },
+        onCollapse: toggleNav,
+        onSettings: () => {
+          closeNav();
+          openSettings({ load: api.listSettings, save: api.saveSettings });
+        },
+      });
+    }
     const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
     app.chat?.update(app.view, app.providers, suffix);
   });
@@ -498,7 +521,7 @@ async function startApp(): Promise<void> {
       api
         .setSessionModel(view.session, provider, model)
         .then((session) => {
-          if (app.view !== null) app.view.session = session;
+          if (app.view?.session.id === session.id) app.view.session = session;
           app.sessions = upsertSession(app.sessions, session);
           scheduleRender();
         })

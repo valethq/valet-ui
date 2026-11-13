@@ -28,6 +28,14 @@ describe("ui server", () => {
     expect((await res.text()).length).toBeGreaterThan(0);
   });
 
+  test("serves the bundled font and allows it in the CSP", async () => {
+    const res = await fetch(`${base}/fonts/inter.woff2`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("font/woff2");
+    expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(10_000);
+    expect(res.headers.get("content-security-policy")).toContain("font-src 'self'");
+  });
+
   test("strict CSP allows the core origin and its ws form", async () => {
     const res = await fetch(`${base}/`);
     const csp = res.headers.get("content-security-policy") ?? "";

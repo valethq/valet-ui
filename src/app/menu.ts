@@ -73,7 +73,9 @@ export function popover(trigger: HTMLButtonElement, sections: () => MenuSection[
     }
     menu = m;
     root.append(m);
-    if (m.getBoundingClientRect().right > window.innerWidth - 8) m.classList.add("end");
+    const box = m.getBoundingClientRect();
+    if (box.right > window.innerWidth - 8) m.classList.add("end");
+    if (box.top < 8) m.classList.add("below");
     trigger.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", onDoc, true);
     document.addEventListener("keydown", onKey);
