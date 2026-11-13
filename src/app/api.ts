@@ -13,13 +13,11 @@ export class ApiError extends Error {
 /** Called when a non-auth request comes back 401 (session expired). */
 export const hooks = { onUnauthorized: (): void => {} };
 
-const base = (): string => window.VALET.coreUrl.replace(/\/+$/, "");
-
 async function req<T>(method: string, path: string, body?: unknown, timeout = 15_000): Promise<T> {
   let res: Response;
   let text: string;
   try {
-    res = await fetch(`${base()}${path}`, {
+    res = await fetch(path, {
       method,
       credentials: "include",
       signal: AbortSignal.timeout(timeout),
@@ -126,7 +124,7 @@ const blobUrls = new Map<string, Promise<string>>();
 export function blobUrl(blobId: string): Promise<string> {
   let url = blobUrls.get(blobId);
   if (url === undefined) {
-    url = fetch(`${base()}/api/core/blobs/${encodeURIComponent(blobId)}`, { credentials: "include" }).then(
+    url = fetch(`/api/core/blobs/${encodeURIComponent(blobId)}`, { credentials: "include" }).then(
       async (res) => {
         if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
         return URL.createObjectURL(await res.blob());
@@ -157,7 +155,7 @@ export const setSessionModel = (session: Session, provider: string, model: strin
 export const cancelRun = (runId: string): Promise<{ ok: boolean }> =>
   req("POST", `/api/core/runs/${encodeURIComponent(runId)}/cancel`);
 
-// ---- valet-ui settings panels (src/settings.ts, served by this plugin on core) ----
+// ---- valet-ui settings panels (src/settings.ts, reached through the core relay) ----
 
 export const listSettings = (): Promise<SettingsEntry[]> => get("/plugins/valet-ui/settings");
 

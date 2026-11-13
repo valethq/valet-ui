@@ -145,9 +145,3 @@ export interface RunStatus {
   runId: string;
   status: string;
 }
-
-declare global {
-  interface Window {
-    VALET: { coreUrl: string };
-  }
-}

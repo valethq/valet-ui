@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { indexHtml, configScript } from "./page";
+import { indexHtml, bootScript } from "./page";
+import { isProxied, openUpstream, proxyRequest, sameOrigin, type WsData, wsHandlers } from "./proxy";
 
 export interface UiConfig {
   host?: string;
@@ -23,25 +24,21 @@ const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 7418;
 const DEFAULT_CORE_URL = "http://127.0.0.1:7417";
 
-function wsUrl(coreUrl: string): string {
-  return coreUrl.replace(/^http/, "ws");
-}
-
-function csp(coreUrl: string): string {
-  const scriptHash = createHash("sha256").update(configScript(coreUrl)).digest("base64");
+function csp(): string {
+  const scriptHash = createHash("sha256").update(bootScript).digest("base64");
   return [
     "default-src 'none'",
     `script-src 'self' 'sha256-${scriptHash}'`,
     "style-src 'unsafe-inline'",
     "font-src 'self'",
-    `connect-src 'self' ${coreUrl} ${wsUrl(coreUrl)}`,
+    "connect-src 'self'",
     "img-src 'self' blob: data:",
     "base-uri 'none'",
     "form-action 'none'",
   ].join("; ");
 }
 
-/** Serves the SPA on its own port (11.5). Nothing mounts on the control plane. */
+/** Serves the SPA on its own port (11.5) and relays its API and websocket traffic to core. */
 export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServer> {
   const host = opts.host ?? DEFAULT_HOST;
   const port = opts.port ?? DEFAULT_PORT;
@@ -60,14 +57,21 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
   if (bundle === undefined) throw new Error("valet-ui bundle produced no output");
 
   const font = await Bun.file(join(import.meta.dir, "app", "fonts", "public-sans-var.woff2")).arrayBuffer();
-  const html = indexHtml(coreUrl);
-  const headers = { "content-security-policy": csp(coreUrl) };
+  const html = indexHtml();
+  const headers = { "content-security-policy": csp() };
 
-  const server = Bun.serve({
+  const server = Bun.serve<WsData>({
     hostname: host,
     port,
-    fetch(req) {
+    websocket: wsHandlers,
+    fetch(req, srv) {
       const path = new URL(req.url).pathname;
+      if (isProxied(path)) {
+        if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
+        if (path !== "/ws") return proxyRequest(req, coreUrl);
+        const upgraded = srv.upgrade(req, { data: openUpstream(req, coreUrl) });
+        return upgraded ? undefined : Response.json({ error: "websocket upgrade required" }, { status: 400 });
+      }
       if (req.method !== "GET") return new Response("not found", { status: 404 });
       if (path === "/") {
         return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", ...headers } });

@@ -825,11 +825,9 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 }
 `;
 
-export function configScript(coreUrl: string): string {
-  return `window.VALET = ${JSON.stringify({ coreUrl })};${themeBootScript}`;
-}
+export const bootScript = themeBootScript;
 
-export function indexHtml(coreUrl: string): string {
+export function indexHtml(): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -837,7 +835,7 @@ export function indexHtml(coreUrl: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>valet</title>
 <style>${CSS}</style>
-<script>${configScript(coreUrl)}</script>
+<script>${bootScript}</script>
 </head>
 <body>
 <div id="root"></div>

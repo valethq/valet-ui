@@ -16,8 +16,7 @@ describe("ui server", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
     const html = await res.text();
-    expect(html).toContain("window.VALET");
-    expect(html).toContain('"coreUrl":"http://127.0.0.1:7417"');
+    expect(html).not.toContain("7417");
     expect(html).toContain('src="/app.js"');
   });
 
@@ -36,11 +35,11 @@ describe("ui server", () => {
     expect(res.headers.get("content-security-policy")).toContain("font-src 'self'");
   });
 
-  test("strict CSP allows the core origin and its ws form", async () => {
+  test("strict CSP only lets the page talk to its own origin", async () => {
     const res = await fetch(`${base}/`);
     const csp = res.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("default-src 'none'");
-    expect(csp).toContain("connect-src 'self' http://127.0.0.1:7417 ws://127.0.0.1:7417");
+    expect(csp).toContain("connect-src 'self';");
     expect(csp).toMatch(/script-src 'self' 'sha256-[^']+'/);
   });
 
@@ -55,12 +54,8 @@ describe("ui server config", () => {
   let server: UiServer;
   afterAll(() => server?.stop());
 
-  test("coreUrl and port are honoured", async () => {
+  test("port is honoured", async () => {
     server = await startUiServer({ port: 0, coreUrl: "http://127.0.0.1:9999/" });
-    const html = await (await fetch(`${server.url}/`)).text();
-    expect(html).toContain('"coreUrl":"http://127.0.0.1:9999"');
-    const csp = (await fetch(`${server.url}/`)).headers.get("content-security-policy") ?? "";
-    expect(csp).toContain("http://127.0.0.1:9999 ws://127.0.0.1:9999");
     expect(server.port).toBeGreaterThan(0);
   });
 });

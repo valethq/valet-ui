@@ -57,7 +57,7 @@ interface App {
 }
 
 const app: App = {
-  socket: new CoreSocket(window.VALET.coreUrl),
+  socket: new CoreSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`),
   chat: null,
   sidebar: el("div", { class: "sidebar" }),
   projects: [],
@@ -627,11 +627,11 @@ async function boot(): Promise<void> {
         await startApp();
       });
     } else {
-      fatal(`cannot reach core at ${window.VALET.coreUrl}`);
+      fatal("cannot reach valet core");
     }
     return;
   }
-  await startApp().catch(() => fatal(`could not load valet from ${window.VALET.coreUrl}`));
+  await startApp().catch(() => fatal("could not load valet"));
 }
 
 void boot();

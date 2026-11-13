@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { indexHtml } from "../src/page";
 
-const html = indexHtml("http://core.test");
+const html = indexHtml();
 
 describe("page css", () => {
   test("sidebar titles wrap to at most two lines", () => {

@@ -30,22 +30,28 @@ async function activate(config: UiConfig) {
   return { urls, reload };
 }
 
-const coreUrlOf = async (url: string) =>
-  ((await (await fetch(`${url}/`)).text()).match(/"coreUrl":"([^"]*)"/) ?? [])[1];
+const proxiedTo = async (url: string) =>
+  ((await (await fetch(`${url}/api/ping`)).json()) as { from: string }).from;
 
-test("a config reload restarts the web server with the new coreUrl", async () => {
-  const { urls, reload } = await activate({ port: 0, coreUrl: "http://a.test:1" });
-  expect(await coreUrlOf(urls[0] as string)).toBe("http://a.test:1");
-  await reload({ port: 0, coreUrl: "http://b.test:2" });
+function fakeCore(from: string) {
+  const core = Bun.serve({ port: 0, fetch: () => Response.json({ from }) });
+  disposers.push(() => core.stop(true));
+  return `http://127.0.0.1:${core.port}`;
+}
+
+test("a config reload restarts the web server against the new coreUrl", async () => {
+  const { urls, reload } = await activate({ port: 0, coreUrl: fakeCore("a") });
+  expect(await proxiedTo(urls[0] as string)).toBe("a");
+  await reload({ port: 0, coreUrl: fakeCore("b") });
   expect(urls).toHaveLength(2);
-  expect(await coreUrlOf(urls[1] as string)).toBe("http://b.test:2");
+  expect(await proxiedTo(urls[1] as string)).toBe("b");
   await expect(fetch(`${urls[0]}/`)).rejects.toThrow();
 });
 
 test("a failed restart brings the previous server back and reports the error", async () => {
   const blocker = Bun.serve({ port: 0, fetch: () => new Response("x") });
   disposers.push(() => blocker.stop(true));
-  const { urls, reload } = await activate({ port: 0, coreUrl: "http://a.test:1" });
-  await expect(reload({ port: blocker.port as number, coreUrl: "http://b.test:2" })).rejects.toThrow();
-  expect(await coreUrlOf(urls.at(-1) as string)).toBe("http://a.test:1");
+  const { urls, reload } = await activate({ port: 0, coreUrl: fakeCore("a") });
+  await expect(reload({ port: blocker.port as number, coreUrl: fakeCore("b") })).rejects.toThrow();
+  expect(await proxiedTo(urls.at(-1) as string)).toBe("a");
 });

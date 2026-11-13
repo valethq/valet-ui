@@ -19,7 +19,7 @@ export function heartbeatStale(lastFrameAt: number, now: number): boolean {
   return now - lastFrameAt >= STALE_MS;
 }
 
-/** The /ws multiplexed protocol (10.3): sub/unsub, per-topic seq resume via
+/** The /ws multiplexed protocol (10.3), relayed by the plugin server: sub/unsub, per-topic seq resume via
  * `since`, `gap` -> caller refetches over REST, reconnect with backoff. */
 export class CoreSocket {
   onEvent: (topic: string, name: string, data: unknown) => void = () => {};
@@ -40,8 +40,8 @@ export class CoreSocket {
   #retry: ReturnType<typeof setTimeout> | undefined;
   #connectTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(coreUrl: string) {
-    this.#url = `${coreUrl.replace(/^http/, "ws").replace(/\/+$/, "")}/ws`;
+  constructor(url: string) {
+    this.#url = url;
   }
 
   start(): void {

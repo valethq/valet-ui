@@ -26,7 +26,6 @@ afterEach(() => {
 });
 
 function stubFetch(handler: () => Response): void {
-  g.window = { VALET: { coreUrl: "http://core.test/" } };
   timeouts = [];
   AbortSignal.timeout = ((ms: number) => {
     timeouts.push(ms);
@@ -64,7 +63,6 @@ describe("sendMessage failure", () => {
 describe("attachments", () => {
   test("sendMessage posts text and file parts together", async () => {
     let seen: { url: string; body?: unknown } = { url: "" };
-    g.window = { VALET: { coreUrl: "http://core.test/" } };
     g.fetch = ((url: string, init: RequestInit) => {
       seen = { url, body: init.body };
       return Promise.resolve(new Response('{"message":{"id":"msg_1"},"parts":[]}', { status: 201 }));
@@ -75,14 +73,13 @@ describe("attachments", () => {
     ];
     await sendMessage("ses_1", parts, "cm_1");
     expect(seen).toEqual({
-      url: "http://core.test/api/core/sessions/ses_1/messages",
+      url: "/api/core/sessions/ses_1/messages",
       body: JSON.stringify({ role: "user", parts, clientMessageId: "cm_1" }),
     });
   });
 
   test("uploadBlob sends the bytes as base64 and resolves the blob id", async () => {
     let seen: { url: string; method?: string; body?: unknown } = { url: "" };
-    g.window = { VALET: { coreUrl: "http://core.test/" } };
     g.fetch = ((url: string, init: RequestInit) => {
       seen = { url, method: init.method, body: init.body };
       return Promise.resolve(new Response('{"id":"blb_1"}', { status: 201 }));
@@ -92,7 +89,7 @@ describe("attachments", () => {
     );
     expect(id).toBe("blb_1");
     expect(seen).toEqual({
-      url: "http://core.test/api/core/blobs",
+      url: "/api/core/blobs",
       method: "POST",
       body: JSON.stringify({ data: "aGk=", mime: "application/pdf", name: "hi.pdf" }),
     });
@@ -100,7 +97,6 @@ describe("attachments", () => {
 
   test("uploadBlob falls back to a generic mime type", async () => {
     let body = "";
-    g.window = { VALET: { coreUrl: "http://core.test/" } };
     g.fetch = ((_url: string, init: RequestInit) => {
       body = String(init.body);
       return Promise.resolve(new Response('{"id":"blb_2"}', { status: 201 }));
@@ -111,10 +107,9 @@ describe("attachments", () => {
 
   test("blobUrl fetches a stored blob once and returns an object URL", async () => {
     let calls = 0;
-    g.window = { VALET: { coreUrl: "http://core.test/" } };
     g.fetch = ((url: string) => {
       calls++;
-      expect(url).toBe("http://core.test/api/core/blobs/blb_9");
+      expect(url).toBe("/api/core/blobs/blb_9");
       return Promise.resolve(
         new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } }),
       );
@@ -129,14 +124,13 @@ describe("attachments", () => {
 describe("settings", () => {
   test("saveSettings PUTs the values to valet-ui's route on core", async () => {
     let seen: { url: string; method?: string; body?: unknown } = { url: "" };
-    g.window = { VALET: { coreUrl: "http://core.test/" } };
     g.fetch = ((url: string, init: RequestInit) => {
       seen = { url, method: init.method, body: init.body };
       return Promise.resolve(new Response('{"key":"agent","values":{"a":2}}'));
     }) as unknown as typeof fetch;
     await saveSettings("agent/main", { a: 2 });
     expect(seen).toEqual({
-      url: "http://core.test/plugins/valet-ui/settings/agent%2Fmain",
+      url: "/plugins/valet-ui/settings/agent%2Fmain",
       method: "PUT",
       body: '{"a":2}',
     });
@@ -153,25 +147,23 @@ describe("settings", () => {
 describe("session management", () => {
   test("deleteSession sends DELETE to the core session route", async () => {
     let seen: { url: string; method?: string } = { url: "" };
-    g.window = { VALET: { coreUrl: "http://core.test/" } };
     g.fetch = ((url: string, init: RequestInit) => {
       seen = { url, method: init.method };
       return Promise.resolve(new Response('{"id":"ses_1"}'));
     }) as unknown as typeof fetch;
     await deleteSession("ses_1");
-    expect(seen).toEqual({ url: "http://core.test/api/core/sessions/ses_1", method: "DELETE" });
+    expect(seen).toEqual({ url: "/api/core/sessions/ses_1", method: "DELETE" });
   });
 
   test("updateSession renames with a PATCH carrying only the title", async () => {
     let seen: { url: string; method?: string; body?: unknown } = { url: "" };
-    g.window = { VALET: { coreUrl: "http://core.test/" } };
     g.fetch = ((url: string, init: RequestInit) => {
       seen = { url, method: init.method, body: init.body };
       return Promise.resolve(new Response('{"id":"ses_1"}'));
     }) as unknown as typeof fetch;
     await updateSession("ses_1", { title: "Renamed" });
     expect(seen).toEqual({
-      url: "http://core.test/api/core/sessions/ses_1",
+      url: "/api/core/sessions/ses_1",
       method: "PATCH",
       body: '{"title":"Renamed"}',
     });

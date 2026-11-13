@@ -84,7 +84,7 @@ describe("isLive", () => {
       g.window = { addEventListener() {}, removeEventListener() {} };
       g.WebSocket = FakeWebSocket;
 
-      const sock = new CoreSocket("http://core.test");
+      const sock = new CoreSocket("ws://app.test/ws");
       expect(sock.isLive()).toBe(false);
       sock.start();
       const ws = FakeWebSocket.instances[0] as FakeWebSocket;
@@ -114,7 +114,7 @@ describe("isLive", () => {
       g.window = { addEventListener() {}, removeEventListener() {} };
       g.WebSocket = FakeWebSocket;
 
-      const sock = new CoreSocket("http://core.test");
+      const sock = new CoreSocket("ws://app.test/ws");
       sock.start();
       const ws = FakeWebSocket.instances[0] as FakeWebSocket;
       ws.readyState = FakeWebSocket.OPEN;
@@ -164,7 +164,7 @@ describe("connect timeout", () => {
       };
 
       const states: boolean[] = [];
-      const sock = new CoreSocket("http://core.test");
+      const sock = new CoreSocket("ws://app.test/ws");
       sock.onState = (open) => {
         states.push(open);
       };
