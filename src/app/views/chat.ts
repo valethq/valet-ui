@@ -32,6 +32,14 @@ function fmtDuration(ms: number): string {
 
 const elapsed = (createdAt: number): string => fmtDuration(Date.now() - createdAt);
 
+/** Drops ANSI escapes from captured tool output: CSI sequences
+ * (`\x1b[...m` etc.), OSC sequences (`\x1b]...` closed by BEL or ST), and any
+ * lone ESC. Stored output is untouched; this runs at render time only. */
+export function stripAnsi(s: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI control chars is the point
+  return s.replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b/g, "");
+}
+
 const toolExitCode = (d: Extract<Part["data"], { type: "tool-call" }>): number | undefined => {
   const exit = (d.result as { meta?: { exitCode?: unknown } } | undefined)?.meta?.exitCode;
   return typeof exit === "number" ? exit : undefined;
@@ -101,7 +109,8 @@ function toolBody(part: Part, input: unknown, output: string, ui: PartUi): HTMLE
     typeof (input as Record<string, unknown>).command === "string"
       ? `$ ${(input as Record<string, unknown>).command as string}`
       : (JSON.stringify(input, null, 2) ?? "");
-  const lines = output === "" ? [] : output.split("\n");
+  const clean = stripAnsi(output);
+  const lines = clean === "" ? [] : clean.split("\n");
   const hidden = ui.showAll.get(part.id) === true ? 0 : Math.max(0, lines.length - MAX_OUTPUT_LINES);
   const children: (Node | string)[] = [];
   if (head !== "") children.push(head, "\n");

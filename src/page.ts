@@ -23,6 +23,16 @@ select, input[type=text], input[type=password] {
   border-radius: 6px;
   padding: 6px 8px;
 }
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: #161b22;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a94a1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px;
+}
 
 .app { display: grid; grid-template-columns: 264px 1fr; height: 100vh; height: 100dvh; }
 .chat-root { display: contents; }
@@ -99,7 +109,7 @@ select, input[type=text], input[type=password] {
 .context-bar { width: 140px; }
 .context-bar .track { height: 5px; border-radius: 3px; background: #222933; overflow: hidden; }
 .context-bar .fill { height: 100%; background: var(--accent, #7aa2f7); transition: width 0.3s; }
-.context-bar .label { font-size: 11px; color: #8a94a1; margin-top: 3px; text-align: right; }
+.context-bar .label { font-size: 11px; color: #8a94a1; margin-top: 3px; text-align: right; white-space: nowrap; }
 
 .messages { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
 .msg { max-width: 78%; }
@@ -257,15 +267,38 @@ select, input[type=text], input[type=password] {
   }
   .app.nav-open .nav-backdrop { display: block; }
   .nav-toggle { display: inline-flex; }
-  .chat-header { flex-wrap: wrap; padding-top: max(10px, env(safe-area-inset-top)); }
+  .chat-header {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: 6px;
+  }
+  .chat-header .nav-toggle { min-height: 40px; }
   .chat-header .session-title { flex: 1 1 calc(100% - 68px); min-width: 0; }
-  .chat-header .model-picker, .chat-header .effort-picker { max-width: 100%; min-width: 0; flex: 1 1 auto; }
-  .context-bar { width: 80px; }
+  .chat-header .model-picker, .chat-header .effort-picker {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    min-height: 40px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .context-bar { width: auto; flex: none; }
   .msg { max-width: 92%; }
   .messages { padding: 12px; }
   .composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
   button, select, .session-row, .part-row summary { min-height: 44px; }
   input, select, textarea { font-size: 16px; }
+}
+
+@media (max-height: 500px) and (pointer: coarse) {
+  .chat-header {
+    flex-wrap: nowrap;
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-bottom: 6px;
+  }
+  .chat-header .session-title { flex: 1 1 0; min-width: 4em; }
+  .chat-header .model-picker, .chat-header .effort-picker { flex: 0 1 200px; }
 }
 `;
 

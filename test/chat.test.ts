@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Part, PartData } from "../src/app/types";
-import { createChat, toolStatus, toolStatusClass } from "../src/app/views/chat";
+import type { SessionView } from "../src/app/state";
+import type { Message, Part, PartData, Session } from "../src/app/types";
+import { createChat, stripAnsi, toolStatus, toolStatusClass } from "../src/app/views/chat";
 
 type ToolData = Extract<PartData, { type: "tool-call" }>;
 
@@ -69,20 +70,60 @@ class FakeEl {
   readonly children: unknown[] = [];
   readonly style: Record<string, string> = {};
   textContent = "";
+  #parent: FakeEl | null = null;
   constructor(readonly tag: string) {}
   setAttribute(k: string, v: string): void {
     this.attrs.set(k, v);
   }
   append(...kids: unknown[]): void {
+    for (const k of kids) if (k instanceof FakeEl) k.#parent = this;
     this.children.push(...kids);
   }
   addEventListener(): void {}
+  remove(): void {
+    const i = this.#parent?.children.indexOf(this) ?? -1;
+    if (i >= 0) this.#parent?.children.splice(i, 1);
+    this.#parent = null;
+  }
   replaceChildren(...kids: unknown[]): void {
     this.children.length = 0;
-    this.children.push(...kids);
+    this.append(...kids);
   }
-  get firstChild(): unknown {
-    return this.children[0] ?? null;
+  get firstChild(): { remove(): void } | null {
+    const c = this.children[0];
+    if (c === undefined) return null;
+    if (c instanceof FakeEl) return c;
+    return {
+      remove: () => {
+        this.children.shift();
+      },
+    };
+  }
+  get dataset(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [k, v] of this.attrs) {
+      if (k.startsWith("data-")) {
+        out[k.slice(5).replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase())] = v;
+      }
+    }
+    return out;
+  }
+  querySelectorAll(sel: string): FakeEl[] {
+    const cls = sel.startsWith(".") ? sel.slice(1) : sel;
+    const out: FakeEl[] = [];
+    const walk = (n: FakeEl): void => {
+      for (const c of n.children) {
+        if (c instanceof FakeEl) {
+          if ((c.attrs.get("class") ?? "").split(" ").includes(cls)) out.push(c);
+          walk(c);
+        }
+      }
+    };
+    walk(this);
+    return out;
+  }
+  querySelector(sel: string): FakeEl | null {
+    return this.querySelectorAll(sel)[0] ?? null;
   }
 }
 
@@ -124,6 +165,92 @@ describe("send error line", () => {
       expect(connNode.style.display).toBe("none");
       chat.setConnection(false);
       expect(connNode.style.display).toBe("");
+    } finally {
+      g.document = savedDocument;
+    }
+  });
+});
+
+describe("stripAnsi", () => {
+  test("removes CSI sequences like colour resets", () => {
+    expect(stripAnsi("\x1b[0m[... 120 lines omitted ...]")).toBe("[... 120 lines omitted ...]");
+    expect(stripAnsi("\x1b[32mok\x1b[0m tail \x1b[1;31mbad\x1b[m")).toBe("ok tail bad");
+  });
+
+  test("removes OSC sequences closed by BEL or ST", () => {
+    expect(stripAnsi("\x1b]0;window title\x07after")).toBe("after");
+    expect(stripAnsi("\x1b]8;;https://example.com\x1b\\link\x1b]8;;\x1b\\!")).toBe("link!");
+  });
+
+  test("removes a stray ESC and leaves plain text alone", () => {
+    expect(stripAnsi("a\x1bb\x1b")).toBe("ab");
+    expect(stripAnsi("plain [0m text")).toBe("plain [0m text");
+    expect(stripAnsi("")).toBe("");
+  });
+});
+
+const session: Session = {
+  id: "ses_1",
+  projectId: "prj_1",
+  title: "T",
+  color: null,
+  parentSessionId: null,
+  status: "idle",
+  settings: {},
+  providerState: {},
+  createdAt: 1,
+  updatedAt: 1,
+  lastMessageAt: null,
+};
+
+const message: Message = {
+  id: "msg_1",
+  sessionId: "ses_1",
+  seq: 1,
+  role: "assistant",
+  authorPrincipalId: null,
+  runId: null,
+  status: "complete",
+  origin: null,
+  meta: {},
+  createdAt: 1,
+  updatedAt: 1,
+};
+
+const viewWith = (parts: Part[]): SessionView => ({
+  session,
+  messages: [{ message, parts }],
+  activeRunId: null,
+  runStatus: null,
+  contextTokens: null,
+  contextWindow: null,
+  runErrors: new Map(),
+});
+
+describe("tool output rendering", () => {
+  test("ANSI escapes are stripped at render time, leaving the visible text", () => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onStop() {},
+        onModel() {},
+        onToggleNav() {},
+      });
+      const part = toolPart({
+        input: { command: "ls" },
+        output: "\x1b[0m[... 120 lines omitted ...]\n\x1b[32mok\x1b[0m",
+        status: "done",
+      });
+      chat.update(viewWith([part]), []);
+      const row = findByClass(root, "part-row") as FakeEl;
+      const body = findByClass(row, "body") as FakeEl;
+      const pre = body.children.find((c): c is FakeEl => c instanceof FakeEl && c.tag === "pre");
+      expect(pre?.children.join("")).toBe("$ ls\n[... 120 lines omitted ...]\nok");
+      expect(part.data.type === "tool-call" && part.data.output).toContain("\x1b[0m");
     } finally {
       g.document = savedDocument;
     }
