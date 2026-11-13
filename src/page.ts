@@ -261,7 +261,6 @@ button.chip:active:not(:disabled) { transform: none; }
   -webkit-mask: linear-gradient(to bottom, transparent, #000 22px, #000 calc(100% - 22px), transparent);
   mask: linear-gradient(to bottom, transparent, #000 22px, #000 calc(100% - 22px), transparent);
   padding-block: 22px;
-  margin-block: -22px;
 }
 .session-row {
   display: flex;
