@@ -10,12 +10,13 @@ import {
   applyRunStart,
   applyRunStatus,
   applyRunUpdate,
-  colorIndex,
   EventBuffer,
   newSessionView,
   replaceMessages,
+  type Indicator,
   type SessionView,
-  sessionColor,
+  needsUser,
+  sessionIndicator,
   titleSuffixes,
   upsertSession,
 } from "./state";
@@ -133,6 +134,21 @@ function unreadSessions(): Set<string> {
   return out;
 }
 
+// Sessions whose run said it is waiting on the user (approval, question).
+const attention = new Set<string>();
+
+function indicatorFor(s: Session): Indicator {
+  const open = app.view?.session.id === s.id ? app.view : null;
+  const pending = open?.messages.some((cm) =>
+    cm.parts.some((p) => p.data.type === "tool-call" && p.data.status === "pending"),
+  );
+  return sessionIndicator(
+    s,
+    { attention: attention.has(s.id) || pending === true, running: open?.activeRunId != null },
+    Date.now(),
+  );
+}
+
 let renderQueued = false;
 function scheduleRender(): void {
   if (renderQueued) return;
@@ -147,6 +163,7 @@ function scheduleRender(): void {
       sessions: app.sessions,
       openId: open?.id ?? null,
       unread: unreadSessions(),
+      indicators: new Map(app.sessions.map((s) => [s.id, indicatorFor(s)])),
       onProject: (id) => {
         closeNav();
         void switchProject(id);
@@ -170,7 +187,7 @@ function scheduleRender(): void {
       },
     });
     const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
-    app.chat?.update(app.view, app.providers, suffix);
+    app.chat?.update(app.view, app.providers, suffix, open === undefined ? undefined : indicatorFor(open));
   });
 }
 
@@ -256,10 +273,6 @@ async function openSession(id: string): Promise<void> {
     // private mode; selection simply isn't remembered
   }
   history.replaceState(null, "", `#s=${encodeURIComponent(id)}`);
-  document.documentElement.style.setProperty(
-    "--session",
-    sessionColor(session, colorIndex(app.sessions, id)),
-  );
   scheduleRender();
 
   const lastRunId = [...messages].reverse().find((cm) => cm.message.runId !== null)?.message.runId;
@@ -324,6 +337,13 @@ function onEvent(topic: string, name: string, data: unknown): void {
 
   if (!topic.startsWith("session:")) return;
   if (opening.push(id, { name, data })) return;
+  if (name === "run.status") {
+    const status = (data as RunStatus).status;
+    if (needsUser(status)) attention.add(id);
+    else attention.delete(id);
+  } else if (name === "run.end" || name === "run.start" || name === "message.create") {
+    attention.delete(id);
+  }
   const view = app.view;
   if (view !== null && view.session.id === id) {
     switch (name) {
@@ -529,3 +549,6 @@ async function boot(): Promise<void> {
 }
 
 void boot();
+
+// Idle sessions drift to grey after STALE_MS with no events to trigger a render.
+setInterval(scheduleRender, 60_000);

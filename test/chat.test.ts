@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionView } from "../src/app/state";
 import type { Message, Part, PartData, Session } from "../src/app/types";
-import { createChat, stripAnsi, toolStatus, toolStatusClass } from "../src/app/views/chat";
+import { createChat, quietStatus, stripAnsi, toolStatus, toolStatusClass } from "../src/app/views/chat";
 
 type ToolData = Extract<PartData, { type: "tool-call" }>;
 
@@ -255,5 +255,15 @@ describe("tool output rendering", () => {
     } finally {
       g.document = savedDocument;
     }
+  });
+});
+
+describe("quietStatus", () => {
+  test("drops the redundant done/complete word but keeps exit code and time", () => {
+    expect(quietStatus("complete")).toBe("");
+    expect(quietStatus("done · exit 0 · 0:12")).toBe("exit 0 · 0:12");
+    expect(quietStatus("done · 0:12")).toBe("0:12");
+    expect(quietStatus("failed · exit 2 · 0:12")).toBe("failed · exit 2 · 0:12");
+    expect(quietStatus("running 0:03")).toBe("running 0:03");
   });
 });

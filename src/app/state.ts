@@ -204,17 +204,25 @@ export function applyRunStatus(view: SessionView, runId: string, status: string)
   if (view.activeRunId === runId || view.activeRunId === null) view.runStatus = status;
 }
 
-/** Position of `id` in the sessions' createdAt order (oldest first). */
-export function colorIndex(sessions: Session[], id: string): number {
-  const i = [...sessions].sort((a, b) => a.createdAt - b.createdAt).findIndex((s) => s.id === id);
-  return Math.max(i, 0);
+export type Indicator = "running" | "attention" | "done" | "stale";
+
+export const STALE_MS = 3 * 60 * 60 * 1000;
+
+/** Sidebar/header status dot: needs-you beats running; an idle session with
+ * no activity for STALE_MS goes grey, otherwise it reads as finished. */
+export function sessionIndicator(
+  session: Session,
+  opts: { attention: boolean; running: boolean },
+  now: number,
+): Indicator {
+  if (opts.attention) return "attention";
+  if (opts.running || session.status === "running") return "running";
+  return now - (session.lastMessageAt ?? session.updatedAt) > STALE_MS ? "stale" : "done";
 }
 
-/** Golden-angle fallback accent when the session has no color yet. */
-export function sessionColor(session: Session, index: number): string {
-  if (session.color !== null) return session.color;
-  return `hsl(${(index * 137.508) % 360}, 65%, 68%)`;
-}
+/** Run-status text from a provider that means it is waiting on the user. */
+export const needsUser = (status: string): boolean =>
+  /approv|permission|question|input|waiting|confirm/i.test(status);
 
 /** Sessions sharing a displayed title get `#n` suffixes by createdAt order;
  * the oldest of each group stays unnumbered. */

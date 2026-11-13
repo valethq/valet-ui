@@ -1,6 +1,6 @@
 import { el } from "../dom";
 import { icon, iconButton, selectChip } from "../icons";
-import { sessionColor, titleSuffixes } from "../state";
+import { type Indicator, titleSuffixes } from "../state";
 import type { Project, Session } from "../types";
 
 export interface SidebarProps {
@@ -9,6 +9,7 @@ export interface SidebarProps {
   sessions: Session[];
   openId: string | null;
   unread: ReadonlySet<string>;
+  indicators: ReadonlyMap<string, Indicator>;
   onProject(id: string): void;
   onSession(id: string): void;
   onNew(): void;
@@ -25,9 +26,6 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   if (p.projectId !== null) picker.value = p.projectId;
   picker.addEventListener("change", () => p.onProject(picker.value));
 
-  const order = new Map(
-    [...p.sessions].sort((a, b) => a.createdAt - b.createdAt).map((s, i) => [s.id, i] as const),
-  );
   const suffixes = titleSuffixes(p.sessions);
   const list = el("div", { class: "sessions" });
   for (const session of p.sessions) {
@@ -35,9 +33,10 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
       class: `session-row${session.id === p.openId ? " open" : ""}`,
       title: session.title ?? "Untitled",
     });
-    const dot = el("span", { class: "dot" });
-    dot.style.background = sessionColor(session, order.get(session.id) ?? 0);
-    row.append(dot, el("span", { class: "title", text: session.title ?? "Untitled" }));
+    row.append(
+      el("span", { class: `dot ${p.indicators.get(session.id) ?? "done"}` }),
+      el("span", { class: "title", text: session.title ?? "Untitled" }),
+    );
     const suffix = suffixes.get(session.id);
     if (suffix !== undefined) row.append(el("span", { class: "suffix", text: `#${suffix}` }));
     if (p.unread.has(session.id)) row.append(el("span", { class: "unread" }));

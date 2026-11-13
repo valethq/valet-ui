@@ -7,11 +7,12 @@ import {
   applyRunInfo,
   applyRunStart,
   applyRunUpdate,
-  colorIndex,
   EventBuffer,
   newSessionView,
   replaceMessages,
-  sessionColor,
+  needsUser,
+  sessionIndicator,
+  STALE_MS,
   titleSuffixes,
   upsertSession,
 } from "../src/app/state";
@@ -381,35 +382,6 @@ describe("upsertSession", () => {
   });
 });
 
-describe("sessionColor", () => {
-  test("uses the explicit color when set", () => {
-    expect(sessionColor(session({ color: "#123456" }), 0)).toBe("#123456");
-  });
-
-  test("falls back to a golden-angle hue by createdAt index", () => {
-    const sessions = [
-      session({ id: "a", createdAt: 1 }),
-      session({ id: "b", createdAt: 2 }),
-      session({ id: "c", createdAt: 3 }),
-    ];
-    expect(sessionColor(sessions[0] as Session, colorIndex(sessions, "a"))).toBe("hsl(0, 65%, 68%)");
-    expect(sessionColor(sessions[1] as Session, colorIndex(sessions, "b"))).toBe(
-      `hsl(${137.508 % 360}, 65%, 68%)`,
-    );
-    expect(sessionColor(sessions[2] as Session, colorIndex(sessions, "c"))).toBe(
-      `hsl(${(2 * 137.508) % 360}, 65%, 68%)`,
-    );
-  });
-
-  test("neighbours differ and the first 20 hues are all distinct", () => {
-    const s = session();
-    expect(sessionColor(s, 0)).not.toBe(sessionColor(s, 1));
-    const colors = new Set<string>();
-    for (let i = 0; i < 20; i++) colors.add(sessionColor(s, i));
-    expect(colors.size).toBe(20);
-  });
-});
-
 describe("titleSuffixes", () => {
   test("numbers same-title sessions after the oldest", () => {
     const sessions = [
@@ -472,5 +444,34 @@ describe("EventBuffer", () => {
     buf.begin("s1");
     buf.push("s1", "b");
     expect(buf.end("s1")).toEqual(["a", "b"]);
+  });
+});
+
+describe("sessionIndicator", () => {
+  const now = 10 * STALE_MS;
+  const s = (over: Partial<Session> = {}) => session({ lastMessageAt: now - 1000, ...over });
+  const none = { attention: false, running: false };
+
+  test("finished, running, needs-you and stale", () => {
+    expect(sessionIndicator(s(), none, now)).toBe("done");
+    expect(sessionIndicator(s({ status: "running" }), none, now)).toBe("running");
+    expect(sessionIndicator(s(), { attention: false, running: true }, now)).toBe("running");
+    expect(sessionIndicator(s({ status: "running" }), { attention: true, running: true }, now)).toBe(
+      "attention",
+    );
+    expect(sessionIndicator(s({ lastMessageAt: now - STALE_MS - 1 }), none, now)).toBe("stale");
+  });
+
+  test("falls back to updatedAt when there are no messages, and running is never stale", () => {
+    expect(sessionIndicator(s({ lastMessageAt: null, updatedAt: now - STALE_MS - 1 }), none, now)).toBe(
+      "stale",
+    );
+    expect(sessionIndicator(s({ status: "running", lastMessageAt: 0 }), none, now)).toBe("running");
+  });
+
+  test("needsUser spots approval and question statuses", () => {
+    expect(needsUser("waiting for approval")).toBe(true);
+    expect(needsUser("permission requested")).toBe(true);
+    expect(needsUser("running")).toBe(false);
   });
 });

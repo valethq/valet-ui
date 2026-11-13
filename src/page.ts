@@ -6,6 +6,9 @@ ${themeCss()}
   --r-md: 14px;
   --r-lg: 20px;
   --r-xl: 26px;
+  --st-done: #22c55e;
+  --st-run: #f97316;
+  --st-need: #eab308;
   --sb-w: 264px;
   --sb-inset: 16px;
   --sb-ease: cubic-bezier(.22, 1, .36, 1);
@@ -228,8 +231,8 @@ button.chip:active:not(:disabled) { transform: none; }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 6px 20px; }
 .sidebar .brand { font-weight: 650; font-size: 16px; letter-spacing: -0.02em; }
 .sidebar .project-picker { padding: 6px 12px 10px; }
-.sidebar .project-picker .chip { display: flex; width: 100%; height: 40px; background: var(--raised); color: var(--text); border-radius: var(--r-md); }
-.sidebar .project-picker .chip:hover { background: var(--tint-strong); }
+.sidebar .project-picker .chip { display: flex; width: 100%; height: 36px; background: none; color: var(--muted); border-radius: var(--r-md); }
+.sidebar .project-picker .chip:hover { background: var(--tint); color: var(--text); }
 .sidebar .project-picker select { width: 100%; font-size: 13.5px; border-radius: var(--r-md); }
 .sidebar .sessions { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
 .session-row {
@@ -252,7 +255,11 @@ button.chip:active:not(:disabled) { transform: none; }
 .session-row:hover { background: var(--tint); color: var(--text); }
 .session-row:active:not(:disabled) { transform: none; }
 .session-row.open { background: var(--raised); color: var(--text); }
-.session-row .dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.dot, .session-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--st-done); }
+.dot.running, .session-dot.running { background: var(--st-run); animation: pulse 1.4s ease-in-out infinite; }
+.dot.attention, .session-dot.attention { background: var(--st-need); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-need) 30%, transparent); }
+.dot.stale, .session-dot.stale { background: var(--faint); }
+.session-dot.none { display: none; }
 .session-row .title {
   flex: 1;
   white-space: normal;
@@ -284,23 +291,8 @@ button.chip:active:not(:disabled) { transform: none; }
   padding: 10px 20px;
   border-bottom: 1px solid var(--border);
 }
-.session-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--session, var(--faint)); }
 .chat-header .session-title { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-header .suffix { flex: none; color: var(--faint); }
-.run-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-left: auto;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: var(--raised);
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.run-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); animation: pulse 1.4s ease-in-out infinite; }
-.run-status:empty { display: none; }
 @keyframes pulse { 50% { opacity: .3; } }
 
 .messages {

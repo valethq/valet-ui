@@ -4,7 +4,7 @@ import { logoFor, logoMark } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { familyOf, groupModels, type ModelFamily, type ModelVariant } from "../models";
-import type { SessionView } from "../state";
+import type { Indicator, SessionView } from "../state";
 import type { ChatMessage, Part, ProviderModels } from "../types";
 
 export interface ChatCallbacks {
@@ -17,7 +17,12 @@ export interface ChatCallbacks {
 
 export interface ChatHandle {
   /** `titleSuffix` is the session's duplicate-title number, when it has one. */
-  update(view: SessionView | null, providers: ProviderModels[], titleSuffix?: number): void;
+  update(
+    view: SessionView | null,
+    providers: ProviderModels[],
+    titleSuffix?: number,
+    indicator?: Indicator,
+  ): void;
   setConnection(open: boolean): void;
   setSendError(message: string | null): void;
 }
@@ -83,6 +88,9 @@ interface PartUi {
   refresh(): void;
 }
 
+/** Drops the redundant "complete"/"done" word; keeps exit code and run time. */
+export const quietStatus = (label: string): string => label.replace(/^(complete|done)( · )?/, "");
+
 function partRow(
   part: Part,
   title: string,
@@ -139,7 +147,7 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
         part,
         "Reasoning",
         part.status,
-        part.status,
+        quietStatus(part.status),
         part.status === "streaming",
         ui,
         el("pre", { text: d.text }),
@@ -149,7 +157,7 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
         part,
         d.title ?? d.name,
         toolStatusClass(part),
-        toolStatus(part),
+        quietStatus(toolStatus(part)),
         d.status === "running" || part.status === "streaming",
         ui,
         ...toolBody(part, d.input, d.output ?? "", ui),
@@ -266,7 +274,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const title = el("span", { class: "session-title" });
   const titleNum = el("span", { class: "suffix" });
   titleNum.style.display = "none";
-  const runHint = el("span", { class: "run-status" });
+  const sessionDot = el("span", { class: "session-dot" });
   const modelChip = chipButton("model", icon("sparkles"), "Model");
   const effortChip = chipButton("effort", icon("gauge"), "Effort");
   const ring = el("span", { class: "ring" });
@@ -377,15 +385,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const main = el(
     "div",
     { class: "main" },
-    el(
-      "div",
-      { class: "chat-header" },
-      navToggle,
-      el("span", { class: "session-dot" }),
-      title,
-      titleNum,
-      runHint,
-    ),
+    el("div", { class: "chat-header" }, navToggle, sessionDot, title, titleNum),
     messages,
     el(
       "div",
@@ -524,7 +524,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   };
 
   return {
-    update(view, providers, titleSuffix) {
+    update(view, providers, titleSuffix, indicator = "done") {
+      sessionDot.className = `session-dot ${view === null ? "none" : indicator}`;
       current = view;
       const sid = view?.session.id ?? null;
       if (sid !== sessionId) {
@@ -556,7 +557,6 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       } else {
         titleNum.style.display = "none";
       }
-      runHint.textContent = view.runStatus ?? "";
       rebuildModels(view, providers);
       stop.style.display = view.activeRunId === null ? "none" : "";
 
