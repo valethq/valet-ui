@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionView } from "../src/app/state";
-import type { Message, Part, PartData, Session } from "../src/app/types";
+import type { ChatMessage, Message, Part, PartData, Session } from "../src/app/types";
 import { createChat, quietStatus, stripAnsi, toolStatus, toolStatusClass } from "../src/app/views/chat";
 
 type ToolData = Extract<PartData, { type: "tool-call" }>;
@@ -89,6 +89,13 @@ class FakeEl {
   replaceChildren(...kids: unknown[]): void {
     this.children.length = 0;
     this.append(...kids);
+  }
+  insertBefore(node: FakeEl, ref: FakeEl | null): void {
+    node.remove();
+    node.#parent = this;
+    const i = ref === null ? -1 : this.children.indexOf(ref);
+    if (i < 0) this.children.push(node);
+    else this.children.splice(i, 0, node);
   }
   get firstChild(): { remove(): void } | null {
     const c = this.children[0];
@@ -258,6 +265,61 @@ describe("tool output rendering", () => {
       expect(part.data.type === "tool-call" && part.data.output).toContain("\x1b[0m");
     } finally {
       g.document = savedDocument;
+    }
+  });
+});
+
+describe("message entrance", () => {
+  test("only newly seen messages animate, and cached nodes stay in place", () => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    const realNow = Date.now;
+    let t = 1_000_000;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    Date.now = () => t;
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+      });
+      const note = (id: string, text: string): ChatMessage => ({
+        message: { ...message, id },
+        parts: [
+          toolPart(
+            {},
+            { id: `p_${id}`, messageId: id, type: "notice", data: { type: "notice", level: "error", text } },
+          ),
+        ],
+      });
+      const show = (...msgs: ChatMessage[]): FakeEl[] => {
+        chat.update({ ...viewWith([]), messages: msgs }, []);
+        return (findByClass(root, "messages") as FakeEl).children as FakeEl[];
+      };
+      const cls = (n: FakeEl | undefined): string => n?.attrs.get("class") ?? "";
+
+      const [first] = show(note("m1", "a"));
+      expect(cls(first)).toBe("msg assistant fade");
+      t += 1_000;
+      const [same, added] = show(note("m1", "a"), note("m2", "b"));
+      expect(same).toBe(first as FakeEl);
+      expect(cls(added)).toBe("msg assistant enter");
+      t += 100;
+      const [, resumed] = show(note("m1", "a"), note("m2", "bb"));
+      expect(resumed).not.toBe(added as FakeEl);
+      expect(cls(resumed)).toBe("msg assistant enter");
+      expect(resumed?.style.animationDelay).toBe("-100ms");
+      t += 1_000;
+      const [kept, settled] = show(note("m1", "a"), note("m2", "bbb"));
+      expect(kept).toBe(first as FakeEl);
+      expect(cls(settled)).toBe("msg assistant");
+    } finally {
+      g.document = savedDocument;
+      Date.now = realNow;
     }
   });
 });

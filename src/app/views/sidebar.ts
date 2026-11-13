@@ -26,18 +26,46 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   if (p.projectId !== null) picker.value = p.projectId;
   picker.addEventListener("change", () => p.onProject(picker.value));
 
+  // Rows are rebuilt each render; compare with the previous list so only real
+  // changes (new row, new open row, dot state, unread) animate.
+  const prevList = node.querySelector<HTMLElement>(".sessions");
+  const project = p.projectId ?? "";
+  const openId = p.openId ?? "";
+  const same = prevList?.dataset.project === project;
+  const prevOpen = prevList?.dataset.open;
+  const prev = new Map<string, DOMStringMap>();
+  for (const r of prevList?.querySelectorAll<HTMLElement>(".session-row") ?? []) {
+    prev.set(r.dataset.id ?? "", r.dataset);
+  }
+
   const suffixes = titleSuffixes(p.sessions);
   const now = Date.now();
-  const list = el("div", { class: "sessions" });
+  const list = el("div", { class: "sessions", "data-project": project, "data-open": openId });
   for (const session of p.sessions) {
+    const open = session.id === p.openId;
+    const was = same ? prev.get(session.id) : undefined;
+    const dot = p.indicators.get(session.id) ?? "done";
+    const unread = p.unread.has(session.id);
+    const moved = was !== undefined && prevOpen !== openId;
+    const fx =
+      same && was === undefined
+        ? " enter"
+        : moved && open
+          ? " opening"
+          : moved && session.id === prevOpen
+            ? " closing"
+            : "";
     const row = el("button", {
-      class: `session-row${session.id === p.openId ? " open" : ""}`,
+      class: `session-row${open ? " open" : ""}${fx}`,
       title: session.title ?? "Untitled",
+      "data-id": session.id,
+      "data-dot": dot,
+      "data-unread": unread ? "1" : "",
     });
     const suffix = suffixes.get(session.id);
     const ago = timeAgo(session.lastMessageAt ?? session.updatedAt, now);
     row.append(
-      el("span", { class: `dot ${p.indicators.get(session.id) ?? "done"}` }),
+      el("span", { class: `dot ${dot}${was !== undefined && was.dot !== dot ? " pop" : ""}` }),
       el(
         "span",
         { class: "text" },
@@ -45,7 +73,8 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
         el("span", { class: "meta", text: suffix === undefined ? ago : `${ago} · #${suffix}` }),
       ),
     );
-    if (p.unread.has(session.id)) row.append(el("span", { class: "unread" }));
+    if (unread)
+      row.append(el("span", { class: `unread${was !== undefined && was.unread !== "1" ? " pop" : ""}` }));
     row.addEventListener("click", () => p.onSession(session.id));
     list.append(row);
   }

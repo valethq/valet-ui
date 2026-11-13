@@ -1,4 +1,4 @@
-import { el } from "../dom";
+import { el, leave } from "../dom";
 import { iconButton } from "../icons";
 import { applyTheme, currentTheme, THEMES } from "../themes";
 import type { SettingsEntry } from "../types";
@@ -22,8 +22,12 @@ function themeSection(): HTMLElement {
     swatch.style.background = `linear-gradient(135deg, ${t.colors.bg} 50%, ${t.colors.accent} 50%)`;
     const b = el("button", { class: "theme-option", role: "radio", "data-theme": t.id }, swatch, t.name);
     b.addEventListener("click", () => {
-      applyTheme(t.id);
-      paint();
+      const swap = (): void => {
+        applyTheme(t.id);
+        paint();
+      };
+      if ("startViewTransition" in document) document.startViewTransition(swap);
+      else swap();
     });
     grid.append(b);
   }
@@ -75,7 +79,7 @@ function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
 /** Opens the settings dialog: the theme, then one form per plugin panel
  * registered on the `settings` scope. */
 export function openSettings(deps: SettingsDeps): void {
-  if (document.querySelector(".modal-backdrop") !== null) return;
+  if (document.querySelector(".modal-backdrop:not(.leaving)") !== null) return;
   const opener = document.activeElement as HTMLElement | null;
   const close = iconButton("close", "Close");
   const plugins = el("div", { class: "plugin-sections" }, el("div", { class: "hint", text: "Loading…" }));
@@ -96,7 +100,7 @@ export function openSettings(deps: SettingsDeps): void {
     if (ev.key === "Escape") dismiss();
   };
   function dismiss(): void {
-    backdrop.remove();
+    leave(backdrop);
     document.removeEventListener("keydown", onKey);
     opener?.focus();
   }

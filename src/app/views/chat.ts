@@ -1,4 +1,4 @@
-import { clear, el } from "../dom";
+import { clear, el, reconcile } from "../dom";
 import { chipButton, icon, iconButton } from "../icons";
 import { logoFor, logoMark } from "../logos";
 import { type MenuSection, popover } from "../menu";
@@ -26,6 +26,8 @@ export interface ChatHandle {
 
 const MAX_OUTPUT_LINES = 400;
 const STICK_PX = 80;
+/** Covers the longest message entrance animation in page.ts. */
+const ENTER_MS = 320;
 
 const fmtTokens = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const cap = (s: string): string => (s === "" ? s : s.charAt(0).toUpperCase() + s.slice(1));
@@ -105,7 +107,10 @@ function partRow(
     el("span", { text: title }),
     el("span", { class: `status ${statusClass}`, text: statusLabel }),
   );
-  summary.addEventListener("click", () => ui.openState.set(part.id, !details.open));
+  summary.addEventListener("click", () => {
+    ui.openState.set(part.id, !details.open);
+    details.classList.add("toggled");
+  });
   details.append(summary, el("div", { class: "body" }, ...bodyChildren));
   return details;
 }
@@ -200,15 +205,16 @@ function messageSig(cm: ChatMessage, view: SessionView, showAll: Map<string, boo
 
 /** Renders a message as one or more flow elements: non-error notice parts
  * break out of the bubble into a full-width divider, splitting the message
- * into a new `.msg` chunk on either side. */
-function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView): HTMLElement[] {
+ * into a new `.msg` chunk on either side. `anim` is an entrance class. */
+function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: string): HTMLElement[] {
   const out: HTMLElement[] = [];
   const msgs: HTMLElement[] = [];
+  const fx = anim === "" ? "" : ` ${anim}`;
   let bubble: HTMLElement | null = null;
   const currentBubble = (): HTMLElement => {
     if (bubble === null) {
       bubble = el("div", { class: "bubble" });
-      const msg = el("div", { class: `msg ${cm.message.role}` }, bubble);
+      const msg = el("div", { class: `msg ${cm.message.role}${fx}` }, bubble);
       msgs.push(msg);
       out.push(msg);
     }
@@ -218,7 +224,7 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView): HTMLElem
     const d = part.data;
     if (d.type === "notice" && d.level !== "error") {
       bubble = null;
-      out.push(el("div", { class: `divider ${d.level}` }, el("span", { text: d.text })));
+      out.push(el("div", { class: `divider ${d.level}${fx}` }, el("span", { text: d.text })));
       continue;
     }
     const node = renderPart(part, ui);
@@ -309,7 +315,9 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const openState = new Map<string, boolean>();
   const showAll = new Map<string, boolean>();
   const bodyStick = new Map<string, boolean>();
-  const cache = new Map<string, { sig: string; nodes: HTMLElement[] }>();
+  const cache = new Map<string, { sig: string; nodes: HTMLElement[]; anim: string; born: number }>();
+  let primed = false;
+  let leadKey: string | undefined;
   let stickToBottom = true;
   let connOpen = false;
   let draftId: string | null = null;
@@ -456,23 +464,28 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       }
     }
     const ui: PartUi = { openState, showAll, refresh: () => renderMessages(view) };
-    clear(messages);
+    const now = Date.now();
     const live = new Set<string>();
+    const nodes: HTMLElement[] = [];
     for (const cm of view.messages) {
       const id = cm.message.id;
       const sig = messageSig(cm, view, showAll);
       let hit = cache.get(id);
       if (hit === undefined || hit.sig !== sig) {
-        hit = { sig, nodes: renderMessage(cm, ui, view) };
+        // New messages animate in once; a re-render mid-entrance resumes it.
+        const born = hit?.born ?? now;
+        const anim = hit === undefined ? (primed ? "enter" : "fade") : now - born < ENTER_MS ? hit.anim : "";
+        hit = { sig, anim, born, nodes: renderMessage(cm, ui, view, anim) };
+        if (anim !== "" && born < now) for (const n of hit.nodes) n.style.animationDelay = `${born - now}ms`;
         cache.set(id, hit);
       }
       live.add(id);
-      messages.append(...hit.nodes);
+      nodes.push(...hit.nodes);
     }
+    primed = true;
     for (const id of cache.keys()) if (!live.has(id)) cache.delete(id);
-    if (view.messages.length === 0) {
-      messages.append(el("div", { class: "empty", text: "No messages yet" }));
-    }
+    if (view.messages.length === 0) nodes.push(el("div", { class: "empty", text: "No messages yet" }));
+    reconcile(messages, nodes);
     for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
       const pid = row.dataset.partId;
       const body = row.querySelector<HTMLElement>(".body");
@@ -539,7 +552,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   function setModels(f: ModelFamily | null, v: ModelVariant | null): void {
     activeFamily = f;
     activeVariant = v;
-    modelChip.lead.replaceChildren(f === null ? icon("sparkles") : familyLogo(f));
+    const key = f === null ? "" : `${f.provider}|${f.key}|${f.label}`;
+    if (key !== leadKey) {
+      leadKey = key;
+      modelChip.lead.replaceChildren(f === null ? icon("sparkles") : familyLogo(f));
+    }
     modelChip.text.textContent = f?.label ?? "No model";
     modelChip.button.disabled = families.length === 0;
     effortMenu.style.display = f === null || f.variants.length <= 1 ? "none" : "";
@@ -554,7 +571,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     contextBar.style.display = tokens === null ? "none" : "";
     if (tokens === null) return;
     const pct = win !== undefined && win > 0 ? Math.min(100, (tokens / win) * 100) : 0;
-    ring.style.background = `conic-gradient(var(--ring) ${pct}%, var(--strong) 0)`;
+    ring.style.setProperty("--fill", `${pct}%`);
     ring.className = `ring${pct >= 90 ? " hot" : pct >= 70 ? " warm" : ""}`;
     tip.textContent =
       win === undefined
@@ -578,6 +595,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         showAll.clear();
         bodyStick.clear();
         cache.clear();
+        primed = false;
         stickToBottom = true;
       }
 

@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 import * as api from "./api";
-import { el } from "./dom";
+import { el, leave } from "./dom";
 import {
   applyDelta,
   applyMessageComplete,
@@ -32,7 +32,7 @@ const root = document.getElementById("root") as HTMLElement;
 function toast(message: string): void {
   const node = el("div", { class: "toast", text: message });
   document.body.append(node);
-  setTimeout(() => node.remove(), 5000);
+  setTimeout(() => leave(node), 5000);
 }
 
 function fatal(message: string): void {

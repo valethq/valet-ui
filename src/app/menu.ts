@@ -1,4 +1,4 @@
-import { el } from "./dom";
+import { el, leave } from "./dom";
 import { icon } from "./icons";
 
 export interface MenuItem {
@@ -40,7 +40,7 @@ export function popover(trigger: HTMLButtonElement, sections: () => MenuSection[
 
   function close(): void {
     if (menu === null) return;
-    menu.remove();
+    leave(menu, 180);
     menu = null;
     trigger.setAttribute("aria-expanded", "false");
     document.removeEventListener("pointerdown", onDoc, true);
@@ -73,9 +73,10 @@ export function popover(trigger: HTMLButtonElement, sections: () => MenuSection[
     }
     menu = m;
     root.append(m);
-    const box = m.getBoundingClientRect();
-    if (box.right > window.innerWidth - 8) m.classList.add("end");
-    if (box.top < 8) m.classList.add("below");
+    // Layout sizes, not the menu's rect: its entrance transform would skew that.
+    const at = root.getBoundingClientRect();
+    if (at.left + m.offsetWidth > window.innerWidth - 8) m.classList.add("end");
+    if (at.top - 8 - m.offsetHeight < 8) m.classList.add("below");
     trigger.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", onDoc, true);
     document.addEventListener("keydown", onKey);
