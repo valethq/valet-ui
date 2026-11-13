@@ -676,6 +676,19 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .auth button:hover { background: color-mix(in srgb, var(--accent) 85%, var(--bg)); }
 .auth .error { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 18px; }
 
+.landing {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 12vh;
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--muted);
+  text-align: center;
+  animation: fade-in .4s ease-out;
+}
 .empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--faint); }
 .hint { font-size: 12px; color: var(--faint); padding: 4px 10px; }
 .hint.conn { padding: 0 8px 8px; text-align: center; animation: hint-in .26s var(--sb-ease) .2s backwards; }

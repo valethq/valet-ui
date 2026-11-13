@@ -24,6 +24,7 @@ export interface ChatHandle {
   setSendError(message: string | null): void;
 }
 
+const LANDING = ["How are you?", "Ready when you are.", "What should we work on?", "What's on your mind?"];
 const MAX_OUTPUT_LINES = 400;
 const STICK_PX = 80;
 /** Covers the longest message entrance animation in page.ts. */
@@ -368,11 +369,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   );
 
   const syncSend = (): void => {
-    send.disabled = current === null || textarea.value.trim() === "";
+    send.disabled = textarea.value.trim() === "";
   };
   const doSend = (): void => {
     const text = textarea.value.trim();
-    if (text === "" || current === null) return;
+    if (text === "") return;
     draftId ??= crypto.randomUUID();
     const id = draftId;
     void cb.onSend(text, id).then((ok) => {
@@ -605,8 +606,15 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         sessionMenu.style.display = "none";
         families = [];
         setModels(null, null);
-        clear(messages);
-        messages.append(el("div", { class: "empty", text: "Select a session" }));
+        if (messages.querySelector(".landing") === null) {
+          clear(messages);
+          messages.append(
+            el("div", {
+              class: "landing",
+              text: LANDING[Math.floor(Math.random() * LANDING.length)] as string,
+            }),
+          );
+        }
         stop.style.display = "none";
         setContext(null);
         syncSend();

@@ -196,7 +196,7 @@ function scheduleRender(): void {
         },
         onNew: () => {
           closeNav();
-          void newSession();
+          newSession();
         },
         onLogout: () => {
           closeNav();
@@ -327,16 +327,24 @@ async function switchProject(id: string): Promise<void> {
   else scheduleRender();
 }
 
-async function newSession(): Promise<void> {
-  if (app.projectId === null) return;
+/** New session is a blank landing; the session is created on the first send. */
+function newSession(): void {
+  app.view = null;
+  history.replaceState(null, "", location.pathname + location.search);
+  scheduleRender();
+}
+
+async function createSessionForDraft(): Promise<boolean> {
+  if (app.projectId === null) return false;
   const session = await api.createSession(app.projectId).catch((e: unknown) => {
     toast(e instanceof Error ? e.message : "could not create session");
     return undefined;
   });
-  if (session === undefined) return;
+  if (session === undefined) return false;
   app.sessions = upsertSession(app.sessions, session);
   syncTopics();
   await openSession(session.id);
+  return app.view !== null;
 }
 
 async function renameSession(id: string, title: string): Promise<void> {
@@ -474,12 +482,13 @@ async function startApp(): Promise<void> {
   const chatRoot = el("div", { class: "chat-root" });
   app.chat = createChat(chatRoot, {
     onSend: async (text, clientMessageId) => {
-      const view = app.view;
-      if (view === null) return false;
       if (!app.socket.isLive()) {
         app.chat?.setSendError("Offline: message not sent");
         return false;
       }
+      if (app.view === null && !(await createSessionForDraft())) return false;
+      const view = app.view;
+      if (view === null) return false;
       try {
         const cm = await api.sendMessage(view.session.id, text, clientMessageId);
         if (app.view?.session.id === view.session.id) {
