@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionView } from "../src/app/state";
 import type { ChatMessage, Message, Part, PartData, Session } from "../src/app/types";
-import { createChat, quietStatus, stripAnsi, toolStatus, toolStatusClass } from "../src/app/views/chat";
+import {
+  createChat,
+  quietStatus,
+  reasoningStatus,
+  stripAnsi,
+  toolStatus,
+  toolStatusClass,
+} from "../src/app/views/chat";
 
 type ToolData = Extract<PartData, { type: "tool-call" }>;
 
@@ -38,6 +45,14 @@ describe("toolStatus", () => {
     expect(toolStatus(toolPart({ status: "running" }))).toMatch(/^running \d+:\d{2}$/);
   });
 
+  test("a step of a second or less shows no time", () => {
+    expect(toolStatus(toolPart({ result: { meta: { exitCode: 0 } } }, { updatedAt: 2_000 }))).toBe(
+      "done · exit 0",
+    );
+    expect(toolStatus(toolPart({ status: "error" }, { updatedAt: 1_500 }))).toBe("error");
+    expect(toolStatus(toolPart({ status: "running" }, { createdAt: Date.now() }))).toBe("running");
+  });
+
   test("a pending step stays bare and non-tool parts are empty", () => {
     expect(toolStatus(toolPart({ status: "pending" }))).toBe("pending");
     const p = toolPart({}, { type: "text", data: { type: "text", text: "hi" } });
@@ -47,6 +62,29 @@ describe("toolStatus", () => {
   test("a done step with a non-zero exit is labelled failed", () => {
     const p = toolPart({ result: { meta: { exitCode: 2 } } });
     expect(toolStatus(p)).toBe("failed · exit 2 · 0:12");
+  });
+});
+
+describe("reasoningStatus", () => {
+  const reasoning = (over: Partial<Part> = {}): Part =>
+    toolPart({}, { type: "reasoning", data: { type: "reasoning", text: "hmm" }, ...over });
+
+  test("a streaming reasoning step shows a live timer", () => {
+    expect(reasoningStatus(reasoning({ status: "streaming" }))).toMatch(/^thinking \d+:\d{2}$/);
+  });
+
+  test("a finished reasoning step shows only its run time once quietStatus runs", () => {
+    expect(quietStatus(reasoningStatus(reasoning()))).toBe("0:12");
+    expect(reasoningStatus(reasoning({ status: "error" }))).toBe("error · 0:12");
+  });
+
+  test("a reasoning step of a second or less shows no time", () => {
+    const short = (over: Partial<Part> = {}) => reasoning({ updatedAt: 2_000, ...over });
+    expect(quietStatus(reasoningStatus(short()))).toBe("");
+    expect(reasoningStatus(short({ status: "error" }))).toBe("error");
+    expect(reasoningStatus(reasoning({ updatedAt: 2_000, status: "streaming", createdAt: Date.now() }))).toBe(
+      "thinking",
+    );
   });
 });
 

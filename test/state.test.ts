@@ -375,11 +375,15 @@ describe("replaceMessages", () => {
 });
 
 describe("upsertSession", () => {
-  test("sorts by createdAt desc and replaces in place", () => {
+  test("sorts by last activity desc, falling back to createdAt, and replaces in place", () => {
     let list = [session({ id: "a", createdAt: 1 })];
     list = upsertSession(list, session({ id: "b", createdAt: 2 }));
-    list = upsertSession(list, session({ id: "a", createdAt: 1, lastMessageAt: 5 }));
     expect(list.map((s) => s.id)).toEqual(["b", "a"]);
+    list = upsertSession(list, session({ id: "a", createdAt: 1, lastMessageAt: 5 }));
+    expect(list.map((s) => s.id)).toEqual(["a", "b"]);
+    list = upsertSession(list, session({ id: "b", createdAt: 2, lastMessageAt: 3 }));
+    expect(list.map((s) => s.id)).toEqual(["a", "b"]);
+    expect(list).toHaveLength(2);
   });
 });
 

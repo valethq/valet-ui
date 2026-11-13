@@ -61,21 +61,39 @@ const toolExitCode = (d: Extract<Part["data"], { type: "tool-call" }>): number |
   return typeof exit === "number" ? exit : undefined;
 };
 
+/** A step only shows its time once it has run for more than a second. */
+const TIMER_MIN_MS = 1000;
+
 /** Header status for a tool step: `running 0:12` while it runs; a finished
  * step shows `done · exit 0 · 0:12` — the exit code only when the result's
  * meta reports one, the run time from createdAt -> updatedAt. A "done" step
- * with a non-zero exit code is labelled `failed`. */
+ * with a non-zero exit code is labelled `failed`. Runs of a second or less
+ * show no time. */
 export function toolStatus(part: Part): string {
   const d = part.data;
   if (d.type !== "tool-call") return "";
-  if (d.status === "running") return `running ${elapsed(part.createdAt)}`;
+  if (d.status === "running") {
+    return Date.now() - part.createdAt > TIMER_MIN_MS ? `running ${elapsed(part.createdAt)}` : "running";
+  }
   if (d.status === "pending") return d.status;
   const exit = toolExitCode(d);
   const failed = d.status === "done" && exit !== undefined && exit !== 0;
   const bits: string[] = [failed ? "failed" : d.status];
   if (exit !== undefined) bits.push(`exit ${exit}`);
-  bits.push(fmtDuration(part.updatedAt - part.createdAt));
+  const ms = part.updatedAt - part.createdAt;
+  if (ms > TIMER_MIN_MS) bits.push(fmtDuration(ms));
   return bits.join(" · ");
+}
+
+/** Header status for a reasoning step: `thinking 0:05` while it streams, then
+ * `complete · 0:12` (quietStatus drops the word, leaving just the run time).
+ * Steps of a second or less show no time. */
+export function reasoningStatus(part: Part): string {
+  if (part.status === "streaming") {
+    return Date.now() - part.createdAt > TIMER_MIN_MS ? `thinking ${elapsed(part.createdAt)}` : "thinking";
+  }
+  const ms = part.updatedAt - part.createdAt;
+  return ms > TIMER_MIN_MS ? `${part.status} · ${fmtDuration(ms)}` : part.status;
 }
 
 /** Status chip class for a tool row: `failed` when the step errored or a
@@ -169,7 +187,7 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
         part,
         "Reasoning",
         part.status,
-        quietStatus(part.status),
+        quietStatus(reasoningStatus(part)),
         part.status === "streaming",
         ui,
         el("pre", { text: d.text }),
@@ -236,15 +254,17 @@ function messageSig(cm: ChatMessage, view: SessionView, showAll: Map<string, boo
   const parts = cm.parts.map((p) => {
     const d = p.data;
     const size =
-      d.type === "text" || d.type === "reasoning"
+      d.type === "text"
         ? d.text.length
-        : d.type === "tool-call"
-          ? `${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
-          : d.type === "notice"
-            ? d.text.length
-            : d.type === "compaction"
-              ? d.status
-              : 0;
+        : d.type === "reasoning"
+          ? `${d.text.length}${p.status === "streaming" ? Math.floor(Date.now() / 1000) : ""}`
+          : d.type === "tool-call"
+            ? `${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
+            : d.type === "notice"
+              ? d.text.length
+              : d.type === "compaction"
+                ? d.status
+                : 0;
     return `${p.id}:${p.status}:${d.type}:${size}`;
   });
   const err = cm.message.runId === null ? "" : (view.runErrors.get(cm.message.runId) ?? "");
@@ -571,9 +591,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       }
     }
     const runningTools = new Set<string>();
+    let liveReasoning = false;
     for (const cm of view.messages) {
       for (const p of cm.parts) {
         if (p.data.type === "tool-call" && p.data.status === "running") runningTools.add(p.id);
+        if (p.data.type === "reasoning" && p.status === "streaming") liveReasoning = true;
       }
     }
     const ui: PartUi = {
@@ -627,7 +649,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       }
     }
     if (stickToBottom) messages.scrollTop = messages.scrollHeight;
-    syncTick(runningTools.size > 0);
+    syncTick(runningTools.size > 0 || liveReasoning);
   }
 
   function syncTick(anyRunning: boolean): void {

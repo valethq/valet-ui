@@ -33,10 +33,15 @@ export function newSessionView(session: Session, messages: ChatMessage[]): Sessi
   };
 }
 
+/** When a chat last had activity; falls back to creation for chats with no messages yet (same order core lists them in). */
+export const sessionActivityAt = (s: Session): number => s.lastMessageAt ?? s.createdAt;
+
+export function sortSessions(list: Session[]): Session[] {
+  return [...list].sort((a, b) => sessionActivityAt(b) - sessionActivityAt(a));
+}
+
 export function upsertSession(list: Session[], session: Session): Session[] {
-  const next = list.filter((s) => s.id !== session.id).concat(session);
-  next.sort((a, b) => b.createdAt - a.createdAt);
-  return next;
+  return sortSessions(list.filter((s) => s.id !== session.id).concat(session));
 }
 
 function findMessage(view: SessionView, id: string): ChatMessage | undefined {
