@@ -3,6 +3,7 @@ import type { ClientFrame, ServerFrame } from "./types";
 const PING_MS = 3_000;
 const STALE_MS = 8_000;
 const MAX_BACKOFF_MS = 5_000;
+const CONNECT_TIMEOUT_MS = 5_000;
 
 /** Records the last seen seq for `topic`; returns true when the frame skipped
  * seqs — the caller still delivers it, then refetches (onGap). */
@@ -37,6 +38,7 @@ export class CoreSocket {
   #lastFrame = 0;
   #ping: ReturnType<typeof setInterval> | undefined;
   #retry: ReturnType<typeof setTimeout> | undefined;
+  #connectTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(coreUrl: string) {
     this.#url = `${coreUrl.replace(/^http/, "ws").replace(/\/+$/, "")}/ws`;
@@ -97,7 +99,16 @@ export class CoreSocket {
   #connect(): void {
     const ws = new WebSocket(this.#url);
     this.#ws = ws;
+    // A dead link leaves the socket in CONNECTING until the browser's TCP
+    // timeout (~2min); bound it ourselves so the retry path kicks in sooner.
+    this.#connectTimer = setTimeout(() => {
+      this.#connectTimer = undefined;
+      if (this.#ws !== ws || ws.readyState === WebSocket.OPEN) return;
+      this.#dropSocket();
+      this.#retrySoon();
+    }, CONNECT_TIMEOUT_MS);
     ws.onopen = () => {
+      this.#clearConnectTimer();
       this.#backoff = 500;
       this.#lastFrame = Date.now();
       this.onState(true);
@@ -109,6 +120,7 @@ export class CoreSocket {
       this.#onFrame(ev.data as string);
     };
     ws.onclose = (ev) => {
+      this.#clearConnectTimer();
       this.#clearPing();
       this.onState(false);
       if (ev.code === 4401) {
@@ -134,11 +146,17 @@ export class CoreSocket {
   /** Detach and close the current socket, if any — its onclose would race the
    * retry path otherwise. */
   #dropSocket(): void {
+    this.#clearConnectTimer();
     const ws = this.#ws;
     this.#ws = undefined;
     if (ws === undefined) return;
     ws.onopen = ws.onmessage = ws.onclose = null;
     ws.close();
+  }
+
+  #clearConnectTimer(): void {
+    if (this.#connectTimer !== undefined) clearTimeout(this.#connectTimer);
+    this.#connectTimer = undefined;
   }
 
   #clearPing(): void {

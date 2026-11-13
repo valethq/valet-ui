@@ -132,3 +132,68 @@ describe("isLive", () => {
     }
   });
 });
+
+describe("connect timeout", () => {
+  test("a socket stuck CONNECTING is dropped after 5s and the next one goes live", () => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = {
+      window: g.window,
+      WebSocket: g.WebSocket,
+      setTimeout: g.setTimeout,
+      clearTimeout: g.clearTimeout,
+    };
+    const timers = new Map<number, () => void>();
+    let nextId = 1;
+    try {
+      FakeWebSocket.instances = [];
+      g.window = { addEventListener() {}, removeEventListener() {} };
+      g.WebSocket = FakeWebSocket;
+      g.setTimeout = (cb: () => void) => {
+        const id = nextId++;
+        timers.set(id, cb);
+        return id;
+      };
+      g.clearTimeout = (id: number) => {
+        timers.delete(id);
+      };
+      const fireAll = () => {
+        for (const [id, cb] of [...timers]) {
+          timers.delete(id);
+          cb();
+        }
+      };
+
+      const states: boolean[] = [];
+      const sock = new CoreSocket("http://core.test");
+      sock.onState = (open) => {
+        states.push(open);
+      };
+      sock.start();
+      expect(FakeWebSocket.instances.length).toBe(1);
+      expect(timers.size).toBe(1);
+
+      // The connect timer fires while the socket is still CONNECTING: it is
+      // dropped and a retry is scheduled on the normal backoff.
+      fireAll();
+      expect((FakeWebSocket.instances[0] as FakeWebSocket).readyState).toBe(3);
+      expect(timers.size).toBe(1);
+      expect(states).toEqual([]);
+
+      // The retry connects a fresh socket; when it opens, state goes live.
+      fireAll();
+      expect(FakeWebSocket.instances.length).toBe(2);
+      const ws = FakeWebSocket.instances[1] as FakeWebSocket;
+      ws.readyState = FakeWebSocket.OPEN;
+      ws.onopen?.();
+      expect(states).toEqual([true]);
+      expect(sock.open).toBe(true);
+      expect(timers.size).toBe(0);
+      sock.close();
+    } finally {
+      g.window = saved.window;
+      g.WebSocket = saved.WebSocket;
+      g.setTimeout = saved.setTimeout;
+      g.clearTimeout = saved.clearTimeout;
+    }
+  });
+});
