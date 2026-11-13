@@ -1,8 +1,10 @@
 import { definePlugin } from "@valethq/sdk";
+import { registerSettings } from "./settings";
 import { startUiServer, type UiConfig, type UiServer } from "./server";
 
 export default definePlugin<UiConfig>({
   async activate(ctx) {
+    registerSettings(ctx);
     let server: UiServer = await startUiServer(ctx.config);
     ctx.log.info("valet-ui listening", { url: server.url });
     ctx.onDispose(() => server.stop());

@@ -13,6 +13,8 @@ async function activate(config: UiConfig) {
   const listeners: ((next: UiConfig, prev: UiConfig) => Promise<void>)[] = [];
   const ctx = {
     config,
+    scopes: { define: () => undefined },
+    http: { route: () => undefined },
     log: {
       info: (_msg: string, data?: { url?: string }) => data?.url && urls.push(data.url),
       warn: (_msg: string, data?: { url?: string }) => data?.url && urls.push(data.url),
