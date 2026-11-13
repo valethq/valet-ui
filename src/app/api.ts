@@ -15,14 +15,14 @@ export const hooks = { onUnauthorized: (): void => {} };
 
 const base = (): string => window.VALET.coreUrl.replace(/\/+$/, "");
 
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function req<T>(method: string, path: string, body?: unknown, timeout = 15_000): Promise<T> {
   let res: Response;
   let text: string;
   try {
     res = await fetch(`${base()}${path}`, {
       method,
       credentials: "include",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(timeout),
       ...(body === undefined
         ? {}
         : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
@@ -85,11 +85,16 @@ export const listMessages = (sessionId: string, limit = 200): Promise<ChatMessag
   get(`/api/core/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}`);
 
 export const sendMessage = (sessionId: string, text: string, clientMessageId: string): Promise<ChatMessage> =>
-  req("POST", `/api/core/sessions/${encodeURIComponent(sessionId)}/messages`, {
-    role: "user",
-    parts: [{ type: "text", text }],
-    clientMessageId,
-  });
+  req(
+    "POST",
+    `/api/core/sessions/${encodeURIComponent(sessionId)}/messages`,
+    {
+      role: "user",
+      parts: [{ type: "text", text }],
+      clientMessageId,
+    },
+    8_000,
+  );
 
 export const getRun = (runId: string): Promise<Run> => get(`/api/core/runs/${encodeURIComponent(runId)}`);
 

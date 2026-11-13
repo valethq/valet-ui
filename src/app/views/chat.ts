@@ -16,6 +16,7 @@ export interface ChatHandle {
   /** `titleSuffix` is the session's duplicate-title number, when it has one. */
   update(view: SessionView | null, providers: ProviderModels[], titleSuffix?: number): void;
   setConnection(open: boolean): void;
+  setSendError(message: string | null): void;
 }
 
 const MAX_OUTPUT_LINES = 400;
@@ -31,19 +32,38 @@ function fmtDuration(ms: number): string {
 
 const elapsed = (createdAt: number): string => fmtDuration(Date.now() - createdAt);
 
+const toolExitCode = (d: Extract<Part["data"], { type: "tool-call" }>): number | undefined => {
+  const exit = (d.result as { meta?: { exitCode?: unknown } } | undefined)?.meta?.exitCode;
+  return typeof exit === "number" ? exit : undefined;
+};
+
 /** Header status for a tool step: `running 0:12` while it runs; a finished
  * step shows `done · exit 0 · 0:12` — the exit code only when the result's
- * meta reports one, the run time from createdAt -> updatedAt. */
+ * meta reports one, the run time from createdAt -> updatedAt. A "done" step
+ * with a non-zero exit code is labelled `failed`. */
 export function toolStatus(part: Part): string {
   const d = part.data;
   if (d.type !== "tool-call") return "";
   if (d.status === "running") return `running ${elapsed(part.createdAt)}`;
   if (d.status === "pending") return d.status;
-  const bits: string[] = [d.status];
-  const exit = (d.result as { meta?: { exitCode?: unknown } } | undefined)?.meta?.exitCode;
-  if (typeof exit === "number") bits.push(`exit ${exit}`);
+  const exit = toolExitCode(d);
+  const failed = d.status === "done" && exit !== undefined && exit !== 0;
+  const bits: string[] = [failed ? "failed" : d.status];
+  if (exit !== undefined) bits.push(`exit ${exit}`);
   bits.push(fmtDuration(part.updatedAt - part.createdAt));
   return bits.join(" · ");
+}
+
+/** Status chip class for a tool row: `failed` when the step errored or a
+ * "done" step reported a non-zero exit code, else the raw status. */
+export function toolStatusClass(part: Part): string {
+  const d = part.data;
+  if (d.type !== "tool-call") return part.status;
+  const exit = toolExitCode(d);
+  if (d.status === "error" || (d.status === "done" && exit !== undefined && exit !== 0)) {
+    return "failed";
+  }
+  return d.status;
 }
 
 interface PartUi {
@@ -116,7 +136,7 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
       return partRow(
         part,
         d.title ?? d.name,
-        d.status,
+        toolStatusClass(part),
         toolStatus(part),
         d.status === "running" || part.status === "streaming",
         ui,
@@ -234,6 +254,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const contextBar = el("div", { class: "context-bar" }, el("div", { class: "track" }, fill), usageLabel);
   const messages = el("div", { class: "messages" });
   const connLine = el("div", { class: "hint conn", text: "Reconnecting…" });
+  const sendErr = el("div", { class: "hint send-error" });
+  sendErr.style.display = "none";
   const textarea = el("textarea", { placeholder: "Message…", rows: "1", enterkeyhint: "enter" });
   const send = el("button", { class: "send", text: "Send" });
   const stop = el("button", { class: "stop", text: "Stop" });
@@ -311,6 +333,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     ),
     messages,
     connLine,
+    sendErr,
     el("div", { class: "composer" }, textarea, stop, send),
   );
   root.replaceChildren(main);
@@ -434,6 +457,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
 
   connLine.style.display = connOpen ? "none" : "";
 
+  const setSendError = (message: string | null): void => {
+    sendErr.textContent = message ?? "";
+    sendErr.style.display = message === null ? "none" : "";
+  };
+
   return {
     update(view, providers, titleSuffix) {
       current = view;
@@ -497,6 +525,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     setConnection(open) {
       connOpen = open;
       connLine.style.display = open ? "none" : "";
+      if (open) setSendError(null);
     },
+    setSendError,
   };
 }

@@ -368,15 +368,22 @@ async function startApp(): Promise<void> {
     onSend: async (text, clientMessageId) => {
       const view = app.view;
       if (view === null) return false;
+      if (!app.socket.isLive()) {
+        app.chat?.setSendError("Offline: message not sent");
+        return false;
+      }
       try {
         const cm = await api.sendMessage(view.session.id, text, clientMessageId);
         if (app.view?.session.id === view.session.id) {
           applyMessageCreate(view, cm.message, cm.parts);
           scheduleRender();
         }
+        app.chat?.setSendError(null);
         return true;
       } catch (e) {
-        toast(e instanceof Error ? e.message : "send failed");
+        const message = e instanceof Error ? e.message : "send failed";
+        app.chat?.setSendError(message);
+        toast(message);
         return false;
       }
     },

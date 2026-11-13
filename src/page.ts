@@ -63,14 +63,20 @@ select, input[type=text], input[type=password] {
   background: transparent;
   cursor: pointer;
   color: #c3c9d1;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .session-row:hover { background: #181d25; }
 .session-row.open { background: #1d242e; color: #eef1f5; }
 .session-row .dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: #3a4150; }
-.session-row .title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.session-row .title {
+  flex: 1;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
 .session-row .suffix { flex: none; color: #6f7885; }
 .session-row .unread { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #7aa2f7); }
 .sidebar .new-session { margin: 8px; }
@@ -158,6 +164,7 @@ select, input[type=text], input[type=password] {
 .part-row[open] summary::before { content: "\\25BE"; }
 .part-row .status { margin-left: auto; font-size: 11px; color: #6f7885; }
 .part-row .status.running { color: var(--accent, #7aa2f7); }
+.part-row .status.failed { color: #e06c75; }
 .part-row .status.error, .part-row .status.denied { color: #d97a7a; }
 .part-row .body { border-top: 1px solid #232b36; padding: 8px 11px; max-height: 320px; overflow-y: auto; }
 .part-row .body pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; color: #b6bfca; }
@@ -224,6 +231,7 @@ select, input[type=text], input[type=password] {
 .empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #59636f; }
 .hint { font-size: 12px; color: #59636f; padding: 4px 10px; }
 .hint.conn { padding: 6px 16px 0; }
+.hint.send-error { padding: 6px 16px 0; color: #e06c75; }
 
 @media (max-width: 900px), (max-height: 500px) and (pointer: coarse) {
   .app { grid-template-columns: 1fr; }

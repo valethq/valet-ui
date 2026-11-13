@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Part, PartData } from "../src/app/types";
-import { toolStatus } from "../src/app/views/chat";
+import { createChat, toolStatus, toolStatusClass } from "../src/app/views/chat";
 
 type ToolData = Extract<PartData, { type: "tool-call" }>;
 
@@ -41,5 +41,91 @@ describe("toolStatus", () => {
     expect(toolStatus(toolPart({ status: "pending" }))).toBe("pending");
     const p = toolPart({}, { type: "text", data: { type: "text", text: "hi" } });
     expect(toolStatus(p)).toBe("");
+  });
+
+  test("a done step with a non-zero exit is labelled failed", () => {
+    const p = toolPart({ result: { meta: { exitCode: 2 } } });
+    expect(toolStatus(p)).toBe("failed · exit 2 · 0:12");
+  });
+});
+
+describe("toolStatusClass", () => {
+  test("done with a non-zero exit and error status both map to failed", () => {
+    expect(toolStatusClass(toolPart({ result: { meta: { exitCode: 2 } } }))).toBe("failed");
+    expect(toolStatusClass(toolPart({ status: "error" }))).toBe("failed");
+    expect(toolStatusClass(toolPart({ status: "error", result: { meta: { exitCode: 3 } } }))).toBe("failed");
+  });
+
+  test("healthy and live steps keep their raw status", () => {
+    expect(toolStatusClass(toolPart({ result: { meta: { exitCode: 0 } } }))).toBe("done");
+    expect(toolStatusClass(toolPart())).toBe("done");
+    expect(toolStatusClass(toolPart({ status: "running" }))).toBe("running");
+    expect(toolStatusClass(toolPart({ status: "denied" }))).toBe("denied");
+  });
+});
+
+class FakeEl {
+  readonly attrs = new Map<string, string>();
+  readonly children: unknown[] = [];
+  readonly style: Record<string, string> = {};
+  textContent = "";
+  constructor(readonly tag: string) {}
+  setAttribute(k: string, v: string): void {
+    this.attrs.set(k, v);
+  }
+  append(...kids: unknown[]): void {
+    this.children.push(...kids);
+  }
+  addEventListener(): void {}
+  replaceChildren(...kids: unknown[]): void {
+    this.children.length = 0;
+    this.children.push(...kids);
+  }
+  get firstChild(): unknown {
+    return this.children[0] ?? null;
+  }
+}
+
+function findByClass(node: FakeEl, cls: string): FakeEl | undefined {
+  if ((node.attrs.get("class") ?? "").split(" ").includes(cls)) return node;
+  for (const c of node.children) {
+    if (c instanceof FakeEl) {
+      const hit = findByClass(c, cls);
+      if (hit !== undefined) return hit;
+    }
+  }
+  return undefined;
+}
+
+describe("send error line", () => {
+  test("setSendError shows a persistent line cleared by null or a reconnect", () => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onStop() {},
+        onModel() {},
+        onToggleNav() {},
+      });
+      const errNode = findByClass(root, "send-error") as FakeEl;
+      const connNode = findByClass(root, "conn") as FakeEl;
+      expect(errNode.style.display).toBe("none");
+      chat.setSendError("Offline: message not sent");
+      expect(errNode.textContent).toBe("Offline: message not sent");
+      expect(errNode.style.display).toBe("");
+      chat.setSendError(null);
+      expect(errNode.style.display).toBe("none");
+      chat.setSendError("boom");
+      chat.setConnection(true);
+      expect(errNode.style.display).toBe("none");
+      expect(connNode.style.display).toBe("none");
+      chat.setConnection(false);
+      expect(connNode.style.display).toBe("");
+    } finally {
+      g.document = savedDocument;
+    }
   });
 });

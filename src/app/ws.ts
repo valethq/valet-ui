@@ -1,7 +1,7 @@
 import type { ClientFrame, ServerFrame } from "./types";
 
-const PING_MS = 10_000;
-const STALE_MS = 25_000;
+const PING_MS = 3_000;
+const STALE_MS = 8_000;
 const MAX_BACKOFF_MS = 5_000;
 
 /** Records the last seen seq for `topic`; returns true when the frame skipped
@@ -51,6 +51,10 @@ export class CoreSocket {
 
   get open(): boolean {
     return this.#ws?.readyState === WebSocket.OPEN;
+  }
+
+  isLive(): boolean {
+    return this.open && !heartbeatStale(this.#lastFrame, Date.now());
   }
 
   close(): void {
