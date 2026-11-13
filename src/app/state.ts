@@ -220,6 +220,15 @@ export function sessionIndicator(
   return now - (session.lastMessageAt ?? session.updatedAt) > STALE_MS ? "stale" : "done";
 }
 
+/** Compact relative time for the sidebar: now, 5m, 3h, 2d. */
+export function timeAgo(at: number, now: number): string {
+  const m = Math.max(0, Math.floor((now - at) / 60_000));
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  if (m < 1440) return `${Math.floor(m / 60)}h`;
+  return `${Math.floor(m / 1440)}d`;
+}
+
 /** Run-status text from a provider that means it is waiting on the user. */
 export const needsUser = (status: string): boolean =>
   /approv|permission|question|input|waiting|confirm/i.test(status);

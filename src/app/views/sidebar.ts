@@ -1,6 +1,6 @@
 import { el } from "../dom";
 import { icon, iconButton, selectChip } from "../icons";
-import { type Indicator, titleSuffixes } from "../state";
+import { type Indicator, timeAgo, titleSuffixes } from "../state";
 import type { Project, Session } from "../types";
 
 export interface SidebarProps {
@@ -27,18 +27,24 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   picker.addEventListener("change", () => p.onProject(picker.value));
 
   const suffixes = titleSuffixes(p.sessions);
+  const now = Date.now();
   const list = el("div", { class: "sessions" });
   for (const session of p.sessions) {
     const row = el("button", {
       class: `session-row${session.id === p.openId ? " open" : ""}`,
       title: session.title ?? "Untitled",
     });
+    const suffix = suffixes.get(session.id);
+    const ago = timeAgo(session.lastMessageAt ?? session.updatedAt, now);
     row.append(
       el("span", { class: `dot ${p.indicators.get(session.id) ?? "done"}` }),
-      el("span", { class: "title", text: session.title ?? "Untitled" }),
+      el(
+        "span",
+        { class: "text" },
+        el("span", { class: "title", text: session.title ?? "Untitled" }),
+        el("span", { class: "meta", text: suffix === undefined ? ago : `${ago} · #${suffix}` }),
+      ),
     );
-    const suffix = suffixes.get(session.id);
-    if (suffix !== undefined) row.append(el("span", { class: "suffix", text: `#${suffix}` }));
     if (p.unread.has(session.id)) row.append(el("span", { class: "unread" }));
     row.addEventListener("click", () => p.onSession(session.id));
     list.append(row);

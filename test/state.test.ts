@@ -13,6 +13,7 @@ import {
   needsUser,
   sessionIndicator,
   STALE_MS,
+  timeAgo,
   titleSuffixes,
   upsertSession,
 } from "../src/app/state";
@@ -473,5 +474,16 @@ describe("sessionIndicator", () => {
     expect(needsUser("waiting for approval")).toBe(true);
     expect(needsUser("permission requested")).toBe(true);
     expect(needsUser("running")).toBe(false);
+  });
+});
+
+describe("timeAgo", () => {
+  test("compacts to now, minutes, hours and days", () => {
+    const now = 10 * 86_400_000;
+    expect(timeAgo(now - 20_000, now)).toBe("now");
+    expect(timeAgo(now - 5 * 60_000, now)).toBe("5m");
+    expect(timeAgo(now - 3 * 3_600_000 - 1, now)).toBe("3h");
+    expect(timeAgo(now - 2 * 86_400_000, now)).toBe("2d");
+    expect(timeAgo(now + 5000, now)).toBe("now");
   });
 });
