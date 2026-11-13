@@ -86,6 +86,8 @@ export interface Part {
   updatedAt: number;
 }
 
+export type PartInput = Extract<PartData, { type: "text" | "file" }>;
+
 export interface ChatMessage {
   message: Message;
   parts: Part[];

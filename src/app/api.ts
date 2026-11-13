@@ -1,4 +1,4 @@
-import type { ChatMessage, Project, ProviderModels, Run, Session, SettingsEntry } from "./types";
+import type { ChatMessage, PartInput, Project, ProviderModels, Run, Session, SettingsEntry } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -90,17 +90,53 @@ export const createSession = (projectId: string): Promise<Session> =>
 export const listMessages = (sessionId: string, limit = 200): Promise<ChatMessage[]> =>
   get(`/api/core/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}`);
 
-export const sendMessage = (sessionId: string, text: string, clientMessageId: string): Promise<ChatMessage> =>
+export const sendMessage = (
+  sessionId: string,
+  parts: PartInput[],
+  clientMessageId: string,
+): Promise<ChatMessage> =>
   req(
     "POST",
     `/api/core/sessions/${encodeURIComponent(sessionId)}/messages`,
-    {
-      role: "user",
-      parts: [{ type: "text", text }],
-      clientMessageId,
-    },
+    { role: "user", parts, clientMessageId },
     8_000,
   );
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+export async function uploadBlob(file: File): Promise<string> {
+  const data = toBase64(new Uint8Array(await file.arrayBuffer()));
+  const { id } = await req<{ id: string }>(
+    "POST",
+    "/api/core/blobs",
+    { data, mime: file.type || "application/octet-stream", name: file.name },
+    120_000,
+  );
+  return id;
+}
+
+const blobUrls = new Map<string, Promise<string>>();
+
+/** An object URL for a stored blob, fetched once; used for image thumbnails. */
+export function blobUrl(blobId: string): Promise<string> {
+  let url = blobUrls.get(blobId);
+  if (url === undefined) {
+    url = fetch(`${base()}/api/core/blobs/${encodeURIComponent(blobId)}`, { credentials: "include" }).then(
+      async (res) => {
+        if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+        return URL.createObjectURL(await res.blob());
+      },
+    );
+    blobUrls.set(blobId, url);
+    url.catch(() => blobUrls.delete(blobId));
+  }
+  return url;
+}
 
 export const getRun = (runId: string): Promise<Run> => get(`/api/core/runs/${encodeURIComponent(runId)}`);
 

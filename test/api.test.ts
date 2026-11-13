@@ -2,12 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   ApiError,
   authStatus,
+  blobUrl,
   deleteSession,
   listProjects,
   listSettings,
   saveSettings,
   sendMessage,
   updateSession,
+  uploadBlob,
 } from "../src/app/api";
 
 const g = globalThis as Record<string, unknown>;
@@ -36,7 +38,7 @@ function stubFetch(handler: () => Response): void {
 describe("request timeouts", () => {
   test("sendMessage fails fast with an 8s timeout", async () => {
     stubFetch(() => new Response('{"id":"msg_1"}', { status: 200 }));
-    await sendMessage("ses_1", "hi", "cm_1");
+    await sendMessage("ses_1", [{ type: "text", text: "hi" }], "cm_1");
     expect(timeouts).toEqual([8_000]);
   });
 
@@ -52,10 +54,75 @@ describe("sendMessage failure", () => {
     stubFetch(() => {
       throw new TypeError("fetch failed");
     });
-    const err = await sendMessage("ses_1", "hi", "cm_1").catch((e: unknown) => e);
+    const err = await sendMessage("ses_1", [{ type: "text", text: "hi" }], "cm_1").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(0);
     expect((err as ApiError).message).toBe("Network unreachable, try again");
+  });
+});
+
+describe("attachments", () => {
+  test("sendMessage posts text and file parts together", async () => {
+    let seen: { url: string; body?: unknown } = { url: "" };
+    g.window = { VALET: { coreUrl: "http://core.test/" } };
+    g.fetch = ((url: string, init: RequestInit) => {
+      seen = { url, body: init.body };
+      return Promise.resolve(new Response('{"message":{"id":"msg_1"},"parts":[]}', { status: 201 }));
+    }) as unknown as typeof fetch;
+    const parts = [
+      { type: "text" as const, text: "look" },
+      { type: "file" as const, blobId: "blb_1", name: "a.png", mime: "image/png" },
+    ];
+    await sendMessage("ses_1", parts, "cm_1");
+    expect(seen).toEqual({
+      url: "http://core.test/api/core/sessions/ses_1/messages",
+      body: JSON.stringify({ role: "user", parts, clientMessageId: "cm_1" }),
+    });
+  });
+
+  test("uploadBlob sends the bytes as base64 and resolves the blob id", async () => {
+    let seen: { url: string; method?: string; body?: unknown } = { url: "" };
+    g.window = { VALET: { coreUrl: "http://core.test/" } };
+    g.fetch = ((url: string, init: RequestInit) => {
+      seen = { url, method: init.method, body: init.body };
+      return Promise.resolve(new Response('{"id":"blb_1"}', { status: 201 }));
+    }) as unknown as typeof fetch;
+    const id = await uploadBlob(
+      new File([new Uint8Array([104, 105])], "hi.pdf", { type: "application/pdf" }),
+    );
+    expect(id).toBe("blb_1");
+    expect(seen).toEqual({
+      url: "http://core.test/api/core/blobs",
+      method: "POST",
+      body: JSON.stringify({ data: "aGk=", mime: "application/pdf", name: "hi.pdf" }),
+    });
+  });
+
+  test("uploadBlob falls back to a generic mime type", async () => {
+    let body = "";
+    g.window = { VALET: { coreUrl: "http://core.test/" } };
+    g.fetch = ((_url: string, init: RequestInit) => {
+      body = String(init.body);
+      return Promise.resolve(new Response('{"id":"blb_2"}', { status: 201 }));
+    }) as unknown as typeof fetch;
+    await uploadBlob(new File(["x"], "data.bin"));
+    expect(JSON.parse(body).mime).toBe("application/octet-stream");
+  });
+
+  test("blobUrl fetches a stored blob once and returns an object URL", async () => {
+    let calls = 0;
+    g.window = { VALET: { coreUrl: "http://core.test/" } };
+    g.fetch = ((url: string) => {
+      calls++;
+      expect(url).toBe("http://core.test/api/core/blobs/blb_9");
+      return Promise.resolve(
+        new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } }),
+      );
+    }) as unknown as typeof fetch;
+    const first = await blobUrl("blb_9");
+    expect(first).toStartWith("blob:");
+    expect(await blobUrl("blb_9")).toBe(first);
+    expect(calls).toBe(1);
   });
 });
 

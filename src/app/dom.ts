@@ -27,6 +27,27 @@ export function reconcile(parent: HTMLElement, nodes: HTMLElement[]): void {
   });
 }
 
+/** Patches `from` in place to match `to`. Same-tag elements are kept, so hover,
+ * focus, scroll and listeners on them survive. Images are not kept: their src
+ * is filled in asynchronously on the fresh node. */
+export function morph(from: Element, to: Element): void {
+  for (const name of from.getAttributeNames()) if (!to.hasAttribute(name)) from.removeAttribute(name);
+  for (const { name, value } of Array.from(to.attributes))
+    if (from.getAttribute(name) !== value) from.setAttribute(name, value);
+  const next = Array.from(to.childNodes);
+  const prev = Array.from(from.childNodes);
+  next.forEach((n, i) => {
+    const old = prev[i];
+    const tag = old === undefined ? undefined : tagOf(old);
+    if (old === undefined) from.append(n);
+    else if (tag !== undefined && tag !== "IMG" && tag === tagOf(n)) morph(old as Element, n as Element);
+    else old.replaceWith(n);
+  });
+  for (const extra of prev.slice(next.length)) extra.remove();
+}
+
+const tagOf = (n: Node): string | undefined => (n.nodeType === 1 ? (n as Element).tagName : undefined);
+
 /** Plays the `.leaving` exit animation from page.ts, then removes the node. */
 export function leave(node: HTMLElement, ms = 260): void {
   node.classList.add("leaving");

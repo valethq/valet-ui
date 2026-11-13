@@ -1,15 +1,18 @@
-import { clear, el, reconcile } from "../dom";
+import { blobUrl } from "../api";
+import { clear, el, morph, reconcile } from "../dom";
 import { chipButton, icon, iconButton } from "../icons";
 import { logoFor, logoMark } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { familyOf, groupModels, type ModelFamily, type ModelVariant } from "../models";
 import type { SessionView } from "../state";
-import type { ChatMessage, Part, ProviderModels } from "../types";
+import type { ChatMessage, Part, PartData, PartInput, ProviderModels } from "../types";
+import { createAttachments, filePart } from "./attachments";
 
 export interface ChatCallbacks {
   /** Resolves true when the POST succeeded; the draft is kept on failure. */
-  onSend(text: string, clientMessageId: string): Promise<boolean>;
+  onSend(parts: PartInput[], clientMessageId: string): Promise<boolean>;
+  onUpload(file: File): Promise<string>;
   onStop(): void;
   onModel(provider: string, model: string): void;
   onRename(): void;
@@ -90,6 +93,7 @@ export function toolStatusClass(part: Part): string {
 interface PartUi {
   openState: Map<string, boolean>;
   showAll: Map<string, boolean>;
+  bodyStick: Map<string, boolean>;
   refresh(): void;
 }
 
@@ -113,11 +117,15 @@ function partRow(
     el("span", { text: title }),
     el("span", { class: `status ${statusClass}`, text: statusLabel }),
   );
+  const body = el("div", { class: "body" }, ...bodyChildren);
+  body.addEventListener("scroll", () => {
+    ui.bodyStick.set(part.id, body.scrollHeight - body.scrollTop - body.clientHeight < STICK_PX);
+  });
   summary.addEventListener("click", () => {
     ui.openState.set(part.id, !details.open);
     details.classList.add("toggled");
   });
-  details.append(summary, el("div", { class: "body" }, ...bodyChildren));
+  details.append(summary, body);
   return details;
 }
 
@@ -175,10 +183,23 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
     case "compaction-summary":
       return el("div", { class: "part-summary", text: `Context compacted — ${d.text}` });
     case "file":
-      return el("div", { class: "part-notice", text: `file: ${d.name}` });
+      return fileNode(d);
     default:
       return null;
   }
+}
+
+function fileNode(d: Extract<PartData, { type: "file" }>): HTMLElement {
+  if (!d.mime.startsWith("image/")) {
+    return el("div", { class: "part-file" }, icon("file"), el("span", { text: d.name }));
+  }
+  const img = el("img", { class: "part-image", alt: d.name });
+  blobUrl(d.blobId)
+    .then((url) => {
+      img.src = url;
+    })
+    .catch(() => {});
+  return img;
 }
 
 function metaModel(cm: ChatMessage): { provider: string; model: string } | undefined {
@@ -322,6 +343,9 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const send = iconButton("send", "Send", "send");
   const stop = iconButton("stop", "Stop", "stop");
   stop.style.display = "none";
+  const attachBtn = iconButton("paperclip", "Attach", "attach");
+  const imageInput = el("input", { type: "file", accept: "image/*", multiple: "", hidden: "" });
+  const fileInput = el("input", { type: "file", multiple: "", hidden: "" });
 
   let current: SessionView | null = null;
   let sessionId: string | null = null;
@@ -382,22 +406,38 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   );
 
   const syncSend = (): void => {
-    send.disabled = textarea.value.trim() === "";
+    send.disabled = textarea.value.trim() === "" && attachments.list().length === 0;
   };
+  const attachments = createAttachments({
+    upload: cb.onUpload,
+    onError: (message) => setSendError(message),
+    onChange: syncSend,
+  });
   const doSend = (): void => {
     const text = textarea.value.trim();
-    if (text === "") return;
+    const sent = attachments.list();
+    if (text === "" && sent.length === 0) return;
     draftId ??= crypto.randomUUID();
     const id = draftId;
-    void cb.onSend(text, id).then((ok) => {
-      if (!ok) return;
-      if (textarea.value.trim() === text) {
-        textarea.value = "";
-        textarea.style.height = "";
-        syncSend();
-      }
-      if (draftId === id) draftId = null;
-    });
+    const files = Promise.all(sent.map(async (a) => filePart(await a.blob, a.file)));
+    void files
+      .then((fileParts) => {
+        const textParts: PartInput[] = text === "" ? [] : [{ type: "text", text }];
+        return cb.onSend([...textParts, ...fileParts], id);
+      })
+      .then(
+        (ok) => {
+          if (!ok) return;
+          if (textarea.value.trim() === text) {
+            textarea.value = "";
+            textarea.style.height = "";
+          }
+          attachments.drop(sent);
+          if (draftId === id) draftId = null;
+          syncSend();
+        },
+        () => {},
+      );
   };
   send.addEventListener("click", doSend);
   stop.addEventListener("click", () => cb.onStop());
@@ -416,6 +456,30 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
     syncSend();
   });
+  textarea.addEventListener("paste", (ev) => {
+    const files = Array.from(ev.clipboardData?.files ?? []);
+    if (files.length === 0) return;
+    ev.preventDefault();
+    attachments.add(files);
+  });
+  for (const input of [imageInput, fileInput]) {
+    input.addEventListener("change", () => {
+      attachments.add(Array.from(input.files ?? []));
+      input.value = "";
+    });
+  }
+  const attachMenu = popover(
+    attachBtn,
+    () => [
+      {
+        items: [
+          { label: "Image", lead: icon("image"), onSelect: () => imageInput.click() },
+          { label: "File", lead: icon("file"), onSelect: () => fileInput.click() },
+        ],
+      },
+    ],
+    "attach-pop",
+  );
   messages.addEventListener("scroll", () => {
     stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
   });
@@ -447,13 +511,16 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       el(
         "div",
         { class: "composer" },
+        attachments.row,
         textarea,
         el(
           "div",
           { class: "composer-bar" },
-          el("div", { class: "controls" }, modelMenu, effortMenu),
+          el("div", { class: "controls" }, attachMenu, modelMenu, effortMenu),
           el("div", { class: "actions" }, contextBar, stop, send),
         ),
+        imageInput,
+        fileInput,
       ),
     ),
   );
@@ -477,7 +544,14 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         if (p.data.type === "tool-call" && p.data.status === "running") runningTools.add(p.id);
       }
     }
-    const ui: PartUi = { openState, showAll, refresh: () => renderMessages(view) };
+    const ui: PartUi = {
+      openState,
+      showAll,
+      bodyStick,
+      refresh: () => {
+        if (current !== null) renderMessages(current);
+      },
+    };
     const now = Date.now();
     const live = new Set<string>();
     const nodes: HTMLElement[] = [];
@@ -489,8 +563,17 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         // New messages animate in once; a re-render mid-entrance resumes it.
         const born = hit?.born ?? now;
         const anim = hit === undefined ? (primed ? "enter" : "fade") : now - born < ENTER_MS ? hit.anim : "";
-        hit = { sig, anim, born, nodes: renderMessage(cm, ui, view, anim) };
-        if (anim !== "" && born < now) for (const n of hit.nodes) n.style.animationDelay = `${born - now}ms`;
+        const fresh = renderMessage(cm, ui, view, anim);
+        if (hit !== undefined && hit.nodes.length === fresh.length) {
+          // Same shape: patch the live nodes so hover, focus and scroll survive.
+          hit.nodes.forEach((n, i) => {
+            morph(n, fresh[i] as HTMLElement);
+          });
+          hit = { ...hit, sig, anim };
+        } else {
+          if (anim !== "" && born < now) for (const n of fresh) n.style.animationDelay = `${born - now}ms`;
+          hit = { sig, anim, born, nodes: fresh };
+        }
         cache.set(id, hit);
       }
       live.add(id);
@@ -504,12 +587,6 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       const pid = row.dataset.partId;
       const body = row.querySelector<HTMLElement>(".body");
       if (pid === undefined || body === null) continue;
-      if (body.dataset.bound !== "1") {
-        body.setAttribute("data-bound", "1");
-        body.addEventListener("scroll", () => {
-          bodyStick.set(pid, body.scrollHeight - body.scrollTop - body.clientHeight < STICK_PX);
-        });
-      }
       if (runningTools.has(pid) && (bodyStick.get(pid) ?? true)) {
         body.scrollTop = body.scrollHeight;
       } else {

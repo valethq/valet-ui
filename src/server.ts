@@ -35,7 +35,7 @@ function csp(coreUrl: string): string {
     "style-src 'unsafe-inline'",
     "font-src 'self'",
     `connect-src 'self' ${coreUrl} ${wsUrl(coreUrl)}`,
-    "img-src 'self' data:",
+    "img-src 'self' blob: data:",
     "base-uri 'none'",
     "form-action 'none'",
   ].join("; ");

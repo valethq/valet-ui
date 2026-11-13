@@ -492,7 +492,7 @@ async function startApp(): Promise<void> {
 
   const chatRoot = el("div", { class: "chat-root" });
   app.chat = createChat(chatRoot, {
-    onSend: async (text, clientMessageId) => {
+    onSend: async (parts, clientMessageId) => {
       if (!app.socket.isLive()) {
         app.chat?.setSendError("Offline: message not sent");
         return false;
@@ -501,7 +501,7 @@ async function startApp(): Promise<void> {
       const view = app.view;
       if (view === null) return false;
       try {
-        const cm = await api.sendMessage(view.session.id, text, clientMessageId);
+        const cm = await api.sendMessage(view.session.id, parts, clientMessageId);
         if (app.view?.session.id === view.session.id) {
           applyMessageCreate(view, cm.message, cm.parts);
           scheduleRender();
@@ -515,6 +515,7 @@ async function startApp(): Promise<void> {
         return false;
       }
     },
+    onUpload: api.uploadBlob,
     onRename: () => {
       const session = app.view?.session;
       if (session === undefined) return;

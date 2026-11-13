@@ -80,7 +80,13 @@ class FakeEl {
     for (const k of kids) if (k instanceof FakeEl) k.#parent = this;
     this.children.push(...kids);
   }
-  addEventListener(): void {}
+  readonly listeners = new Map<string, ((ev: unknown) => void)[]>();
+  addEventListener(type: string, fn: (ev: unknown) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  dispatch(type: string, ev: unknown): void {
+    for (const fn of this.listeners.get(type) ?? []) fn(ev);
+  }
   remove(): void {
     const i = this.#parent?.children.indexOf(this) ?? -1;
     if (i >= 0) this.#parent?.children.splice(i, 1);
@@ -96,6 +102,32 @@ class FakeEl {
     const i = ref === null ? -1 : this.children.indexOf(ref);
     if (i < 0) this.children.push(node);
     else this.children.splice(i, 0, node);
+  }
+  readonly nodeType = 1;
+  get tagName(): string {
+    return this.tag.toUpperCase();
+  }
+  get childNodes(): FakeEl[] {
+    return this.children as FakeEl[];
+  }
+  get attributes(): { name: string; value: string }[] {
+    return [...this.attrs].map(([name, value]) => ({ name, value }));
+  }
+  getAttributeNames(): string[] {
+    return [...this.attrs.keys()];
+  }
+  getAttribute(k: string): string | null {
+    return this.attrs.get(k) ?? null;
+  }
+  hasAttribute(k: string): boolean {
+    return this.attrs.has(k);
+  }
+  removeAttribute(k: string): void {
+    this.attrs.delete(k);
+  }
+  replaceWith(n: FakeEl): void {
+    this.#parent?.insertBefore(n, this);
+    this.remove();
   }
   get firstChild(): { remove(): void } | null {
     const c = this.children[0];
@@ -146,6 +178,17 @@ function findByClass(node: FakeEl, cls: string): FakeEl | undefined {
   return undefined;
 }
 
+function findTag(node: FakeEl, tag: string): FakeEl | undefined {
+  if (node.tag === tag) return node;
+  for (const c of node.children) {
+    if (c instanceof FakeEl) {
+      const hit = findTag(c, tag);
+      if (hit !== undefined) return hit;
+    }
+  }
+  return undefined;
+}
+
 describe("send error line", () => {
   test("setSendError shows a persistent line cleared by null or a reconnect", () => {
     const g = globalThis as Record<string, unknown>;
@@ -155,6 +198,7 @@ describe("send error line", () => {
       const root = new FakeEl("div");
       const chat = createChat(root as unknown as HTMLElement, {
         onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
         onStop() {},
         onModel() {},
         onRename() {},
@@ -246,6 +290,7 @@ describe("tool output rendering", () => {
       const root = new FakeEl("div");
       const chat = createChat(root as unknown as HTMLElement, {
         onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
         onStop() {},
         onModel() {},
         onRename() {},
@@ -281,6 +326,7 @@ describe("message entrance", () => {
       const root = new FakeEl("div");
       const chat = createChat(root as unknown as HTMLElement, {
         onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
         onStop() {},
         onModel() {},
         onRename() {},
@@ -310,9 +356,8 @@ describe("message entrance", () => {
       expect(cls(added)).toBe("msg assistant enter");
       t += 100;
       const [, resumed] = show(note("m1", "a"), note("m2", "bb"));
-      expect(resumed).not.toBe(added as FakeEl);
+      expect(resumed).toBe(added as FakeEl);
       expect(cls(resumed)).toBe("msg assistant enter");
-      expect(resumed?.style.animationDelay).toBe("-100ms");
       t += 1_000;
       const [kept, settled] = show(note("m1", "a"), note("m2", "bbb"));
       expect(kept).toBe(first as FakeEl);
@@ -322,6 +367,206 @@ describe("message entrance", () => {
       Date.now = realNow;
     }
   });
+});
+
+describe("streaming updates", () => {
+  test("a changed message is patched in place, keeping the hovered row's summary", () => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+      });
+      const reasoning = (text: string): Part => ({
+        id: "prt_r",
+        messageId: "msg_1",
+        idx: 0,
+        status: "streaming",
+        type: "reasoning",
+        data: { type: "reasoning", text },
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      chat.update(viewWith([reasoning("a")]), []);
+      const summary = findTag(root, "summary");
+      const row = findByClass(root, "part-row");
+      chat.update(viewWith([reasoning("ab")]), []);
+      expect(findTag(root, "summary")).toBe(summary as FakeEl);
+      expect(findByClass(root, "part-row")).toBe(row as FakeEl);
+    } finally {
+      g.document = savedDocument;
+    }
+  });
+});
+
+describe("composer attachments", () => {
+  const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+  const withDom = (run: () => Promise<void>): (() => Promise<void>) => {
+    return async () => {
+      const g = globalThis as Record<string, unknown>;
+      const saved = g.document;
+      g.document = { createElement: (tag: string) => new FakeEl(tag) };
+      try {
+        await run();
+      } finally {
+        g.document = saved;
+      }
+    };
+  };
+
+  test(
+    "pasted files upload, then send as file parts with the text",
+    withDom(async () => {
+      const root = new FakeEl("div");
+      const sent: unknown[] = [];
+      createChat(root as unknown as HTMLElement, {
+        onSend: (parts) => {
+          sent.push(parts);
+          return Promise.resolve(true);
+        },
+        onUpload: (file) => Promise.resolve(`blb_${file.name}`),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+      });
+      const textarea = findTag(root, "textarea") as FakeEl;
+      const row = findByClass(root, "attach-row") as FakeEl;
+      textarea.value = "see attached";
+      const png = new File([new Uint8Array([1])], "a.png", { type: "image/png" });
+      const txt = new File(["notes"], "notes.pdf", { type: "application/pdf" });
+      textarea.dispatch("paste", { clipboardData: { files: [png, txt] }, preventDefault() {} });
+      expect(row.style.display).toBe("");
+      expect(row.children.length).toBe(2);
+      expect((row.children[0] as FakeEl).children[0]).toBeInstanceOf(FakeEl);
+      expect(((row.children[0] as FakeEl).children[0] as FakeEl).tag).toBe("img");
+
+      (findByClass(root, "send") as FakeEl).dispatch("click", {});
+      await tick();
+      expect(sent).toEqual([
+        [
+          { type: "text", text: "see attached" },
+          { type: "file", blobId: "blb_a.png", name: "a.png", mime: "image/png" },
+          { type: "file", blobId: "blb_notes.pdf", name: "notes.pdf", mime: "application/pdf" },
+        ],
+      ]);
+      expect(row.style.display).toBe("none");
+      expect(textarea.value).toBe("");
+    }),
+  );
+
+  test(
+    "a file alone can be sent without text",
+    withDom(async () => {
+      const root = new FakeEl("div");
+      const sent: unknown[] = [];
+      createChat(root as unknown as HTMLElement, {
+        onSend: (parts) => {
+          sent.push(parts);
+          return Promise.resolve(true);
+        },
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+      });
+      const textarea = findTag(root, "textarea") as FakeEl;
+      const file = new File(["x"], "x.bin");
+      textarea.dispatch("paste", { clipboardData: { files: [file] }, preventDefault() {} });
+      (findByClass(root, "send") as FakeEl).dispatch("click", {});
+      await tick();
+      expect(sent).toEqual([
+        [{ type: "file", blobId: "blb_1", name: "x.bin", mime: "application/octet-stream" }],
+      ]);
+    }),
+  );
+
+  test(
+    "a failed upload drops the chip and shows the error",
+    withDom(async () => {
+      const root = new FakeEl("div");
+      createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.reject(new Error("disk full")),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+      });
+      const textarea = findTag(root, "textarea") as FakeEl;
+      textarea.dispatch("paste", {
+        clipboardData: { files: [new File(["x"], "x.txt")] },
+        preventDefault() {},
+      });
+      await tick();
+      expect((findByClass(root, "send-error") as FakeEl).textContent).toBe("disk full");
+      expect((findByClass(root, "attach-row") as FakeEl).style.display).toBe("none");
+    }),
+  );
+
+  test(
+    "a file over 20 MB is refused without uploading",
+    withDom(async () => {
+      const root = new FakeEl("div");
+      const uploads: string[] = [];
+      createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: (file) => {
+          uploads.push(file.name);
+          return Promise.resolve("blb_1");
+        },
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+      });
+      const big = { name: "big.bin", size: 21 * 1024 * 1024, type: "" } as unknown as File;
+      (findTag(root, "textarea") as FakeEl).dispatch("paste", {
+        clipboardData: { files: [big] },
+        preventDefault() {},
+      });
+      expect(uploads).toEqual([]);
+      expect((findByClass(root, "send-error") as FakeEl).textContent).toBe("big.bin is larger than 20 MB");
+    }),
+  );
+
+  test(
+    "text paste without files is left to the browser",
+    withDom(async () => {
+      const root = new FakeEl("div");
+      createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+      });
+      let prevented = false;
+      (findTag(root, "textarea") as FakeEl).dispatch("paste", {
+        clipboardData: { files: [] },
+        preventDefault() {
+          prevented = true;
+        },
+      });
+      expect(prevented).toBe(false);
+      expect((findByClass(root, "attach-row") as FakeEl).style.display).toBe("none");
+    }),
+  );
 });
 
 describe("quietStatus", () => {

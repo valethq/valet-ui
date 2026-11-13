@@ -572,6 +572,39 @@ button.chip:active:not(:disabled) { transform: none; }
 .composer .stop { background: var(--raised); color: var(--text); animation: pop-in .22s var(--sb-ease); }
 @keyframes pop-in { from { opacity: 0; transform: scale(.7); } }
 .composer .stop .icon { width: 16px; height: 16px; }
+.attach-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px 0; }
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  height: 40px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--raised);
+  font-size: 13px;
+  animation: fade-in .2s ease-out;
+}
+.attach-chip.pending { opacity: .55; }
+.attach-chip > .icon { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.attach-chip .attach-remove { width: 28px; height: 28px; flex: none; }
+.attach-chip .attach-remove .icon { width: 14px; height: 14px; }
+.attach-thumb { width: 28px; height: 28px; flex: none; object-fit: cover; border-radius: 6px; }
+.attach-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.part-image { display: block; max-width: 100%; max-height: 320px; border-radius: var(--r-md); }
+.part-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: 13px;
+}
+.part-file .icon { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.part-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .modal-backdrop {
   position: fixed;
