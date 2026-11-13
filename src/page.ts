@@ -211,8 +211,8 @@ button.chip:active:not(:disabled) { transform: none; }
   filter: blur(16px);
   opacity: 0;
   pointer-events: none;
-  transition-timing-function: var(--sb-ease-out);
-  transition-delay: .12s;
+  transition-duration: .3s;
+  transition-delay: 0s;
 }
 .app.collapsed:not(.no-peek) .sidebar-edge:hover + .sidebar,
 .app.collapsed:not(.no-peek) .sidebar:hover,
@@ -221,7 +221,7 @@ button.chip:active:not(:disabled) { transform: none; }
   filter: blur(0);
   opacity: 1;
   pointer-events: auto;
-  transition-timing-function: var(--sb-ease);
+  transition-duration: var(--sb-dur);
   transition-delay: 0s;
 }
 .sidebar-head .actions { display: flex; align-items: center; gap: 2px; }
@@ -247,6 +247,7 @@ button.chip:active:not(:disabled) { transform: none; }
   font-size: 13.5px;
   line-height: 1.4;
   overflow: hidden;
+  flex: none;
 }
 .session-row:hover { background: var(--tint); color: var(--text); }
 .session-row:active:not(:disabled) { transform: none; }
@@ -272,7 +273,7 @@ button.chip:active:not(:disabled) { transform: none; }
   min-width: 0;
   min-height: 0;
   margin-left: calc(var(--sb-w) + var(--sb-inset));
-  transition: margin-left var(--sb-dur) var(--sb-ease);
+  transition: margin-left .3s var(--sb-ease);
 }
 .app.collapsed .main { margin-left: 0; }
 .chat-header {
