@@ -110,6 +110,17 @@ export function applyDelta(view: SessionView, d: MessageDelta): boolean {
   return unknown;
 }
 
+/** Replaces (or adds) one part in place. False when its message isn't in the view yet, so the caller can refetch. */
+export function applyPartUpdate(view: SessionView, messageId: string, part: Part): boolean {
+  const cm = findMessage(view, messageId);
+  if (!cm) return false;
+  const i = cm.parts.findIndex((p) => p.id === part.id);
+  if (i >= 0) cm.parts[i] = part;
+  else cm.parts.push(part);
+  cm.parts.sort((a, b) => a.idx - b.idx);
+  return true;
+}
+
 /** Returns true when the message was unknown (caller refetches). */
 export function applyMessageComplete(view: SessionView, message: Message): boolean {
   const cm = findMessage(view, message.id);

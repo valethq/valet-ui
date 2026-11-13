@@ -4,6 +4,7 @@ import { el, leave } from "./dom";
 import {
   applyDelta,
   applyMessageComplete,
+  applyPartUpdate,
   applyMessageCreate,
   applyRunEnd,
   applyRunInfo,
@@ -427,6 +428,12 @@ function onEvent(topic: string, name: string, data: unknown): void {
       case "message.delta":
         if (applyDelta(view, data as MessageDelta)) refetchMessagesSoon();
         break;
+      case "part.update": {
+        const p = data as { messageId: string; part: Part };
+        if (!applyPartUpdate(view, p.messageId, p.part)) refetchMessagesSoon();
+        else scheduleRender();
+        break;
+      }
       case "message.complete":
         applyMessageComplete(view, (data as { message: Message }).message);
         refetchMessagesSoon();
