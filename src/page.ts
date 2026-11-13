@@ -256,7 +256,7 @@ button.chip:active:not(:disabled) { transform: none; }
 .sidebar .project-picker .chip { display: flex; width: 100%; height: 32px; background: none; color: var(--muted); border-radius: var(--r-md); }
 .sidebar .project-picker .chip:hover { background: var(--tint); color: var(--text); }
 .sidebar .project-picker select { width: 100%; font-size: 13.5px; border-radius: var(--r-md); }
-.sidebar .sessions { flex: 1; overflow-y: auto; padding: 2px 6px; display: flex; flex-direction: column; gap: 0; }
+.sidebar .sessions { flex: 1; overflow-y: auto; padding: 2px 6px; display: flex; flex-direction: column; gap: 4px; }
 .session-row {
   display: flex;
   align-items: center;
