@@ -457,6 +457,14 @@ button.chip:active:not(:disabled) { transform: none; }
 .part-row .status.failed { color: var(--danger); }
 .part-row .status.error, .part-row .status.denied { color: var(--danger); }
 .part-row .body { margin: 4px 0 0 8px; padding: 2px 0 2px 12px; border-left: 2px solid var(--border); max-height: 260px; overflow-y: auto; }
+.part-row::details-content {
+  block-size: 0;
+  overflow-y: clip;
+  opacity: 0;
+  interpolate-size: allow-keywords;
+  transition: block-size .25s var(--sb-ease), opacity .22s ease, content-visibility .25s allow-discrete;
+}
+.part-row[open]::details-content { block-size: auto; opacity: 1; }
 .part-row.toggled .body { animation: body-in .22s var(--sb-ease); }
 @keyframes body-in { from { opacity: 0; transform: translateY(-4px); } }
 .part-row .body pre { margin: 0; padding: 0; border: none; border-radius: 0; background: none; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; color: var(--muted); }

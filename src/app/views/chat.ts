@@ -122,7 +122,13 @@ function partRow(
     ui.bodyStick.set(part.id, body.scrollHeight - body.scrollTop - body.clientHeight < STICK_PX);
   });
   summary.addEventListener("click", () => {
-    ui.openState.set(part.id, !details.open);
+    const opening = !details.open;
+    ui.openState.set(part.id, opening);
+    details.classList.remove("toggled");
+    if (!opening) return;
+    // Re-adding an already-present class is a no-op, so flush styles between
+    // remove and add to restart the body-in animation on every open.
+    void details.offsetWidth;
     details.classList.add("toggled");
   });
   details.append(summary, body);
