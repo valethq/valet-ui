@@ -1,8 +1,8 @@
 import { el, leave } from "../dom";
 import { iconButton } from "../icons";
-import { applyTheme, currentTheme, THEMES } from "../themes";
 import type { SettingsEntry } from "../types";
 import { schemaForm } from "./schema-form";
+import { themeSection } from "./themes";
 
 export interface SettingsDeps {
   load(): Promise<SettingsEntry[]>;
@@ -10,30 +10,6 @@ export interface SettingsDeps {
 }
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
-function themeSection(): HTMLElement {
-  const grid = el("div", { class: "theme-grid", role: "radiogroup", "aria-label": "Theme" });
-  const paint = (): void => {
-    for (const b of grid.children)
-      b.setAttribute("aria-checked", String((b as HTMLElement).dataset.theme === currentTheme()));
-  };
-  for (const t of THEMES) {
-    const swatch = el("span", { class: "swatch" });
-    swatch.style.background = `linear-gradient(135deg, ${t.colors.bg} 50%, ${t.colors.accent} 50%)`;
-    const b = el("button", { class: "theme-option", role: "radio", "data-theme": t.id }, swatch, t.name);
-    b.addEventListener("click", () => {
-      const swap = (): void => {
-        applyTheme(t.id);
-        paint();
-      };
-      if ("startViewTransition" in document) document.startViewTransition(swap);
-      else swap();
-    });
-    grid.append(b);
-  }
-  paint();
-  return el("section", { class: "settings-section" }, grid);
-}
 
 function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
   const form = schemaForm(entry.schema, entry.values);

@@ -18,10 +18,12 @@ import {
   type SessionView,
   needsUser,
   sessionIndicator,
+  sortSessions,
   titleSuffixes,
   upsertSession,
 } from "./state";
 import type { Message, MessageDelta, Part, Project, ProviderModels, Run, RunStatus, Session } from "./types";
+import { syncCustom } from "./themes";
 import { renderAuth } from "./views/auth";
 import { createChat, type ChatHandle } from "./views/chat";
 import { openSettings } from "./views/settings";
@@ -242,7 +244,7 @@ function refetchMessagesSoon(): void {
 
 async function loadSessions(): Promise<void> {
   if (app.projectId === null) return;
-  app.sessions = (await api.listSessions(app.projectId)).sort((a, b) => b.createdAt - a.createdAt);
+  app.sessions = sortSessions(await api.listSessions(app.projectId));
   syncTopics();
 }
 
@@ -609,6 +611,7 @@ window.addEventListener("hashchange", () => {
 });
 
 async function boot(): Promise<void> {
+  syncCustom();
   let status: api.AuthStatus | null = null;
   try {
     status = await api.authStatus();
