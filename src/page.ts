@@ -24,8 +24,10 @@ select, input[type=text], input[type=password] {
   padding: 6px 8px;
 }
 
-.app { display: grid; grid-template-columns: 264px 1fr; height: 100vh; }
+.app { display: grid; grid-template-columns: 264px 1fr; height: 100vh; height: 100dvh; }
 .chat-root { display: contents; }
+.nav-toggle { display: none; }
+.nav-backdrop { display: none; }
 .toast {
   position: fixed;
   bottom: 18px;
@@ -90,12 +92,13 @@ select, input[type=text], input[type=password] {
 
 .messages { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
 .msg { max-width: 78%; }
+.msg, .msg .bubble { min-width: 0; }
 .msg.user { align-self: flex-end; }
 .msg.assistant, .msg.system, .msg.tool { align-self: flex-start; }
 .msg .bubble {
   border-radius: 10px;
   padding: 9px 13px;
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: break-word;
 }
 .msg.user .bubble { background: #26354d; }
@@ -114,6 +117,19 @@ select, input[type=text], input[type=password] {
 .msg .bubble p > code, .msg .bubble code.inline { background: #222933; border-radius: 4px; padding: 1px 5px; }
 .msg .bubble p { margin: 0 0 8px; white-space: pre-wrap; }
 .msg .bubble p:last-child { margin-bottom: 0; }
+.msg .bubble ul, .msg .bubble ol { margin: 0 0 8px; padding-left: 20px; }
+.msg .bubble li { white-space: pre-wrap; }
+.msg .bubble .md-quote {
+  border-left: 2px solid #3a4150;
+  padding-left: 10px;
+  color: #a9b2bf;
+  white-space: pre-wrap;
+  margin: 0 0 8px;
+}
+.md-h { font-weight: 600; margin: 4px 0 6px; }
+.md-h1, .md-h2 { font-size: 1.12em; }
+.msg .bubble a { color: var(--accent, #7aa2f7); }
+.msg .bubble hr { border: none; border-top: 1px solid #2b333f; margin: 8px 0; }
 .msg .meta { font-size: 11px; color: #6f7885; margin: 3px 4px 0; }
 .msg.user .meta { text-align: right; }
 
@@ -139,7 +155,7 @@ select, input[type=text], input[type=password] {
 .part-row .status.running { color: var(--accent, #7aa2f7); }
 .part-row .status.error, .part-row .status.denied { color: #d97a7a; }
 .part-row .body { border-top: 1px solid #232b36; padding: 8px 11px; max-height: 320px; overflow-y: auto; }
-.part-row .body pre { margin: 0; white-space: pre-wrap; overflow-wrap: break-word; font-size: 12.5px; color: #b6bfca; }
+.part-row .body pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; color: #b6bfca; }
 .part-notice { font-size: 12.5px; color: #98a1ad; padding: 2px 4px; }
 .part-notice.warn { color: #cfa75f; }
 .part-notice.error { color: #d97a7a; }
@@ -162,6 +178,7 @@ select, input[type=text], input[type=password] {
 
 .auth {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -182,6 +199,41 @@ select, input[type=text], input[type=password] {
 
 .empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #59636f; }
 .hint { font-size: 12px; color: #59636f; padding: 4px 10px; }
+
+@media (max-width: 720px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(85vw, 300px);
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform .2s;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .app.nav-open .sidebar { transform: none; }
+  .nav-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 19;
+    display: none;
+  }
+  .app.nav-open .nav-backdrop { display: block; }
+  .nav-toggle { display: inline-flex; }
+  .chat-header { flex-wrap: wrap; padding-top: max(10px, env(safe-area-inset-top)); }
+  .chat-header .session-title { flex: 1 1 0; min-width: 0; }
+  .chat-header .model-picker, .chat-header .effort-picker { max-width: 100%; min-width: 0; flex: 1 1 auto; }
+  .context-bar { width: 80px; }
+  .msg { max-width: 92%; }
+  .messages { padding: 12px; }
+  .composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  button, select, .session-row, .part-row summary { min-height: 44px; }
+  input, select, textarea { font-size: 16px; }
+}
 `;
 
 export function configScript(coreUrl: string): string {
@@ -193,7 +245,7 @@ export function indexHtml(coreUrl: string): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>valet</title>
 <style>${CSS}</style>
 </head>

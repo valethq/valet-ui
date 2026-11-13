@@ -62,6 +62,14 @@ const app: App = {
   view: null,
 };
 
+let appEl: HTMLElement | null = null;
+const toggleNav = (): void => {
+  appEl?.classList.toggle("nav-open");
+};
+const closeNav = (): void => {
+  appEl?.classList.remove("nav-open");
+};
+
 let renderQueued = false;
 function scheduleRender(): void {
   if (renderQueued) return;
@@ -74,9 +82,18 @@ function scheduleRender(): void {
       sessions: app.sessions,
       openId: app.view?.session.id ?? null,
       unread: app.unread,
-      onProject: (id) => void switchProject(id),
-      onSession: (id) => void openSession(id),
-      onNew: () => void newSession(),
+      onProject: (id) => {
+        closeNav();
+        void switchProject(id);
+      },
+      onSession: (id) => {
+        closeNav();
+        void openSession(id);
+      },
+      onNew: () => {
+        closeNav();
+        void newSession();
+      },
     });
     app.chat?.update(app.view, app.providers);
   });
@@ -113,6 +130,37 @@ async function loadSessions(): Promise<void> {
   syncTopics();
 }
 
+const sessionKey = (projectId: string): string => `valet-ui.session.${projectId}`;
+
+function rememberedSession(projectId: string | null): string | null {
+  if (projectId === null) return null;
+  try {
+    return localStorage.getItem(sessionKey(projectId));
+  } catch {
+    return null;
+  }
+}
+
+function sessionFromHash(): string | null {
+  const m = /^#s=(.+)$/.exec(window.location.hash);
+  if (m === null) return null;
+  try {
+    return decodeURIComponent(m[1] as string);
+  } catch {
+    return m[1] as string;
+  }
+}
+
+function pickSession(preferHash: boolean): Session | undefined {
+  const remembered = rememberedSession(app.projectId);
+  const candidates = preferHash ? [sessionFromHash(), remembered] : [remembered];
+  for (const id of candidates) {
+    const hit = id === null ? undefined : app.sessions.find((s) => s.id === id);
+    if (hit !== undefined) return hit;
+  }
+  return app.sessions[0];
+}
+
 let openSeq = 0;
 async function openSession(id: string): Promise<void> {
   const session = app.sessions.find((s) => s.id === id);
@@ -122,6 +170,12 @@ async function openSession(id: string): Promise<void> {
   const messages = await api.listMessages(id).catch(() => []);
   if (seq !== openSeq) return;
   app.view = newSessionView(session, messages);
+  try {
+    localStorage.setItem(sessionKey(session.projectId), id);
+  } catch {
+    // private mode; selection simply isn't remembered
+  }
+  history.replaceState(null, "", `#s=${encodeURIComponent(id)}`);
   document.documentElement.style.setProperty("--accent", sessionColor(session));
   scheduleRender();
 }
@@ -136,8 +190,8 @@ async function switchProject(id: string): Promise<void> {
     // private mode; selection simply isn't remembered
   }
   await loadSessions();
-  const first = app.sessions[0];
-  if (first !== undefined) await openSession(first.id);
+  const target = pickSession(false);
+  if (target !== undefined) await openSession(target.id);
   else scheduleRender();
 }
 
@@ -258,9 +312,13 @@ async function startApp(): Promise<void> {
         })
         .catch((e: unknown) => toast(e instanceof Error ? e.message : "model change failed"));
     },
+    onToggleNav: toggleNav,
   });
 
-  root.replaceChildren(el("div", { class: "app" }, app.sidebar, chatRoot));
+  const backdrop = el("div", { class: "nav-backdrop" });
+  backdrop.addEventListener("click", closeNav);
+  appEl = el("div", { class: "app" }, app.sidebar, chatRoot, backdrop);
+  root.replaceChildren(appEl);
 
   app.socket.onEvent = onEvent;
   app.socket.onGap = onGap;
@@ -278,8 +336,8 @@ async function startApp(): Promise<void> {
   })();
   app.projectId = app.projects.find((p) => p.id === remembered)?.id ?? app.projects[0]?.id ?? null;
   await loadSessions();
-  const first = app.sessions[0];
-  if (first !== undefined) await openSession(first.id);
+  const target = pickSession(true);
+  if (target !== undefined) await openSession(target.id);
   else scheduleRender();
 }
 
