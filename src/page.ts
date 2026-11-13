@@ -167,6 +167,23 @@ select, input[type=text], input[type=password] {
 .part-notice.warn { color: #cfa75f; }
 .part-notice.error { color: #d97a7a; }
 .part-summary { font-size: 13px; color: #a9b2bf; border-left: 2px solid #3a4150; padding: 4px 10px; margin-bottom: 6px; }
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #59636f;
+  font-size: 12px;
+}
+.divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid #232b36; }
+.divider span { text-align: center; }
+
+.md-table { overflow-x: auto; margin: 0 0 8px; }
+.md-table table { border-collapse: collapse; font-size: 13.5px; }
+.md-table th, .md-table td { padding: 4px 10px; text-align: left; }
+.md-table thead th { border-bottom: 1px solid #3a4150; }
+.md-table tbody td { border-bottom: 1px solid #232b36; }
+.md-table .ta-c { text-align: center; }
+.md-table .ta-r { text-align: right; }
 
 .composer { border-top: 1px solid #21262e; padding: 12px 16px; display: flex; gap: 10px; align-items: flex-end; background: #0c0f13; }
 .composer textarea {

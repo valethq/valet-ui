@@ -9,6 +9,7 @@ import {
   applyRunInfo,
   applyRunStart,
   applyRunStatus,
+  applyRunUpdate,
   colorIndex,
   EventBuffer,
   newSessionView,
@@ -305,6 +306,9 @@ function onEvent(topic: string, name: string, data: unknown): void {
         break;
       case "run.start":
         applyRunStart(view, (data as { run: Run }).run);
+        break;
+      case "run.update":
+        applyRunUpdate(view, (data as { run: Run }).run);
         break;
       case "run.end":
         applyRunEnd(view, (data as { run: Run }).run);

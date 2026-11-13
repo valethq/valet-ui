@@ -186,6 +186,13 @@ export function applyRunEnd(view: SessionView, run: Run): void {
   applyUsage(view, run);
 }
 
+/** run.update fires on every runs.update write; its usage keeps the context
+ * bar moving mid-run. */
+export function applyRunUpdate(view: SessionView, run: Run): void {
+  if (run.sessionId !== view.session.id) return;
+  applyUsage(view, run);
+}
+
 /** Seeds the view from a fetched run row (context bar + error after reload). */
 export function applyRunInfo(view: SessionView, run: Run): void {
   if (run.sessionId !== view.session.id) return;

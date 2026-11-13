@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseMarkdown } from "../src/app/markdown";
+import { type Inline, parseMarkdown } from "../src/app/markdown";
 
 describe("parseMarkdown", () => {
   test("plain text becomes paragraphs split on blank lines", () => {
@@ -188,6 +188,63 @@ describe("parseMarkdown", () => {
     expect(parseMarkdown("> one\n> two\nafter")).toEqual([
       { type: "quote", children: [{ type: "text", text: "one\ntwo" }] },
       { type: "p", children: [{ type: "text", text: "after" }] },
+    ]);
+  });
+
+  test("a github table parses head, alignment and body rows", () => {
+    const blocks = parseMarkdown(
+      "| n | prime | square | cube |\n| - | :---- | :----: | ---: |\n| 1 | 2 | 4 | 8 |\n| 2 | 3 | 9 | 27 |\n| 3 | 5 | 25 | 125 |",
+    );
+    const t = (text: string): Inline[] => [{ type: "text", text }];
+    expect(blocks).toEqual([
+      {
+        type: "table",
+        align: [null, "left", "center", "right"],
+        head: [t("n"), t("prime"), t("square"), t("cube")],
+        rows: [
+          [t("1"), t("2"), t("4"), t("8")],
+          [t("2"), t("3"), t("9"), t("27")],
+          [t("3"), t("5"), t("25"), t("125")],
+        ],
+      },
+    ]);
+  });
+
+  test("tables work without outer pipes and with inline markdown in cells", () => {
+    const blocks = parseMarkdown("a | **b**\n--- | ---\n`x` | y");
+    expect(blocks).toEqual([
+      {
+        type: "table",
+        align: [null, null],
+        head: [[{ type: "text", text: "a" }], [{ type: "strong", children: [{ type: "text", text: "b" }] }]],
+        rows: [[[{ type: "code", text: "x" }], [{ type: "text", text: "y" }]]],
+      },
+    ]);
+  });
+
+  test("a table interrupts a paragraph and ends at a pipe-free line", () => {
+    const blocks = parseMarkdown("intro\n| a |\n| - |\n| 1 |\ndone");
+    expect(blocks).toEqual([
+      { type: "p", children: [{ type: "text", text: "intro" }] },
+      {
+        type: "table",
+        align: [null],
+        head: [[{ type: "text", text: "a" }]],
+        rows: [[[{ type: "text", text: "1" }]]],
+      },
+      { type: "p", children: [{ type: "text", text: "done" }] },
+    ]);
+  });
+
+  test("lines with pipes but no delimiter row stay paragraphs", () => {
+    expect(parseMarkdown("a | b")).toEqual([{ type: "p", children: [{ type: "text", text: "a | b" }] }]);
+    expect(parseMarkdown("a | b\nnot a delimiter")).toEqual([
+      { type: "p", children: [{ type: "text", text: "a | b\nnot a delimiter" }] },
+    ]);
+    // a delimiter row of the wrong width is no table either
+    expect(parseMarkdown("a | b\n---")).toEqual([
+      { type: "p", children: [{ type: "text", text: "a | b" }] },
+      { type: "hr" },
     ]);
   });
 

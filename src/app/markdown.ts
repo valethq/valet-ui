@@ -11,6 +11,8 @@ export type Inline =
   | { type: "del"; children: Inline[] }
   | { type: "link"; href: string; children: Inline[] };
 
+export type TableAlign = "left" | "center" | "right" | null;
+
 export type Block =
   | { type: "p"; children: Inline[] }
   | { type: "pre"; text: string }
@@ -18,6 +20,7 @@ export type Block =
   | { type: "ul"; items: Inline[][] }
   | { type: "ol"; start: number; items: Inline[][] }
   | { type: "quote"; children: Inline[] }
+  | { type: "table"; align: TableAlign[]; head: Inline[][]; rows: Inline[][][] }
   | { type: "hr" };
 
 const SAFE_HREF = /^(https?:\/\/|mailto:)/i;
@@ -122,6 +125,67 @@ function classify(line: string): Line {
   return { kind: "text", body: line };
 }
 
+const DELIM_CELL = /^:?-{1,}:?$/;
+
+/** Splits a table row on unescaped pipes; leading/trailing pipes optional. */
+function splitRow(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|") && !s.endsWith("\\|")) s = s.slice(0, -1);
+  const cells: string[] = [];
+  let cur = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i] as string;
+    if (c === "\\" && s[i + 1] === "|") {
+      cur += "|";
+      i++;
+    } else if (c === "|") {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += c;
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
+
+/** GFM table at lines[li]: a header row containing a pipe, a `---` delimiter
+ * row of equal width (optional `:` alignment), then body rows while pipes
+ * continue. Returns the block and the index after it, or null. */
+function tryTable(lines: string[], li: number): { block: Block; next: number } | null {
+  const head = lines[li] as string;
+  const delim = lines[li + 1];
+  if (delim === undefined || !head.includes("|")) return null;
+  const headCells = splitRow(head);
+  const delimCells = splitRow(delim);
+  if (delimCells.length !== headCells.length || !delimCells.every((c) => DELIM_CELL.test(c.trim()))) {
+    return null;
+  }
+  const align: TableAlign[] = delimCells.map((c) => {
+    const t = c.trim();
+    const left = t.startsWith(":");
+    const right = t.endsWith(":");
+    return left && right ? "center" : right ? "right" : left ? "left" : null;
+  });
+  const cols = headCells.length;
+  const rows: Inline[][][] = [];
+  let next = li + 2;
+  while (next < lines.length) {
+    const raw = lines[next] as string;
+    if (!raw.includes("|") || classify(raw).kind !== "text") break;
+    const cells = splitRow(raw).map((c) => parseInline(c.trim()));
+    cells.length = Math.min(cells.length, cols);
+    while (cells.length < cols) cells.push([]);
+    rows.push(cells);
+    next++;
+  }
+  return {
+    block: { type: "table", align, head: headCells.map((c) => parseInline(c.trim())), rows },
+    next,
+  };
+}
+
 function proseBlocks(s: string, blocks: Block[]): void {
   for (const para of s.split(/\n{2,}/)) {
     if (para.trim() === "") continue;
@@ -157,8 +221,9 @@ function proseBlocks(s: string, blocks: Block[]): void {
       flushList();
       flushQuote();
     };
-    for (const raw of para.split("\n")) {
-      const line = classify(raw);
+    const lines = para.split("\n");
+    for (let li = 0; li < lines.length; li++) {
+      const line = classify(lines[li] as string);
       switch (line.kind) {
         case "h":
           flushAll();
@@ -182,11 +247,19 @@ function proseBlocks(s: string, blocks: Block[]): void {
           if (quote === null) quote = [];
           quote.push(line.body);
           break;
-        case "text":
+        case "text": {
+          const t = tryTable(lines, li);
+          if (t !== null) {
+            flushAll();
+            blocks.push(t.block);
+            li = t.next - 1;
+            break;
+          }
           flushList();
           flushQuote();
           text.push(line.body);
           break;
+        }
       }
     }
     flushAll();
@@ -273,6 +346,37 @@ export function renderMarkdown(text: string): HTMLElement {
         div.className = "md-quote";
         renderInlines(block.children, div);
         root.append(div);
+        break;
+      }
+      case "table": {
+        const cell = (tag: "th" | "td", cells: Inline[], i: number): HTMLElement => {
+          const node = document.createElement(tag);
+          const a = block.align[i];
+          if (a === "center") node.className = "ta-c";
+          else if (a === "right") node.className = "ta-r";
+          renderInlines(cells, node);
+          return node;
+        };
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        block.head.forEach((cells, i) => {
+          headRow.append(cell("th", cells, i));
+        });
+        thead.append(headRow);
+        const tbody = document.createElement("tbody");
+        for (const row of block.rows) {
+          const tr = document.createElement("tr");
+          row.forEach((cells, i) => {
+            tr.append(cell("td", cells, i));
+          });
+          tbody.append(tr);
+        }
+        const wrap = document.createElement("div");
+        wrap.className = "md-table";
+        const table = document.createElement("table");
+        table.append(thead, tbody);
+        wrap.append(table);
+        root.append(wrap);
         break;
       }
       case "hr":

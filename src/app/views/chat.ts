@@ -142,33 +142,55 @@ function metaModel(cm: ChatMessage): { provider: string; model: string } | undef
     : undefined;
 }
 
-function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView): HTMLElement {
-  const msg = el("div", { class: `msg ${cm.message.role}` });
-  const bubble = el("div", { class: "bubble" });
+/** Renders a message as one or more flow elements: non-error notice parts
+ * break out of the bubble into a full-width divider, splitting the message
+ * into a new `.msg` chunk on either side. */
+function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  const msgs: HTMLElement[] = [];
+  let bubble: HTMLElement | null = null;
+  const currentBubble = (): HTMLElement => {
+    if (bubble === null) {
+      bubble = el("div", { class: "bubble" });
+      const msg = el("div", { class: `msg ${cm.message.role}` }, bubble);
+      msgs.push(msg);
+      out.push(msg);
+    }
+    return bubble;
+  };
   for (const part of cm.parts) {
+    const d = part.data;
+    if (d.type === "notice" && d.level !== "error") {
+      bubble = null;
+      out.push(el("div", { class: `divider ${d.level}` }, el("span", { text: d.text })));
+      continue;
+    }
     const node = renderPart(part, ui);
-    if (node !== null) bubble.append(node);
+    if (node !== null) currentBubble().append(node);
   }
   if (cm.parts.length === 0) {
+    const b = currentBubble();
     if (cm.message.status === "error") {
       const runError = cm.message.runId === null ? undefined : view.runErrors.get(cm.message.runId);
-      bubble.append(
+      b.append(
         el("div", {
           class: "part-notice error",
           text: runError === undefined ? "Error" : `Error — ${runError}`,
         }),
       );
     } else if (cm.message.status === "streaming") {
-      bubble.append(el("span", { class: "hint", text: "…" }));
+      b.append(el("span", { class: "hint", text: "…" }));
     }
   }
-  msg.append(bubble);
-  const meta: string[] = [cm.message.role];
-  const model = metaModel(cm)?.model;
-  if (cm.message.role === "assistant" && model !== undefined && model !== "") meta.push(model);
-  if (cm.message.status !== "complete") meta.push(cm.message.status);
-  msg.append(el("div", { class: "meta", text: meta.join(" · ") }));
-  return msg;
+  const lastMsg = msgs[msgs.length - 1];
+  if (lastMsg !== undefined) {
+    const meta: string[] = [cm.message.role];
+    const model = metaModel(cm)?.model;
+    if (cm.message.role === "assistant" && model !== undefined && model !== "") meta.push(model);
+    if (cm.message.status !== "complete") meta.push(cm.message.status);
+    lastMsg.append(el("div", { class: "meta", text: meta.join(" · ") }));
+  }
+  return out;
 }
 
 function pickVariant(f: ModelFamily): ModelVariant {
@@ -310,7 +332,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     }
     const ui: PartUi = { openState, showAll, refresh: () => renderMessages(view) };
     clear(messages);
-    for (const cm of view.messages) messages.append(renderMessage(cm, ui, view));
+    for (const cm of view.messages) messages.append(...renderMessage(cm, ui, view));
     if (view.messages.length === 0) {
       messages.append(el("div", { class: "empty", text: "No messages yet" }));
     }

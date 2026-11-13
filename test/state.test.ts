@@ -6,6 +6,7 @@ import {
   applyRunEnd,
   applyRunInfo,
   applyRunStart,
+  applyRunUpdate,
   colorIndex,
   EventBuffer,
   newSessionView,
@@ -264,6 +265,24 @@ describe("runs", () => {
     applyRunStart(view, run("run_1"));
     applyRunEnd(view, run("run_1", { status: "error", error: "boom" }));
     expect(view.runErrors.get("run_1")).toBe("boom");
+  });
+
+  test("run.update moves the context bar mid-run without touching the active run", () => {
+    const view = viewWith([]);
+    applyRunStart(view, run("run_1"));
+    applyRunUpdate(view, run("run_1", { usage: { contextTokens: 190_700, contextWindow: 200_000 } }));
+    expect(view.contextTokens).toBe(190_700);
+    expect(view.contextWindow).toBe(200_000);
+    expect(view.activeRunId).toBe("run_1");
+    applyRunUpdate(view, run("run_1", { usage: { contextTokens: 41_800 } }));
+    expect(view.contextTokens).toBe(41_800);
+    expect(view.activeRunId).toBe("run_1");
+  });
+
+  test("run.update for another session is ignored", () => {
+    const view = viewWith([]);
+    applyRunUpdate(view, run("run_x", { sessionId: "ses_2", usage: { contextTokens: 9 } }));
+    expect(view.contextTokens).toBeNull();
   });
 
   test("applyRunInfo seeds usage and error from a fetched run", () => {
