@@ -14,8 +14,14 @@ describe("page css", () => {
     expect(title).not.toContain("text-overflow");
   });
 
-  test("failed tool status and send errors render red", () => {
-    expect(html).toContain(".part-row .status.failed { color: #e06c75; }");
-    expect(html).toContain(".hint.send-error { padding: 6px 16px 0; color: #e06c75; }");
+  test("failed tool status and send errors use the theme's danger colour", () => {
+    expect(html).toContain(".part-row .status.failed { color: var(--danger); }");
+    expect(/\.hint\.send-error \{[^}]*color: var\(--danger\)/.test(html)).toBe(true);
+  });
+
+  test("the stored theme applies from the head before the app loads", () => {
+    const head = html.slice(0, html.indexOf("</head>"));
+    expect(head).toContain('localStorage.getItem("valet-ui.theme")');
+    expect(head).toContain('html[data-theme="paper"]');
   });
 });

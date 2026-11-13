@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { ApiError, authStatus, listProjects, sendMessage } from "../src/app/api";
+import { ApiError, authStatus, listProjects, listSettings, saveSettings, sendMessage } from "../src/app/api";
 
 const g = globalThis as Record<string, unknown>;
 const realFetch = g.fetch;
@@ -47,6 +47,30 @@ describe("sendMessage failure", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(0);
     expect((err as ApiError).message).toBe("Network unreachable, try again");
+  });
+});
+
+describe("settings", () => {
+  test("saveSettings PUTs the values to valet-ui's route on core", async () => {
+    let seen: { url: string; method?: string; body?: unknown } = { url: "" };
+    g.window = { VALET: { coreUrl: "http://core.test/" } };
+    g.fetch = ((url: string, init: RequestInit) => {
+      seen = { url, method: init.method, body: init.body };
+      return Promise.resolve(new Response('{"key":"agent","values":{"a":2}}'));
+    }) as unknown as typeof fetch;
+    await saveSettings("agent/main", { a: 2 });
+    expect(seen).toEqual({
+      url: "http://core.test/plugins/valet-ui/settings/agent%2Fmain",
+      method: "PUT",
+      body: '{"a":2}',
+    });
+  });
+
+  test("a provider's rejection message surfaces as the error text", async () => {
+    stubFetch(() => new Response('{"error":"port is taken"}', { status: 422 }));
+    const err = await listSettings().catch((e: unknown) => e);
+    expect((err as ApiError).status).toBe(422);
+    expect((err as ApiError).message).toBe("port is taken");
   });
 });
 

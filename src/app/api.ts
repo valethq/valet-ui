@@ -1,4 +1,4 @@
-import type { ChatMessage, Project, ProviderModels, Run, Session } from "./types";
+import type { ChatMessage, Project, ProviderModels, Run, Session, SettingsEntry } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -41,8 +41,9 @@ async function req<T>(method: string, path: string, body?: unknown, timeout = 15
   }
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith("/plugins/valet-auth/")) hooks.onUnauthorized();
-    const err = data as { error?: { message?: string; reason?: string } } | undefined;
-    throw new ApiError(res.status, err?.error?.reason ?? err?.error?.message ?? `HTTP ${res.status}`);
+    const err = (data as { error?: string | { message?: string; reason?: string } } | undefined)?.error;
+    const message = typeof err === "string" ? err : (err?.reason ?? err?.message);
+    throw new ApiError(res.status, message ?? `HTTP ${res.status}`);
   }
   return data as T;
 }
@@ -116,6 +117,13 @@ export const setSessionModel = (session: Session, provider: string, model: strin
 
 export const cancelRun = (runId: string): Promise<{ ok: boolean }> =>
   req("POST", `/api/core/runs/${encodeURIComponent(runId)}/cancel`);
+
+// ---- valet-ui settings panels (src/settings.ts, served by this plugin on core) ----
+
+export const listSettings = (): Promise<SettingsEntry[]> => get("/plugins/valet-ui/settings");
+
+export const saveSettings = (key: string, values: Record<string, unknown>): Promise<SettingsEntry> =>
+  req("PUT", `/plugins/valet-ui/settings/${encodeURIComponent(key)}`, values);
 
 // ---- valet-agent (11.1). Normalized like authStatus. ----
 

@@ -22,6 +22,7 @@ import {
 import type { Message, MessageDelta, Part, Project, ProviderModels, Run, RunStatus, Session } from "./types";
 import { renderAuth } from "./views/auth";
 import { createChat, type ChatHandle } from "./views/chat";
+import { openSettings } from "./views/settings";
 import { renderSidebar } from "./views/sidebar";
 import { CoreSocket } from "./ws";
 
@@ -66,8 +67,35 @@ const app: App = {
 };
 
 let appEl: HTMLElement | null = null;
+const NARROW = "(max-width: 900px), (max-height: 500px) and (pointer: coarse)";
+const SIDEBAR_KEY = "valet-ui.sidebar";
+const sidebarCollapsed = (): boolean => {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === "collapsed";
+  } catch {
+    return false;
+  }
+};
+/** Narrow screens open the drawer; wide ones pin/unpin the floating sidebar.
+ * `no-peek` stops an unpin clicked from inside the sidebar re-showing it as a
+ * hover peek while it slides out. */
 const toggleNav = (): void => {
-  appEl?.classList.toggle("nav-open");
+  if (appEl === null) return;
+  if (window.matchMedia(NARROW).matches) {
+    appEl.classList.toggle("nav-open");
+    return;
+  }
+  const collapsed = appEl.classList.toggle("collapsed");
+  if (collapsed) {
+    const node = appEl;
+    node.classList.add("no-peek");
+    setTimeout(() => node.classList.remove("no-peek"), 450);
+  }
+  try {
+    localStorage.setItem(SIDEBAR_KEY, collapsed ? "collapsed" : "pinned");
+  } catch {
+    // private mode; the choice lasts until reload
+  }
 };
 const closeNav = (): void => {
   appEl?.classList.remove("nav-open");
@@ -134,6 +162,11 @@ function scheduleRender(): void {
       onLogout: () => {
         closeNav();
         void logout();
+      },
+      onCollapse: toggleNav,
+      onSettings: () => {
+        closeNav();
+        openSettings({ load: api.listSettings, save: api.saveSettings });
       },
     });
     const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
@@ -223,7 +256,10 @@ async function openSession(id: string): Promise<void> {
     // private mode; selection simply isn't remembered
   }
   history.replaceState(null, "", `#s=${encodeURIComponent(id)}`);
-  document.documentElement.style.setProperty("--accent", sessionColor(session, colorIndex(app.sessions, id)));
+  document.documentElement.style.setProperty(
+    "--session",
+    sessionColor(session, colorIndex(app.sessions, id)),
+  );
   scheduleRender();
 
   const lastRunId = [...messages].reverse().find((cm) => cm.message.runId !== null)?.message.runId;
@@ -410,7 +446,7 @@ async function startApp(): Promise<void> {
         })
         .catch((e: unknown) => {
           toast(e instanceof Error ? e.message : "model change failed");
-          // The select already moved; re-render resets it to the persisted model.
+          // Re-render shows the persisted model again.
           scheduleRender();
         });
     },
@@ -419,7 +455,14 @@ async function startApp(): Promise<void> {
 
   const backdrop = el("div", { class: "nav-backdrop" });
   backdrop.addEventListener("click", closeNav);
-  appEl = el("div", { class: "app" }, app.sidebar, chatRoot, backdrop);
+  appEl = el(
+    "div",
+    { class: `app${sidebarCollapsed() ? " collapsed" : ""}` },
+    el("div", { class: "sidebar-edge" }),
+    app.sidebar,
+    chatRoot,
+    backdrop,
+  );
   root.replaceChildren(appEl);
 
   app.socket.onEvent = onEvent;

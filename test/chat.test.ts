@@ -70,6 +70,7 @@ class FakeEl {
   readonly children: unknown[] = [];
   readonly style: Record<string, string> = {};
   textContent = "";
+  value = "";
   #parent: FakeEl | null = null;
   constructor(readonly tag: string) {}
   setAttribute(k: string, v: string): void {

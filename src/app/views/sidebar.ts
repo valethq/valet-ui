@@ -1,4 +1,5 @@
 import { el } from "../dom";
+import { icon, iconButton, selectChip } from "../icons";
 import { sessionColor, titleSuffixes } from "../state";
 import type { Project, Session } from "../types";
 
@@ -12,10 +13,12 @@ export interface SidebarProps {
   onSession(id: string): void;
   onNew(): void;
   onLogout(): void;
+  onSettings(): void;
+  onCollapse(): void;
 }
 
 export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
-  const picker = el("select");
+  const picker = el("select", { "aria-label": "Project" });
   for (const project of p.projects) {
     picker.append(el("option", { value: project.id, text: project.name }));
   }
@@ -43,12 +46,32 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   }
   if (p.sessions.length === 0) list.append(el("div", { class: "hint", text: "No sessions yet." }));
 
-  const add = el("button", { class: "new-session", text: "New session" });
+  const add = iconButton("compose", "New session", "new-session");
   add.disabled = p.projectId === null;
   add.addEventListener("click", () => p.onNew());
 
-  const logout = el("button", { class: "logout", text: "Log out" });
+  const collapse = iconButton("sidebar", "Collapse sidebar", "collapse-btn");
+  collapse.addEventListener("click", () => p.onCollapse());
+
+  const settings = iconButton("settings", "Settings");
+  settings.addEventListener("click", () => p.onSettings());
+
+  const logout = iconButton("logout", "Log out", "logout");
   logout.addEventListener("click", () => p.onLogout());
 
-  node.replaceChildren(el("div", { class: "project-picker" }, picker), list, add, logout);
+  node.replaceChildren(
+    el(
+      "div",
+      { class: "sidebar-head" },
+      el("span", { class: "brand", text: "valet" }),
+      el("div", { class: "actions" }, add, collapse),
+    ),
+    el(
+      "div",
+      { class: "project-picker" },
+      selectChip(picker, "project", el("span", { class: "lead" }, icon("folder"))),
+    ),
+    list,
+    el("div", { class: "sidebar-foot" }, settings, logout),
+  );
 }

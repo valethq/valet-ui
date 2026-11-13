@@ -1,4 +1,7 @@
 import { clear, el } from "../dom";
+import { chipButton, icon, iconButton } from "../icons";
+import { logoFor, logoMark } from "../logos";
+import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { familyOf, groupModels, type ModelFamily, type ModelVariant } from "../models";
 import type { SessionView } from "../state";
@@ -115,7 +118,7 @@ function toolBody(part: Part, input: unknown, output: string, ui: PartUi): HTMLE
   const children: (Node | string)[] = [];
   if (head !== "") children.push(head, "\n");
   if (hidden > 0) {
-    const showAll = el("button", { class: "show-all", text: "Show all" });
+    const showAll = iconButton("expand", "Show all", "show-all");
     showAll.addEventListener("click", () => {
       ui.showAll.set(part.id, true);
       ui.refresh();
@@ -213,11 +216,19 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView): HTMLElem
   }
   const lastMsg = msgs[msgs.length - 1];
   if (lastMsg !== undefined) {
-    const meta: string[] = [cm.message.role];
-    const model = metaModel(cm)?.model;
-    if (cm.message.role === "assistant" && model !== undefined && model !== "") meta.push(model);
+    const assistant = cm.message.role === "assistant";
+    const mm = metaModel(cm);
+    const shown = assistant && mm !== undefined && mm.model !== "" ? mm : undefined;
+    const meta: string[] = assistant ? [] : [cm.message.role];
+    if (shown !== undefined) meta.push(shown.model);
     if (cm.message.status !== "complete") meta.push(cm.message.status);
-    lastMsg.append(el("div", { class: "meta", text: meta.join(" · ") }));
+    if (meta.length > 0) {
+      const line = el("div", { class: "meta" });
+      const logo = shown === undefined ? undefined : logoFor(shown.model, shown.provider);
+      if (logo !== undefined) line.append(logoMark(logo));
+      line.append(meta.join(" · "));
+      lastMsg.append(line);
+    }
   }
   return out;
 }
@@ -251,23 +262,23 @@ function contextWindow(view: SessionView, providers: ProviderModels[]): number |
 }
 
 export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
-  const navToggle = el("button", { class: "nav-toggle", "aria-label": "Sessions", text: "☰" });
+  const navToggle = iconButton("sidebar", "Sessions", "nav-toggle");
   const title = el("span", { class: "session-title" });
   const titleNum = el("span", { class: "suffix" });
   titleNum.style.display = "none";
-  const runHint = el("span", { class: "hint" });
-  const modelPicker = el("select", { class: "model-picker" });
-  const effortPicker = el("select", { class: "effort-picker" });
-  const fill = el("div", { class: "fill" });
-  const usageLabel = el("div", { class: "label" });
-  const contextBar = el("div", { class: "context-bar" }, el("div", { class: "track" }, fill), usageLabel);
+  const runHint = el("span", { class: "run-status" });
+  const modelChip = chipButton("model", icon("sparkles"), "Model");
+  const effortChip = chipButton("effort", icon("gauge"), "Effort");
+  const ring = el("span", { class: "ring" });
+  const tip = el("span", { class: "tip", role: "tooltip" });
+  const contextBar = el("div", { class: "context-bar", tabindex: "0", role: "img" }, ring, tip);
   const messages = el("div", { class: "messages" });
   const connLine = el("div", { class: "hint conn", text: "Reconnecting…" });
   const sendErr = el("div", { class: "hint send-error" });
   sendErr.style.display = "none";
   const textarea = el("textarea", { placeholder: "Message…", rows: "1", enterkeyhint: "enter" });
-  const send = el("button", { class: "send", text: "Send" });
-  const stop = el("button", { class: "stop", text: "Stop" });
+  const send = iconButton("send", "Send", "send");
+  const stop = iconButton("stop", "Stop", "stop");
   stop.style.display = "none";
 
   let current: SessionView | null = null;
@@ -280,8 +291,53 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   let draftId: string | null = null;
   let families: ModelFamily[] = [];
   let activeFamily: ModelFamily | null = null;
+  let activeVariant: ModelVariant | null = null;
   let tick: ReturnType<typeof setInterval> | undefined;
 
+  const familyLogo = (f: ModelFamily): HTMLElement => {
+    const logo = logoFor(`${f.label} ${f.key}`, f.provider);
+    return logo === undefined ? icon("sparkles") : logoMark(logo);
+  };
+  const modelMenu = popover(
+    modelChip.button,
+    () => {
+      const sections = new Map<string, MenuSection>();
+      const more: MenuSection = { title: "More variants", items: [] };
+      for (const f of families) {
+        let s = f.more ? more : sections.get(f.provider);
+        if (s === undefined) {
+          s = { title: f.providerLabel, items: [] };
+          sections.set(f.provider, s);
+        }
+        s.items.push({
+          label: f.label,
+          lead: familyLogo(f),
+          selected: f === activeFamily,
+          onSelect: () => cb.onModel(f.provider, pickVariant(f).id),
+        });
+      }
+      return [...sections.values(), ...(more.items.length > 0 ? [more] : [])];
+    },
+    "model-pop",
+  );
+  const effortMenu = popover(
+    effortChip.button,
+    () => {
+      const f = activeFamily;
+      if (f === null) return [];
+      const items = f.variants.map((v) => ({
+        label: cap(v.effort),
+        selected: v === activeVariant,
+        onSelect: () => cb.onModel(f.provider, v.id),
+      }));
+      return [{ title: "Effort", items }];
+    },
+    "effort-pop",
+  );
+
+  const syncSend = (): void => {
+    send.disabled = current === null || textarea.value.trim() === "";
+  };
   const doSend = (): void => {
     const text = textarea.value.trim();
     if (text === "" || current === null) return;
@@ -292,6 +348,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       if (textarea.value.trim() === text) {
         textarea.value = "";
         textarea.style.height = "";
+        syncSend();
       }
       if (draftId === id) draftId = null;
     });
@@ -310,20 +367,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   });
   textarea.addEventListener("input", () => {
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    syncSend();
   });
   messages.addEventListener("scroll", () => {
     stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
-  });
-  modelPicker.addEventListener("change", () => {
-    const f = families[Number(modelPicker.value)];
-    if (f === undefined) return;
-    const v = pickVariant(f);
-    cb.onModel(f.provider, v.id);
-  });
-  effortPicker.addEventListener("change", () => {
-    if (activeFamily === null) return;
-    cb.onModel(activeFamily.provider, effortPicker.value);
   });
 
   const main = el(
@@ -333,19 +381,34 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       "div",
       { class: "chat-header" },
       navToggle,
+      el("span", { class: "session-dot" }),
       title,
       titleNum,
       runHint,
-      contextBar,
-      modelPicker,
-      effortPicker,
     ),
     messages,
-    connLine,
-    sendErr,
-    el("div", { class: "composer" }, textarea, stop, send),
+    el(
+      "div",
+      { class: "composer-wrap" },
+      connLine,
+      sendErr,
+      el(
+        "div",
+        { class: "composer" },
+        textarea,
+        el(
+          "div",
+          { class: "composer-bar" },
+          el("div", { class: "controls" }, modelMenu, effortMenu),
+          el("div", { class: "actions" }, contextBar, stop, send),
+        ),
+      ),
+    ),
   );
   root.replaceChildren(main);
+  syncSend();
+  setContext(null);
+  setModels(null, null);
 
   function renderMessages(view: SessionView): void {
     const scrollTops = new Map<string, number>();
@@ -422,49 +485,38 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       };
       families.unshift(sel);
     }
-    activeFamily = sel ?? null;
+    setModels(
+      sel ?? null,
+      sel === undefined ? null : (sel.variants.find((v) => v.id === selected?.model) ?? pickVariant(sel)),
+    );
+  }
 
-    clear(modelPicker);
-    const groups = new Map<string, HTMLOptGroupElement>();
-    const groupOrder: HTMLOptGroupElement[] = [];
-    const moreGroup = el("optgroup", { label: "More variants" });
-    families.forEach((f, i) => {
-      const opt = el("option", { value: String(i), text: f.label });
-      if (f === sel) opt.selected = true;
-      if (f.more) {
-        moreGroup.append(opt);
-        return;
-      }
-      let g = groups.get(f.provider);
-      if (g === undefined) {
-        g = el("optgroup", { label: f.providerLabel });
-        groups.set(f.provider, g);
-        groupOrder.push(g);
-      }
-      g.append(opt);
-    });
-    for (const g of groupOrder) modelPicker.append(g);
-    if (moreGroup.children.length > 0) modelPicker.append(moreGroup);
-    modelPicker.disabled = modelPicker.children.length === 0;
-
-    clear(effortPicker);
-    if (sel === undefined || sel.variants.length <= 1) {
-      effortPicker.style.display = "none";
-    } else {
-      effortPicker.style.display = "";
-      const currentVariant =
-        selected !== undefined ? sel.variants.find((v) => v.id === selected.model) : undefined;
-      const shown = currentVariant ?? pickVariant(sel);
-      for (const v of sel.variants) {
-        const opt = el("option", { value: v.id, text: cap(v.effort) });
-        if (v === shown) opt.selected = true;
-        effortPicker.append(opt);
-      }
-    }
-    effortPicker.disabled = sel === undefined;
+  function setModels(f: ModelFamily | null, v: ModelVariant | null): void {
+    activeFamily = f;
+    activeVariant = v;
+    modelChip.lead.replaceChildren(f === null ? icon("sparkles") : familyLogo(f));
+    modelChip.text.textContent = f?.label ?? "No model";
+    modelChip.button.disabled = families.length === 0;
+    effortMenu.style.display = f === null || f.variants.length <= 1 ? "none" : "";
+    effortChip.text.textContent = v === null ? "" : cap(v.effort);
   }
 
   connLine.style.display = connOpen ? "none" : "";
+
+  /** Ring fill only; the exact numbers live in the hover/focus tip. Hidden
+   * until a run reports usage. */
+  function setContext(tokens: number | null, win?: number): void {
+    contextBar.style.display = tokens === null ? "none" : "";
+    if (tokens === null) return;
+    const pct = win !== undefined && win > 0 ? Math.min(100, (tokens / win) * 100) : 0;
+    ring.style.background = `conic-gradient(var(--ring) ${pct}%, var(--strong) 0)`;
+    ring.className = `ring${pct >= 90 ? " hot" : pct >= 70 ? " warm" : ""}`;
+    tip.textContent =
+      win === undefined
+        ? `${fmtTokens(tokens)} tokens`
+        : `${fmtTokens(tokens)} / ${fmtTokens(win)} tokens · ${Math.round(pct)}%`;
+    contextBar.setAttribute("aria-label", `Context: ${tip.textContent}`);
+  }
 
   const setSendError = (message: string | null): void => {
     sendErr.textContent = message ?? "";
@@ -487,17 +539,12 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         title.textContent = "";
         titleNum.style.display = "none";
         families = [];
-        activeFamily = null;
-        clear(modelPicker);
-        modelPicker.disabled = true;
-        clear(effortPicker);
-        effortPicker.disabled = true;
-        effortPicker.style.display = "none";
+        setModels(null, null);
         clear(messages);
         messages.append(el("div", { class: "empty", text: "Select a session" }));
         stop.style.display = "none";
-        usageLabel.textContent = "";
-        fill.style.width = "0%";
+        setContext(null);
+        syncSend();
         syncTick(false);
         return;
       }
@@ -513,22 +560,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       rebuildModels(view, providers);
       stop.style.display = view.activeRunId === null ? "none" : "";
 
-      const ctxWindow = contextWindow(view, providers);
-      if (view.contextTokens !== null) {
-        const pct =
-          ctxWindow !== undefined && ctxWindow > 0
-            ? Math.min(100, (view.contextTokens / ctxWindow) * 100)
-            : 0;
-        fill.style.width = `${pct}%`;
-        usageLabel.textContent =
-          ctxWindow === undefined
-            ? `${fmtTokens(view.contextTokens)} tok`
-            : `${fmtTokens(view.contextTokens)} / ${fmtTokens(ctxWindow)} tok`;
-      } else {
-        fill.style.width = "0%";
-        usageLabel.textContent = "";
-      }
-
+      setContext(view.contextTokens, contextWindow(view, providers));
+      syncSend();
       renderMessages(view);
     },
     setConnection(open) {

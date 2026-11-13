@@ -103,6 +103,16 @@ export interface ProviderModels {
   models: ModelInfo[];
 }
 
+/** A plugin's settings panel from GET /plugins/valet-ui/settings (mirrors src/settings.ts). */
+export interface SettingsEntry {
+  key: string;
+  plugin: string;
+  title: string;
+  description?: string;
+  schema: Record<string, unknown>;
+  values: Record<string, unknown>;
+}
+
 // ---- WS frames (10.3) ----
 
 export type ClientFrame =
