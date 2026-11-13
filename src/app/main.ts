@@ -10,10 +10,12 @@ import {
   applyRunStart,
   applyRunStatus,
   colorIndex,
+  EventBuffer,
   newSessionView,
   replaceMessages,
   type SessionView,
   sessionColor,
+  titleSuffixes,
   upsertSession,
 } from "./state";
 import type { Message, MessageDelta, Part, Project, ProviderModels, Run, RunStatus, Session } from "./types";
@@ -133,7 +135,8 @@ function scheduleRender(): void {
         void logout();
       },
     });
-    app.chat?.update(app.view, app.providers);
+    const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
+    app.chat?.update(app.view, app.providers, suffix);
   });
 }
 
@@ -200,13 +203,18 @@ function pickSession(preferHash: boolean): Session | undefined {
 }
 
 let openSeq = 0;
+// Events for a session being opened arrive before its REST snapshot lands;
+// they buffer here and replay through onEvent once the view exists.
+const opening = new EventBuffer<{ name: string; data: unknown }>();
 async function openSession(id: string): Promise<void> {
   const session = app.sessions.find((s) => s.id === id);
   if (session === undefined) return;
   const seq = ++openSeq;
+  opening.begin(id);
   const messages = await api.listMessages(id).catch(() => []);
   if (seq !== openSeq) return;
   app.view = newSessionView(session, messages);
+  for (const ev of opening.end(id)) onEvent(`session:${id}`, ev.name, ev.data);
   noteSeen(id, Math.max(session.lastMessageAt ?? 0, ...messages.map((cm) => cm.message.createdAt)));
   try {
     localStorage.setItem(sessionKey(session.projectId), id);
@@ -278,6 +286,7 @@ function onEvent(topic: string, name: string, data: unknown): void {
   }
 
   if (!topic.startsWith("session:")) return;
+  if (opening.push(id, { name, data })) return;
   const view = app.view;
   if (view !== null && view.session.id === id) {
     switch (name) {

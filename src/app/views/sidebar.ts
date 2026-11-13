@@ -1,5 +1,5 @@
 import { el } from "../dom";
-import { sessionColor } from "../state";
+import { sessionColor, titleSuffixes } from "../state";
 import type { Project, Session } from "../types";
 
 export interface SidebarProps {
@@ -25,6 +25,7 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   const order = new Map(
     [...p.sessions].sort((a, b) => a.createdAt - b.createdAt).map((s, i) => [s.id, i] as const),
   );
+  const suffixes = titleSuffixes(p.sessions);
   const list = el("div", { class: "sessions" });
   for (const session of p.sessions) {
     const row = el("button", {
@@ -34,6 +35,8 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
     const dot = el("span", { class: "dot" });
     dot.style.background = sessionColor(session, order.get(session.id) ?? 0);
     row.append(dot, el("span", { class: "title", text: session.title ?? "Untitled" }));
+    const suffix = suffixes.get(session.id);
+    if (suffix !== undefined) row.append(el("span", { class: "suffix", text: `#${suffix}` }));
     if (p.unread.has(session.id)) row.append(el("span", { class: "unread" }));
     row.addEventListener("click", () => p.onSession(session.id));
     list.append(row);

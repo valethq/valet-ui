@@ -7,10 +7,11 @@ import {
   applyRunInfo,
   applyRunStart,
   colorIndex,
+  EventBuffer,
   newSessionView,
-  PALETTE,
   replaceMessages,
   sessionColor,
+  titleSuffixes,
   upsertSession,
 } from "../src/app/state";
 import type { ChatMessage, Message, MessageDelta, Part, PartData, Run, Session } from "../src/app/types";
@@ -124,6 +125,79 @@ describe("applyDelta", () => {
   test("reports an unknown message", () => {
     const view = viewWith([]);
     expect(applyDelta(view, delta({ messageId: "msg_x" }))).toBe(true);
+  });
+
+  test("offset equal to the local length appends", () => {
+    const view = viewWith([
+      { message: message("msg_1", 1), parts: [part("prt_1", "msg_1", 0, { type: "text", text: "abc" })] },
+    ]);
+    expect(applyDelta(view, delta({ delta: "def", offset: 3 }))).toBe(false);
+    expect(view.messages[0]?.parts[0]?.data).toEqual({ type: "text", text: "abcdef" });
+  });
+
+  test("offset below the local length drops the overlap", () => {
+    const view = viewWith([
+      {
+        message: message("msg_1", 1),
+        parts: [part("prt_1", "msg_1", 0, { type: "text", text: "abcdef" })],
+      },
+    ]);
+    expect(applyDelta(view, delta({ delta: "cdefg", offset: 2 }))).toBe(false);
+    expect(view.messages[0]?.parts[0]?.data).toEqual({ type: "text", text: "abcdefg" });
+  });
+
+  test("a fully-overlapping delta applies nothing", () => {
+    const view = viewWith([
+      {
+        message: message("msg_1", 1),
+        parts: [part("prt_1", "msg_1", 0, { type: "text", text: "abcdef" })],
+      },
+    ]);
+    expect(applyDelta(view, delta({ delta: "cdef", offset: 2 }))).toBe(false);
+    expect(view.messages[0]?.parts[0]?.data).toEqual({ type: "text", text: "abcdef" });
+  });
+
+  test("offset ahead of the local length is a gap and refetches", () => {
+    const view = viewWith([
+      { message: message("msg_1", 1), parts: [part("prt_1", "msg_1", 0, { type: "text", text: "ab" })] },
+    ]);
+    expect(applyDelta(view, delta({ delta: "f", offset: 5 }))).toBe(true);
+    expect(view.messages[0]?.parts[0]?.data).toEqual({ type: "text", text: "ab" });
+  });
+
+  test("offsets apply to tool-call output too", () => {
+    const view = viewWith([
+      {
+        message: message("msg_1", 1),
+        parts: [
+          part("prt_1", "msg_1", 0, {
+            type: "tool-call",
+            callId: "c1",
+            name: "exec",
+            input: {},
+            status: "running",
+            output: "out",
+          }),
+        ],
+      },
+    ]);
+    expect(applyDelta(view, delta({ kind: "tool-output", delta: "utput", offset: 1 }))).toBe(false);
+    const p = view.messages[0]?.parts[0];
+    expect(p?.data.type === "tool-call" && p.data.output).toBe("output");
+  });
+
+  test("a first delta with offset > 0 is a gap but keeps the stub", () => {
+    const view = viewWith([{ message: message("msg_1", 1), parts: [] }]);
+    expect(applyDelta(view, delta({ partId: "prt_9", delta: "x", offset: 4 }))).toBe(true);
+    const p = view.messages[0]?.parts[0];
+    expect(p?.id).toBe("prt_9");
+    expect(p?.data).toEqual({ type: "text", text: "" });
+  });
+
+  test("a first delta with offset 0 fills the stub", () => {
+    const view = viewWith([{ message: message("msg_1", 1), parts: [] }]);
+    expect(applyDelta(view, delta({ partId: "prt_9", delta: "hi", offset: 0 }))).toBe(true);
+    expect(view.messages[0]?.parts[0]?.data).toEqual({ type: "text", text: "hi" });
   });
 });
 
@@ -293,15 +367,91 @@ describe("sessionColor", () => {
     expect(sessionColor(session({ color: "#123456" }), 0)).toBe("#123456");
   });
 
-  test("falls back to the palette by createdAt index", () => {
+  test("falls back to a golden-angle hue by createdAt index", () => {
     const sessions = [
       session({ id: "a", createdAt: 1 }),
       session({ id: "b", createdAt: 2 }),
       session({ id: "c", createdAt: 3 }),
     ];
-    expect(sessionColor(sessions[0] as Session, colorIndex(sessions, "a"))).toBe(PALETTE[0] as string);
-    expect(sessionColor(sessions[1] as Session, colorIndex(sessions, "b"))).toBe(PALETTE[1] as string);
-    expect(sessionColor(sessions[2] as Session, colorIndex(sessions, "c"))).toBe(PALETTE[2] as string);
-    expect(PALETTE[0]).not.toBe(PALETTE[1]);
+    expect(sessionColor(sessions[0] as Session, colorIndex(sessions, "a"))).toBe("hsl(0, 65%, 68%)");
+    expect(sessionColor(sessions[1] as Session, colorIndex(sessions, "b"))).toBe(
+      `hsl(${137.508 % 360}, 65%, 68%)`,
+    );
+    expect(sessionColor(sessions[2] as Session, colorIndex(sessions, "c"))).toBe(
+      `hsl(${(2 * 137.508) % 360}, 65%, 68%)`,
+    );
+  });
+
+  test("neighbours differ and the first 20 hues are all distinct", () => {
+    const s = session();
+    expect(sessionColor(s, 0)).not.toBe(sessionColor(s, 1));
+    const colors = new Set<string>();
+    for (let i = 0; i < 20; i++) colors.add(sessionColor(s, i));
+    expect(colors.size).toBe(20);
+  });
+});
+
+describe("titleSuffixes", () => {
+  test("numbers same-title sessions after the oldest", () => {
+    const sessions = [
+      session({ id: "a", title: "dup", createdAt: 1 }),
+      session({ id: "b", title: "dup", createdAt: 2 }),
+      session({ id: "c", title: "dup", createdAt: 3 }),
+      session({ id: "d", title: "solo", createdAt: 4 }),
+    ];
+    const m = titleSuffixes(sessions);
+    expect(m.get("a")).toBeUndefined();
+    expect(m.get("b")).toBe(2);
+    expect(m.get("c")).toBe(3);
+    expect(m.get("d")).toBeUndefined();
+  });
+
+  test("untitled sessions group together regardless of list order", () => {
+    const sessions = [
+      session({ id: "b", title: null, createdAt: 2 }),
+      session({ id: "a", title: null, createdAt: 1 }),
+    ];
+    const m = titleSuffixes(sessions);
+    expect(m.get("a")).toBeUndefined();
+    expect(m.get("b")).toBe(2);
+  });
+});
+
+describe("EventBuffer", () => {
+  test("drops events when not armed, buffers in order while armed", () => {
+    const buf = new EventBuffer<string>();
+    expect(buf.push("s1", "a")).toBe(false);
+    buf.begin("s1");
+    expect(buf.push("s2", "x")).toBe(false);
+    expect(buf.push("s1", "a")).toBe(true);
+    expect(buf.push("s1", "b")).toBe(true);
+    expect(buf.end("s1")).toEqual(["a", "b"]);
+    expect(buf.push("s1", "c")).toBe(false);
+  });
+
+  test("end with a different id leaves the buffer armed", () => {
+    const buf = new EventBuffer<string>();
+    buf.begin("s1");
+    buf.push("s1", "a");
+    expect(buf.end("s2")).toEqual([]);
+    expect(buf.end("s1")).toEqual(["a"]);
+  });
+
+  test("begin with a different id drops the old buffer", () => {
+    const buf = new EventBuffer<string>();
+    buf.begin("s1");
+    buf.push("s1", "a");
+    buf.begin("s2");
+    expect(buf.push("s1", "b")).toBe(false);
+    expect(buf.end("s2")).toEqual([]);
+  });
+
+  test("begin with the same id keeps buffered events", () => {
+    const buf = new EventBuffer<string>();
+    buf.begin("s1");
+    buf.push("s1", "a");
+    buf.begin("s1");
+    buf.push("s1", "b");
+    expect(buf.end("s1")).toEqual(["a", "b"]);
   });
 });

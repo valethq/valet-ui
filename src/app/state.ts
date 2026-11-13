@@ -74,7 +74,8 @@ function stubPart(d: MessageDelta, idx: number): Part {
   };
 }
 
-/** Returns true when the delta referenced something unknown (caller refetches). */
+/** Returns true when the delta had a gap or referenced something unknown
+ * (caller refetches). */
 export function applyDelta(view: SessionView, d: MessageDelta): boolean {
   const cm = findMessage(view, d.messageId);
   if (!cm) return true;
@@ -87,10 +88,24 @@ export function applyDelta(view: SessionView, d: MessageDelta): boolean {
     cm.parts.push(part);
     cm.parts.sort((a, b) => a.idx - b.idx);
   }
+  const cur =
+    part.data.type === "text" || part.data.type === "reasoning"
+      ? part.data.text.length
+      : part.data.type === "tool-call"
+        ? (part.data.output ?? "").length
+        : 0;
+  let delta = d.delta;
+  if (d.offset !== undefined) {
+    // offset is the server-side length before this delta: ahead of `cur` is a
+    // gap (refetch; keep any stub), behind it is overlap already applied.
+    if (d.offset > cur) return true;
+    delta = delta.slice(cur - d.offset);
+    if (delta === "") return unknown;
+  }
   if (part.data.type === "text" || part.data.type === "reasoning") {
-    part.data = { ...part.data, text: part.data.text + d.delta };
+    part.data = { ...part.data, text: part.data.text + delta };
   } else if (part.data.type === "tool-call") {
-    part.data = { ...part.data, output: (part.data.output ?? "") + d.delta };
+    part.data = { ...part.data, output: (part.data.output ?? "") + delta };
   }
   return unknown;
 }
@@ -182,17 +197,65 @@ export function applyRunStatus(view: SessionView, runId: string, status: string)
   if (view.activeRunId === runId || view.activeRunId === null) view.runStatus = status;
 }
 
-/** Deterministic fallback accents when the session has no color yet. */
-export const PALETTE = ["#7aa2f7", "#9ece6a", "#e0af68", "#bb9af7", "#7dcfff", "#f7768e", "#73daca"];
-
 /** Position of `id` in the sessions' createdAt order (oldest first). */
 export function colorIndex(sessions: Session[], id: string): number {
   const i = [...sessions].sort((a, b) => a.createdAt - b.createdAt).findIndex((s) => s.id === id);
   return Math.max(i, 0);
 }
 
+/** Golden-angle fallback accent when the session has no color yet. */
 export function sessionColor(session: Session, index: number): string {
   if (session.color !== null) return session.color;
-  const i = ((index % PALETTE.length) + PALETTE.length) % PALETTE.length;
-  return PALETTE[i] as string;
+  return `hsl(${(index * 137.508) % 360}, 65%, 68%)`;
+}
+
+/** Sessions sharing a displayed title get `#n` suffixes by createdAt order;
+ * the oldest of each group stays unnumbered. */
+export function titleSuffixes(sessions: Session[]): Map<string, number> {
+  const byTitle = new Map<string, Session[]>();
+  for (const s of sessions) {
+    const key = s.title ?? "Untitled";
+    const group = byTitle.get(key);
+    if (group === undefined) byTitle.set(key, [s]);
+    else group.push(s);
+  }
+  const out = new Map<string, number>();
+  for (const group of byTitle.values()) {
+    group.sort((a, b) => a.createdAt - b.createdAt);
+    for (let i = 1; i < group.length; i++) {
+      const s = group[i];
+      if (s !== undefined) out.set(s.id, i + 1);
+    }
+  }
+  return out;
+}
+
+/** Buffers events for a session whose REST snapshot is still loading; the
+ * buffer replays through the normal handler once the view exists. */
+export class EventBuffer<E> {
+  #id: string | null = null;
+  #events: E[] = [];
+
+  /** Arm the buffer for `id`; a different pending id drops the old buffer. */
+  begin(id: string): void {
+    if (id === this.#id) return;
+    this.#id = id;
+    this.#events = [];
+  }
+
+  /** Buffers `event` when `id` is the pending session; returns whether it did. */
+  push(id: string, event: E): boolean {
+    if (id !== this.#id) return false;
+    this.#events.push(event);
+    return true;
+  }
+
+  /** Disarm and drain; buffered events come back in arrival order. */
+  end(id: string): E[] {
+    if (id !== this.#id) return [];
+    this.#id = null;
+    const out = this.#events;
+    this.#events = [];
+    return out;
+  }
 }

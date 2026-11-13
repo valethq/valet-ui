@@ -3,6 +3,14 @@ import type { ClientFrame, ServerFrame } from "./types";
 const PING_MS = 25_000;
 const MAX_BACKOFF_MS = 5_000;
 
+/** Records the last seen seq for `topic`; returns true when the frame skipped
+ * seqs — the caller still delivers it, then refetches (onGap). */
+export function trackSeq(seqs: Map<string, number>, topic: string, seq: number): boolean {
+  const last = seqs.get(topic);
+  if (last === undefined || seq > last) seqs.set(topic, seq);
+  return last !== undefined && seq > last + 1;
+}
+
 /** The /ws multiplexed protocol (10.3): sub/unsub, per-topic seq resume via
  * `since`, `gap` -> caller refetches over REST, reconnect with backoff. */
 export class CoreSocket {
@@ -99,10 +107,12 @@ export class CoreSocket {
       return;
     }
     switch (frame.type) {
-      case "event":
-        this.#seqs.set(frame.topic, frame.seq);
+      case "event": {
+        const skipped = trackSeq(this.#seqs, frame.topic, frame.seq);
         this.onEvent(frame.topic, frame.name, frame.data);
+        if (skipped) this.onGap(frame.topic);
         return;
+      }
       case "gap":
         this.#seqs.delete(frame.topic);
         this.onGap(frame.topic);

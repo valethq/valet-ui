@@ -71,6 +71,7 @@ select, input[type=text], input[type=password] {
 .session-row.open { background: #1d242e; color: #eef1f5; }
 .session-row .dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: #3a4150; }
 .session-row .title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.session-row .suffix { flex: none; color: #6f7885; }
 .session-row .unread { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #7aa2f7); }
 .sidebar .new-session { margin: 8px; }
 .sidebar .logout { margin: 0 8px 8px; font-size: 12.5px; color: #8a94a1; background: transparent; }
@@ -80,12 +81,14 @@ select, input[type=text], input[type=password] {
 .chat-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 10px 16px;
   border-bottom: 1px solid #21262e;
   background: #0c0f13;
 }
-.chat-header .session-title { font-weight: 600; font-size: 15px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-header .session-title { font-weight: 600; font-size: 15px; flex: 1; min-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-header .suffix { flex: none; color: #8a94a1; }
 .chat-header .model-picker { max-width: 260px; }
 .context-bar { width: 140px; }
 .context-bar .track { height: 5px; border-radius: 3px; background: #222933; overflow: hidden; }
@@ -205,7 +208,7 @@ select, input[type=text], input[type=password] {
 .hint { font-size: 12px; color: #59636f; padding: 4px 10px; }
 .hint.conn { padding: 6px 16px 0; }
 
-@media (max-width: 720px) {
+@media (max-width: 900px), (max-height: 500px) and (pointer: coarse) {
   .app { grid-template-columns: 1fr; }
   .sidebar {
     position: fixed;

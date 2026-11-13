@@ -13,7 +13,8 @@ export interface ChatCallbacks {
 }
 
 export interface ChatHandle {
-  update(view: SessionView | null, providers: ProviderModels[]): void;
+  /** `titleSuffix` is the session's duplicate-title number, when it has one. */
+  update(view: SessionView | null, providers: ProviderModels[], titleSuffix?: number): void;
   setConnection(open: boolean): void;
 }
 
@@ -186,6 +187,8 @@ function contextWindow(view: SessionView, providers: ProviderModels[]): number |
 export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const navToggle = el("button", { class: "nav-toggle", "aria-label": "Sessions", text: "☰" });
   const title = el("span", { class: "session-title" });
+  const titleNum = el("span", { class: "suffix" });
+  titleNum.style.display = "none";
   const runHint = el("span", { class: "hint" });
   const modelPicker = el("select", { class: "model-picker" });
   const effortPicker = el("select", { class: "effort-picker" });
@@ -258,7 +261,17 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const main = el(
     "div",
     { class: "main" },
-    el("div", { class: "chat-header" }, navToggle, title, runHint, contextBar, modelPicker, effortPicker),
+    el(
+      "div",
+      { class: "chat-header" },
+      navToggle,
+      title,
+      titleNum,
+      runHint,
+      contextBar,
+      modelPicker,
+      effortPicker,
+    ),
     messages,
     connLine,
     el("div", { class: "composer" }, textarea, stop, send),
@@ -385,7 +398,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   connLine.style.display = connOpen ? "none" : "";
 
   return {
-    update(view, providers) {
+    update(view, providers, titleSuffix) {
       current = view;
       const sid = view?.session.id ?? null;
       if (sid !== sessionId) {
@@ -398,6 +411,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
 
       if (view === null) {
         title.textContent = "";
+        titleNum.style.display = "none";
         families = [];
         activeFamily = null;
         clear(modelPicker);
@@ -415,6 +429,12 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       }
 
       title.textContent = view.session.title ?? "Untitled";
+      if (titleSuffix !== undefined) {
+        titleNum.textContent = `#${titleSuffix}`;
+        titleNum.style.display = "";
+      } else {
+        titleNum.style.display = "none";
+      }
       runHint.textContent = view.runStatus ?? "";
       rebuildModels(view, providers);
       stop.style.display = view.activeRunId === null ? "none" : "";

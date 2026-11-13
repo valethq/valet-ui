@@ -123,6 +123,8 @@ export interface MessageDelta {
   messageId: string;
   partId: string;
   kind: "text" | "reasoning" | "tool-output";
+  /** Length of the part's text/output before this delta (exact streaming). */
+  offset?: number;
   delta: string;
 }
 
