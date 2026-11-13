@@ -187,7 +187,7 @@ function scheduleRender(): void {
       },
     });
     const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
-    app.chat?.update(app.view, app.providers, suffix, open === undefined ? undefined : indicatorFor(open));
+    app.chat?.update(app.view, app.providers, suffix);
   });
 }
 

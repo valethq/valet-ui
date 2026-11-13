@@ -4,7 +4,7 @@ import { logoFor, logoMark } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { familyOf, groupModels, type ModelFamily, type ModelVariant } from "../models";
-import type { Indicator, SessionView } from "../state";
+import type { SessionView } from "../state";
 import type { ChatMessage, Part, ProviderModels } from "../types";
 
 export interface ChatCallbacks {
@@ -19,12 +19,7 @@ export interface ChatCallbacks {
 
 export interface ChatHandle {
   /** `titleSuffix` is the session's duplicate-title number, when it has one. */
-  update(
-    view: SessionView | null,
-    providers: ProviderModels[],
-    titleSuffix?: number,
-    indicator?: Indicator,
-  ): void;
+  update(view: SessionView | null, providers: ProviderModels[], titleSuffix?: number): void;
   setConnection(open: boolean): void;
   setSendError(message: string | null): void;
 }
@@ -276,7 +271,6 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const title = el("span", { class: "session-title" });
   const titleNum = el("span", { class: "suffix" });
   titleNum.style.display = "none";
-  const sessionDot = el("span", { class: "session-dot" });
   const modelChip = chipButton("model", icon("sparkles"), "Model");
   const effortChip = chipButton("effort", icon("gauge"), "Effort");
   const ring = el("span", { class: "ring" });
@@ -401,7 +395,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const main = el(
     "div",
     { class: "main" },
-    el("div", { class: "chat-header" }, navToggle, sessionDot, title, titleNum, sessionMenu),
+    el("div", { class: "chat-header" }, navToggle, title, titleNum, sessionMenu),
     messages,
     el(
       "div",
@@ -540,8 +534,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   };
 
   return {
-    update(view, providers, titleSuffix, indicator = "done") {
-      sessionDot.className = `session-dot ${view === null ? "none" : indicator}`;
+    update(view, providers, titleSuffix) {
       current = view;
       const sid = view?.session.id ?? null;
       if (sid !== sessionId) {
