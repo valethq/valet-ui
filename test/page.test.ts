@@ -22,6 +22,12 @@ describe("page css", () => {
     );
   });
 
+  test("messages fade out above the composer, mirroring the header fade", () => {
+    expect(html).toContain(".composer-wrap { position: relative;");
+    expect(html).toContain("background: linear-gradient(transparent, var(--bg) 90%);");
+    expect(html).toContain(".main[data-landing] .composer-wrap::before { display: none; }");
+  });
+
   test("the session three-dot button shows on hover and is always visible on touch", () => {
     expect(html).toContain(".session-item .row-more { position: absolute;");
     expect(html).toContain(".session-item:hover .row-more");

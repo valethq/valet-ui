@@ -527,7 +527,19 @@ button.chip:active:not(:disabled) { transform: none; }
 .md-table .ta-c { text-align: center; }
 .md-table .ta-r { text-align: right; }
 
-.composer-wrap { padding: 4px max(16px, calc((100% - 812px) / 2)) 18px; }
+.composer-wrap { position: relative; padding: 4px max(16px, calc((100% - 812px) / 2)) 18px; }
+.composer-wrap::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 24px;
+  z-index: 4;
+  background: linear-gradient(transparent, var(--bg) 90%);
+  pointer-events: none;
+}
+.main[data-landing] .composer-wrap::before { display: none; }
 .composer {
   display: flex;
   flex-direction: column;
