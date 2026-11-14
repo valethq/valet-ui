@@ -95,3 +95,27 @@ describe("custom themes", () => {
     expect(themeCss([t])).toContain('html[data-theme="my-one"] { color-scheme: dark;');
   });
 });
+
+describe("brand presets", () => {
+  test("Tokyo Night is a dark preset", () => {
+    const t = THEMES.find((x) => x.id === "tokyo-night");
+    expect(t?.scheme).toBe("dark");
+    expect(t?.colors.bg).toBe("#1a1b26");
+  });
+
+  test("Absolutely! uses the brand colours and a heading font", () => {
+    const t = THEMES.find((x) => x.id === "absolutely");
+    expect(t?.name).toBe("Absolutely!");
+    expect([t?.colors.bg, t?.colors.text, t?.colors.accent]).toEqual(["#faf9f5", "#141413", "#d97757"]);
+    expect(t?.fonts?.heading).toStartWith("Poppins");
+    expect(t?.fonts?.sans).toStartWith("Lora");
+    expect(themeCss()).toMatch(/html\[data-theme="absolutely"\][^}]*--font-head: Poppins/);
+  });
+});
+
+describe("pitch black", () => {
+  test("the base surfaces are pure black", () => {
+    const c = THEMES.find((x) => x.id === "pitch-black")?.colors;
+    expect([c?.bg, c?.panel, c?.surface, c?.code]).toEqual(["#000000", "#000000", "#000000", "#000000"]);
+  });
+});

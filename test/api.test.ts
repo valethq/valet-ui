@@ -144,6 +144,42 @@ describe("settings", () => {
   });
 });
 
+describe("settings panels get friendly plugin names", () => {
+  const panels = [
+    { key: "agent", plugin: "valet-agent", title: "Agent", schema: {}, values: {} },
+    { key: "ui", plugin: "valet-ui", title: "Web", schema: {}, values: {} },
+  ];
+  const stubRoutes = (plugins: () => Response) => {
+    g.fetch = ((url: string) =>
+      Promise.resolve(
+        url.startsWith("/api/core/plugins") ? plugins() : new Response(JSON.stringify(panels)),
+      )) as unknown as typeof fetch;
+  };
+
+  test("each panel gets its plugin's manifest name from core", async () => {
+    stubRoutes(
+      () =>
+        new Response(
+          JSON.stringify([
+            { id: "valet-agent", name: "Agent", state: "active" },
+            { id: "valet-ui", state: "active" },
+          ]),
+        ),
+    );
+    const [agent, ui] = await listSettings();
+    expect(agent?.pluginName).toBe("Agent");
+    expect(ui?.pluginName).toBeUndefined();
+    expect(ui?.plugin).toBe("valet-ui");
+  });
+
+  test("a failed plugin list leaves panels listed without names", async () => {
+    stubRoutes(() => new Response('{"error":"nope"}', { status: 500 }));
+    const entries = await listSettings();
+    expect(entries.map((e) => e.title)).toEqual(["Agent", "Web"]);
+    expect(entries.every((e) => e.pluginName === undefined)).toBe(true);
+  });
+});
+
 describe("session management", () => {
   test("deleteSession sends DELETE to the core session route", async () => {
     let seen: { url: string; method?: string } = { url: "" };

@@ -25,6 +25,8 @@ export interface ThemeColors {
 export interface ThemeFonts {
   sans: string;
   mono: string;
+  /** Titles and headings; falls back to `sans`. */
+  heading?: string;
 }
 
 export interface Theme {
@@ -279,6 +281,25 @@ export const THEMES: Theme[] = [
     },
   },
   derived(
+    "pitch-black",
+    "Pitch Black",
+    "dark",
+    { bg: "#000000", text: "#f2f2f2", accent: "#ffffff" },
+    {
+      panel: "#000000",
+      surface: "#000000",
+      raised: "#101010",
+      border: "#1f1f1f",
+      strong: "#3a3a3a",
+      muted: "#9a9a9a",
+      faint: "#5c5c5c",
+      "on-accent": "#000000",
+      user: "#161616",
+      code: "#000000",
+      shadow: "rgba(0, 0, 0, 0.9)",
+    },
+  ),
+  derived(
     "midnight",
     "Midnight",
     "dark",
@@ -333,6 +354,27 @@ export const THEMES: Theme[] = [
       danger: "#eb6f92",
       warn: "#f6c177",
       ok: "#9ccfd8",
+    },
+  ),
+  derived(
+    "tokyo-night",
+    "Tokyo Night",
+    "dark",
+    { bg: "#1a1b26", text: "#c0caf5", accent: "#7aa2f7" },
+    {
+      panel: "#16161e",
+      surface: "#1f2335",
+      raised: "#292e42",
+      border: "#2f334d",
+      strong: "#3b4261",
+      muted: "#a9b1d6",
+      faint: "#565f89",
+      user: "#283457",
+      code: "#16161e",
+      "on-accent": "#16161e",
+      danger: "#f7768e",
+      warn: "#e0af68",
+      ok: "#9ece6a",
     },
   ),
   derived(
@@ -479,6 +521,29 @@ export const THEMES: Theme[] = [
     { sans: (SANS_FONTS[5] as FontChoice).stack, mono: MONO },
   ),
   derived(
+    "absolutely",
+    "Absolutely!",
+    "light",
+    { bg: "#faf9f5", text: "#141413", accent: "#d97757" },
+    {
+      panel: "#f2f0e8",
+      surface: "#fdfcf9",
+      raised: "#e8e6dc",
+      border: "#e0ddd0",
+      strong: "#b0aea5",
+      muted: "#5e5d59",
+      faint: "#8a877f",
+      "on-accent": "#141413",
+      user: "#e8e6dc",
+      code: "#f2f0e8",
+      danger: "#b9442f",
+      warn: "#a8741a",
+      ok: "#667a4a",
+      shadow: "rgba(20, 20, 19, 0.08)",
+    },
+    { sans: 'Lora, Georgia, "Times New Roman"', mono: MONO, heading: 'Poppins, Arial, "Helvetica Neue"' },
+  ),
+  derived(
     "blossom",
     "Blossom",
     "light",
@@ -539,6 +604,11 @@ export function cleanTheme(raw: unknown): Theme | null {
     const mono = cleanFontStack(f?.mono);
     if (sans === null || mono === null) return null;
     theme.fonts = { sans, mono };
+    if (f?.heading !== undefined) {
+      const heading = cleanFontStack(f.heading);
+      if (heading === null) return null;
+      theme.fonts.heading = heading;
+    }
   }
   return theme;
 }
@@ -552,7 +622,7 @@ const block = (t: Theme): string => {
     .map(([k, v]) => `--${k}: ${v};`)
     .join(
       " ",
-    )} --font: ${f.sans}, sans-serif; --mono: ${f.mono}, monospace; --font-features: ${sansFeatures(f.sans)};`;
+    )} --font: ${f.sans}, sans-serif; --mono: ${f.mono}, monospace; --font-head: ${f.heading === undefined ? "var(--font)" : `${f.heading}, sans-serif`}; --font-features: ${sansFeatures(f.sans)};`;
 };
 
 /** `:root` carries the default so an unknown stored id still renders. */

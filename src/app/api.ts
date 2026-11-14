@@ -1,4 +1,13 @@
-import type { ChatMessage, PartInput, Project, ProviderModels, Run, Session, SettingsEntry } from "./types";
+import type {
+  ChatMessage,
+  PartInput,
+  PluginStatus,
+  Project,
+  ProviderModels,
+  Run,
+  Session,
+  SettingsEntry,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -157,7 +166,18 @@ export const cancelRun = (runId: string): Promise<{ ok: boolean }> =>
 
 // ---- valet-ui settings panels (src/settings.ts, reached through the core relay) ----
 
-export const listSettings = (): Promise<SettingsEntry[]> => get("/plugins/valet-ui/settings");
+/** Panels with each plugin's friendly manifest name. The name lookup is best-effort: without it the panels still list, labelled by id. */
+export async function listSettings(): Promise<SettingsEntry[]> {
+  const [entries, plugins] = await Promise.all([
+    get<SettingsEntry[]>("/plugins/valet-ui/settings"),
+    get<PluginStatus[]>("/api/core/plugins").catch((): PluginStatus[] => []),
+  ]);
+  const names = new Map(plugins.map((p) => [p.id, p.name]));
+  return entries.map((e) => {
+    const pluginName = names.get(e.plugin);
+    return pluginName === undefined ? e : { ...e, pluginName };
+  });
+}
 
 export const saveSettings = (key: string, values: Record<string, unknown>): Promise<SettingsEntry> =>
   req("PUT", `/plugins/valet-ui/settings/${encodeURIComponent(key)}`, values);

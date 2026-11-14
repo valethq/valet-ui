@@ -112,10 +112,21 @@ export interface ProviderModels {
   models: ModelInfo[];
 }
 
+/** One row of core's GET /api/core/plugins (mirrors PluginStatus in valet-core kernel.ts). */
+export interface PluginStatus {
+  id: string;
+  name?: string;
+  version?: string;
+  state: "active" | "failed" | "disabled";
+  error?: string;
+}
+
 /** A plugin's settings panel from GET /plugins/valet-ui/settings (mirrors src/settings.ts). */
 export interface SettingsEntry {
   key: string;
   plugin: string;
+  /** Friendly name of `plugin` from core's plugin list; set by listSettings when known. */
+  pluginName?: string;
   title: string;
   description?: string;
   schema: Record<string, unknown>;

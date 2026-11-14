@@ -279,7 +279,7 @@ button.chip:active:not(:disabled) { transform: none; }
 }
 .sidebar-head .actions { display: flex; align-items: center; }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 2px 16px; }
-.sidebar .brand { font-weight: 650; font-size: 16px; letter-spacing: -0.02em; }
+.sidebar .brand { font-family: var(--font-head); font-weight: 650; font-size: 16px; letter-spacing: -0.02em; }
 .sidebar .project-picker { padding: 2px 6px 4px; }
 .sidebar .project-picker .chip { display: flex; width: 100%; height: 32px; background: none; color: var(--muted); border-radius: var(--r-md); }
 .sidebar .project-picker .chip:hover { background: var(--tint); color: var(--text); }
@@ -363,7 +363,7 @@ button.chip:active:not(:disabled) { transform: none; }
   pointer-events: none;
 }
 .chat-header > * { pointer-events: auto; }
-.chat-header .session-title { font-weight: 400; font-size: 15px; line-height: 1.35; letter-spacing: -0.01em; flex: 0 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.chat-header .session-title { font-family: var(--font-head); font-weight: 400; font-size: 15px; line-height: 1.35; letter-spacing: -0.01em; flex: 0 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .chat-header .suffix { flex: none; color: var(--faint); }
 @keyframes pulse { 50% { opacity: .3; } }
 
@@ -411,7 +411,7 @@ button.chip:active:not(:disabled) { transform: none; }
   white-space: pre-wrap;
   margin: 0 0 10px;
 }
-.md-h { font-weight: 650; margin: 6px 0 8px; letter-spacing: -0.01em; }
+.md-h { font-family: var(--font-head); font-weight: 650; margin: 6px 0 8px; letter-spacing: -0.01em; }
 .md-h1, .md-h2 { font-size: 1.15em; }
 .msg .bubble a { color: var(--accent); text-underline-offset: 3px; }
 .msg .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
@@ -643,7 +643,7 @@ button.chip:active:not(:disabled) { transform: none; }
 }
 .modal:focus { outline: none; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 8px 24px; }
-.modal-head h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; }
+.modal-head h2 { font-family: var(--font-head); margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; }
 .modal-body { overflow-y: auto; padding: 0 0 24px; }
 .settings-tabs { display: flex; gap: 2px; overflow-x: auto; padding: 0 24px; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .settings-tabs::-webkit-scrollbar { display: none; }
@@ -663,8 +663,9 @@ button.chip:active:not(:disabled) { transform: none; }
 .settings-tab[aria-selected=true] { color: var(--text); border-bottom-color: var(--text); }
 .settings-panels { padding: 16px 24px 0; }
 .settings-section { padding: 0; }
-.settings-section h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 13.5px; font-weight: 600; }
+.settings-section h3 { font-family: var(--font-head); display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 13.5px; font-weight: 600; }
 .settings-section .plugin-id { font-size: 11.5px; font-weight: 400; color: var(--faint); font-family: var(--mono); }
+.settings-section .plugin-name { font-size: 11.5px; font-weight: 400; color: var(--faint); }
 .section-desc { margin: -6px 0 14px; font-size: 13px; color: var(--muted); }
 .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .theme-option {
@@ -769,7 +770,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   padding: 32px;
   animation: modal-in .3s var(--sb-ease);
 }
-.auth h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 6px; }
+.auth h1 { font-family: var(--font-head); font-size: 20px; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 6px; }
 .auth .sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
 .auth label { display: block; font-size: 12.5px; color: var(--muted); margin: 14px 0 6px; }
 .auth input { width: 100%; }

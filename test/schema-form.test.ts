@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { fieldKind, formatField, parseField } from "../src/app/views/schema-form";
+import { enumLabels, fieldKind, formatField, parseField } from "../src/app/views/schema-form";
+
+test("enum options are labelled by enumNames, values stay raw", () => {
+  const p = { enum: ["acceptEdits", "plan"], enumNames: ["Accept edits", "Plan"] };
+  expect(enumLabels(p)).toEqual(["Accept edits", "Plan"]);
+  expect(parseField("enum", "acceptEdits", p, "Mode")).toBe("acceptEdits");
+});
+
+test("enum labels fall back to the raw value when enumNames is missing or short", () => {
+  expect(enumLabels({ enum: ["a", "b"] })).toEqual(["a", "b"]);
+  expect(enumLabels({ enum: ["a", "b"], enumNames: ["Alpha"] })).toEqual(["Alpha", "b"]);
+});
 
 describe("fieldKind", () => {
   test("maps the simple schema subset to controls", () => {

@@ -73,6 +73,13 @@ export function parseField(kind: FieldKind, raw: string | boolean, p: Prop, labe
   }
 }
 
+/** Option labels for an enum: `enumNames[i]` names `enum[i]` (a common JSON-schema
+ * convention). Missing or non-string entries fall back to the raw value. */
+export function enumLabels(p: Prop): string[] {
+  const names = Array.isArray(p.enumNames) ? p.enumNames : [];
+  return (p.enum as unknown[]).map((v, i) => (typeof names[i] === "string" ? names[i] : String(v)));
+}
+
 let seq = 0;
 
 function control(kind: FieldKind, p: Prop, value: string | boolean, id: string): HTMLElement {
@@ -84,7 +91,9 @@ function control(kind: FieldKind, p: Prop, value: string | boolean, id: string):
     }
     case "enum": {
       const select = el("select", { id });
-      for (const v of p.enum as unknown[]) select.append(el("option", { value: String(v), text: String(v) }));
+      enumLabels(p).forEach((text, i) => {
+        select.append(el("option", { value: String((p.enum as unknown[])[i]), text }));
+      });
       select.value = String(value);
       return selectChip(select, "field-select");
     }

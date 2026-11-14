@@ -18,7 +18,14 @@ function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
   const section = el(
     "section",
     { class: "settings-section" },
-    el("h3", {}, entry.title, el("span", { class: "plugin-id", text: entry.plugin })),
+    el(
+      "h3",
+      {},
+      entry.title,
+      entry.pluginName === undefined
+        ? el("span", { class: "plugin-id", text: entry.plugin })
+        : el("span", { class: "plugin-name", text: entry.pluginName, title: entry.plugin }),
+    ),
     ...(entry.description === undefined ? [] : [el("p", { class: "section-desc", text: entry.description })]),
     form.node,
     el("div", { class: "form-actions" }, status, save),
@@ -38,7 +45,8 @@ function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
     deps
       .save(entry.key, values)
       .then((next) => {
-        const fresh = panelSection(next, deps);
+        // The save response has no plugin name; keep the one the panel was listed with.
+        const fresh = panelSection({ ...next, pluginName: entry.pluginName }, deps);
         section.replaceWith(fresh);
         const s = fresh.querySelector(".form-status");
         if (s !== null) s.textContent = "Saved";
