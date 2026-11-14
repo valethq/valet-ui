@@ -462,7 +462,7 @@ button.chip:active:not(:disabled) { transform: none; }
 .msg .bubble a { color: var(--accent); text-underline-offset: 3px; }
 .msg .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); margin: 5px 4px 0; }
-.msg .meta .logo { width: 13px; height: 13px; filter: grayscale(1); opacity: .7; }
+.msg .meta .logo { width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
 .msg.user .meta { justify-content: flex-end; }
 .msg .meta .copy-btn { width: 26px; height: 26px; color: var(--faint); margin: -4px 0 -4px -6px; }
 .msg.user .meta .copy-btn { margin-left: 0; margin-right: -6px; }
@@ -522,16 +522,21 @@ button.chip:active:not(:disabled) { transform: none; }
 @keyframes body-in { from { opacity: 0; transform: translateY(-4px); } }
 .part-row .body pre { margin: 0; padding: 0; border: none; border-radius: 0; background: none; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; color: var(--muted); }
 .part-row + :not(.part-row), :not(.part-row) + .part-row { margin-top: 10px; }
-.sub-card { display: flex; flex-direction: column; gap: 5px; width: min(100%, 460px); margin: 8px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--raised); font-size: 13px; line-height: 1.4; }
+.sub-card { display: flex; flex-direction: column; gap: 2px; width: min(100%, 460px); margin: 8px 0; padding: 10px 6px 6px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--raised); font-size: 13px; line-height: 1.4; }
 .sub-card.failed { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
-.sub-top { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--faint); }
+.sub-top { display: flex; align-items: center; gap: 8px; padding: 0 8px 6px; font-size: 11px; color: var(--faint); }
 .sub-top .sub-tag { padding: 0; border: none; font-size: 11px; color: var(--muted); }
 .sub-status { margin-left: auto; font-family: var(--mono); font-size: 10.5px; white-space: nowrap; }
-.sub-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sub-preview { color: var(--muted); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.sub-open { display: flex; align-items: center; justify-content: space-between; margin-top: 3px; padding: 8px 0 0; border: none; border-top: 1px solid var(--border); background: none; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
-.sub-open .icon { width: 14px; height: 14px; transition: transform .2s var(--sb-ease); }
-.sub-open:hover .icon { transform: translateX(3px); }
+.sub-stage { padding: 6px 8px 2px; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+.sub-row { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 34px; padding: 6px 8px; border: none; border-radius: calc(var(--r-md) - 4px); background: none; color: var(--text); font: inherit; text-align: left; }
+button.sub-row { cursor: pointer; transition: background-color .15s; }
+button.sub-row:hover { background: var(--tint); }
+.sub-row.idle { color: var(--faint); }
+.sub-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-state { flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--faint); white-space: nowrap; }
+.sub-row .icon { flex: none; width: 14px; height: 14px; color: var(--faint); transition: transform .2s var(--sb-ease), color .15s; }
+button.sub-row:hover .icon { color: var(--accent); transform: translateX(3px); }
+.dot.idle { background: none; box-shadow: inset 0 0 0 1.5px var(--faint); }
 .part-row .trunc { color: var(--faint); }
 .part-row .show-all { width: 24px; height: 24px; vertical-align: middle; margin-left: 4px; }
 .part-row .show-all .icon { width: 14px; height: 14px; }
@@ -1057,7 +1062,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   .derive { grid-column: 1 / -1; padding-left: 0; }
   .font-fields { grid-template-columns: 1fr; }
   .part-row summary { min-height: 32px; }
-  .sub-open { min-height: 40px; }
+  .sub-row { min-height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

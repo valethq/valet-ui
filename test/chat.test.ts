@@ -749,54 +749,90 @@ describe("subagent sessions", () => {
       g.document = saved;
     }
   };
-  const child = {
+  const kid = (id: string, title: string, createdAt: number, stage = 1) => ({
     ...session,
-    id: "ses_c1",
-    title: "Audit queue",
+    id,
+    title,
     parentSessionId: "ses_p",
-    createdAt: 2_000,
-  };
+    createdAt,
+    settings: { agent: { parentRunId: "run_1", stage } },
+  });
+  const child = kid("ses_c1", "Audit queue", 2_000);
   const text = (n: FakeEl | undefined): string =>
     n === undefined
       ? ""
       : n.children.map((c) => (c instanceof FakeEl ? text(c) : String(c))).join("") + n.textContent;
+  const inRun = (...parts: Part[]): SessionView => ({
+    ...viewWith(parts),
+    messages: [{ message: { ...message, runId: "run_1" }, parts }],
+  });
+  const tasks = (...t: Record<string, unknown>[]) => ({ tasks: t });
+  const cls = (n: FakeEl | undefined): string => n?.attrs.get("class") ?? "";
 
-  test("a subagent call renders as a card that opens its child, not as a tool row", () => {
+  test("parallel subagents are one card with a row each, not tool rows", () => {
     withDom((root, chat) => {
       const part = toolPart({
         name: "subagent",
-        input: { prompt: "audit it" },
-        output: 'All clear.\n\n[subagent session ses_c1; pass it as "session" to continue this subagent]',
+        status: "running",
+        input: tasks({ prompt: "a" }, { prompt: "b" }),
       });
-      chat.update(viewWith([part]), [], undefined, undefined, {
-        subs: [{ session: child, indicator: "running" }],
-      });
+      const subs = [
+        { session: child, indicator: "done" as const },
+        { session: kid("ses_c2", "Check tests", 2_001), indicator: "running" as const },
+      ];
+      chat.update(inRun(part), [], undefined, undefined, { subs });
       expect(findByClass(root, "part-row")).toBeUndefined();
+      const cards = (findByClass(root, "messages") as FakeEl).querySelectorAll(".sub-card");
+      expect(cards).toHaveLength(1);
+      const card = cards[0] as FakeEl;
+      expect(text(findByClass(card, "sub-tag"))).toBe("2 subagents · 1/2 done");
+      const rows = card.querySelectorAll(".sub-row");
+      expect(rows.map((r) => text(findByClass(r, "sub-title")))).toEqual(["Audit queue", "Check tests"]);
+      expect(rows.map((r) => text(findByClass(r, "sub-state")))).toEqual(["done", "working"]);
+      expect(rows.map((r) => r.attrs.get("data-open-session"))).toEqual(["ses_c1", "ses_c2"]);
+      expect(cls(findByClass(card, "dot"))).toBe("dot running");
+    });
+  });
+
+  test("a staged call labels its stages and shows a later stage as queued until it starts", () => {
+    withDom((root, chat) => {
+      const part = toolPart({
+        name: "subagent",
+        status: "running",
+        input: tasks({ prompt: "build", stage: 1 }, { prompt: "test", stage: 2 }),
+      });
+      chat.update(inRun(part), [], undefined, undefined, {
+        subs: [{ session: kid("ses_c1", "Build it", 2_000), indicator: "running" }],
+      });
       const card = findByClass(root, "sub-card") as FakeEl;
-      expect(text(findByClass(card, "sub-title"))).toBe("Audit queue");
-      expect(text(findByClass(card, "sub-preview"))).toBe("All clear.");
-      expect((findByClass(card, "dot") as FakeEl).attrs.get("class")).toBe("dot running");
-      expect((findByClass(card, "sub-open") as FakeEl).attrs.get("data-open-session")).toBe("ses_c1");
+      expect(card.querySelectorAll(".sub-stage").map((n) => text(n))).toEqual(["Stage 1", "Stage 2"]);
+      const [first, second] = card.querySelectorAll(".sub-row") as [FakeEl, FakeEl];
+      expect(first.tag).toBe("button");
+      expect(second.tag).toBe("div");
+      expect(text(findByClass(second, "sub-state"))).toBe("queued");
+      expect(second.attrs.has("data-open-session")).toBe(false);
     });
   });
 
-  test("a call whose child is gone is a card without an open button", () => {
+  test("a single subagent is a card with one row, tagged singular, that follows its child", () => {
     withDom((root, chat) => {
-      chat.update(viewWith([toolPart({ name: "subagent", input: { prompt: "x" } })]), []);
-      expect(findByClass(root, "sub-card")).toBeDefined();
-      expect(findByClass(root, "sub-open")).toBeUndefined();
-    });
-  });
-
-  test("the card follows its child's status", () => {
-    withDom((root, chat) => {
-      const part = toolPart({ name: "subagent", input: { prompt: "x" }, output: "ok" });
+      const part = toolPart({ name: "subagent", input: tasks({ prompt: "x" }), output: "ok" });
       const show = (indicator: "running" | "done") =>
-        chat.update(viewWith([part]), [], undefined, undefined, { subs: [{ session: child, indicator }] });
+        chat.update(inRun(part), [], undefined, undefined, { subs: [{ session: child, indicator }] });
       show("running");
-      expect((findByClass(root, "dot") as FakeEl).attrs.get("class")).toBe("dot running");
+      const card = findByClass(root, "sub-card") as FakeEl;
+      expect(text(findByClass(card, "sub-tag"))).toBe("subagent");
+      expect(cls(findByClass(card, "dot"))).toBe("dot running");
       show("done");
-      expect((findByClass(root, "dot") as FakeEl).attrs.get("class")).toBe("dot done");
+      expect(cls(findByClass(card, "dot"))).toBe("dot done");
+    });
+  });
+
+  test("a call whose child is gone is a card whose row cannot be opened", () => {
+    withDom((root, chat) => {
+      chat.update(inRun(toolPart({ name: "subagent", input: tasks({ prompt: "x" }) })), []);
+      expect(findByClass(root, "sub-card")).toBeDefined();
+      expect(findByClass(root, "sub-row")?.tag).toBe("div");
     });
   });
 

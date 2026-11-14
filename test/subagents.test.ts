@@ -3,8 +3,8 @@ import { childrenOf, orphanChildren, rootOf, topLevel } from "../src/app/state";
 import {
   bindSubs,
   isSubagentCall,
-  subagentPreview,
-  subagentTitle,
+  rowState,
+  type SubRow,
   subCount,
   type ToolData,
 } from "../src/app/subagents";
@@ -35,7 +35,7 @@ const call = (id: string, data: Partial<ToolData> = {}, createdAt = 100): Part =
     type: "tool-call",
     callId: id,
     name: "subagent",
-    input: { prompt: "do it" },
+    input: { tasks: [{ prompt: "do it" }] },
     status: "done",
     ...data,
   },
@@ -43,14 +43,22 @@ const call = (id: string, data: Partial<ToolData> = {}, createdAt = 100): Part =
   updatedAt: createdAt,
 });
 
-const chat = (...parts: Part[]): ChatMessage[] => [
-  { message: { id: "msg_1", sessionId: "ses_p", seq: 1, role: "assistant" } as Message, parts },
+const chat = (runId: string | null, ...parts: Part[]): ChatMessage[] => [
+  { message: { id: "msg_1", sessionId: "ses_p", seq: 1, role: "assistant", runId } as Message, parts },
 ];
-const sub = (id: string, createdAt = 200) => ({
-  session: session(id, { parentSessionId: "ses_p", createdAt }),
+/** A child of ses_p; `run` and `stage` are what valet-agent records on it. */
+const sub = (id: string, createdAt = 200, run?: string, stage = 1, title: string | null = null) => ({
+  session: session(id, {
+    parentSessionId: "ses_p",
+    createdAt,
+    title,
+    settings: run === undefined ? {} : { agent: { parentRunId: run, stage } },
+  }),
   indicator: "done" as const,
 });
-const footer = (id: string) => `\n\n[subagent session ${id}; pass it as "session" to continue this subagent]`;
+const footer = (id: string) => `[subagent session ${id}; pass it as "session" to continue this subagent]`;
+const tasks = (...t: Record<string, unknown>[]) => ({ tasks: t });
+const ids = (rows: SubRow[] | undefined) => rows?.map((r) => r.sub?.session.id);
 
 describe("session tree", () => {
   const list = [
@@ -97,53 +105,81 @@ describe("subagent calls", () => {
     expect(isSubagentCall(named("not_a_subagent_tool"))).toBe(false);
   });
 
-  test("a finished call binds through the footer valet-agent appends", () => {
-    const part = call("p1", { output: `all fine${footer("ses_c1")}` });
-    const bound = bindSubs(chat(part), [sub("ses_c1"), sub("ses_c2")]);
-    expect(bound.get("p1")?.session.id).toBe("ses_c1");
+  test("children bind through the run that started them, in creation order", () => {
+    const part = call("p1", { status: "running", input: tasks({ prompt: "a" }, { prompt: "b" }) }, 100);
+    const bound = bindSubs(chat("run_1", part), [sub("ses_b", 210, "run_1"), sub("ses_a", 200, "run_1")]);
+    expect(ids(bound.get("p1"))).toEqual(["ses_a", "ses_b"]);
   });
 
-  test("result.meta.sessionId and an input `session` bind too", () => {
-    const meta = call("p1", { result: { content: [], meta: { sessionId: "ses_c1" } } });
-    const asked = call("p2", { input: { prompt: "more", session: "ses_c2" } });
-    const bound = bindSubs(chat(meta, asked), [sub("ses_c1"), sub("ses_c2")]);
-    expect([bound.get("p1")?.session.id, bound.get("p2")?.session.id]).toEqual(["ses_c1", "ses_c2"]);
+  test("a child of another run, or of no run, is not in the card", () => {
+    const part = call("p1", { status: "running" }, 100);
+    const bound = bindSubs(chat("run_1", part), [sub("ses_other", 200, "run_2"), sub("ses_fork", 200)]);
+    expect(ids(bound.get("p1"))).toEqual([undefined]);
   });
 
-  test("a running call takes the oldest child nobody else claimed, created after it started", () => {
-    const done = call("p1", { output: `ok${footer("ses_c1")}` }, 100);
-    const running = call("p2", { status: "running", output: undefined }, 150);
-    const bound = bindSubs(chat(done, running), [sub("ses_c1", 120), sub("ses_c2", 160)]);
-    expect(bound.get("p2")?.session.id).toBe("ses_c2");
+  test("two calls in one run: a child belongs to the last call that began before it", () => {
+    const first = call("p1", { input: tasks({ prompt: "a" }) }, 100);
+    const second = call("p2", { status: "running", input: tasks({ prompt: "b" }) }, 300);
+    const bound = bindSubs(chat("run_1", first, second), [
+      sub("ses_a", 150, "run_1"),
+      sub("ses_b", 350, "run_1"),
+    ]);
+    expect([ids(bound.get("p1")), ids(bound.get("p2"))]).toEqual([["ses_a"], ["ses_b"]]);
   });
 
-  test("a running call does not take a child that predates it", () => {
-    const running = call("p1", { status: "running", output: undefined }, 500);
-    expect(bindSubs(chat(running), [sub("ses_c1", 120)]).size).toBe(0);
+  test("a finished call binds the sessions its result names, by meta or by footers", () => {
+    const meta = call("p1", {
+      input: tasks({ prompt: "a" }, { prompt: "b" }),
+      result: { content: [], meta: { sessions: [{ sessionId: "ses_a" }, { sessionId: "ses_b" }] } },
+    });
+    const text = call("p2", {
+      input: tasks({ prompt: "c" }),
+      output: `reply\n\n${footer("ses_c")}`,
+    });
+    const bound = bindSubs(chat(null, meta, text), [sub("ses_a", 1), sub("ses_b", 2), sub("ses_c", 3)]);
+    expect([ids(bound.get("p1")), ids(bound.get("p2"))]).toEqual([["ses_a", "ses_b"], ["ses_c"]]);
   });
 
-  test("a call whose child is gone binds to nothing", () => {
-    const part = call("p1", { output: `ok${footer("ses_gone")}` });
-    expect(bindSubs(chat(part), [sub("ses_c1")]).size).toBe(0);
-  });
-});
-
-describe("card text", () => {
-  const data = (over: Partial<ToolData>): ToolData => call("p", over).data as ToolData;
-
-  test("title prefers the child's, then the call's, then the prompt", () => {
-    expect(subagentTitle(data({}), { ...sub("c"), session: session("c", { title: "Audit" }) })).toBe("Audit");
-    expect(subagentTitle(data({ input: { prompt: "p", title: "Named" } }), undefined)).toBe("Named");
-    expect(subagentTitle(data({ input: { prompt: "Line one\nline two" } }), undefined)).toBe(
-      "Line one line two",
+  test("a task that continues a session binds to it, even when that child is older", () => {
+    const part = call(
+      "p1",
+      { status: "running", input: tasks({ prompt: "more", session: "ses_old" }, { prompt: "new" }) },
+      500,
     );
-    expect(subagentTitle(data({ input: {} }), undefined)).toBe("Subagent");
-    expect(subagentTitle(data({ input: { prompt: "x".repeat(200) } }), undefined)).toHaveLength(80);
+    const bound = bindSubs(chat("run_2", part), [sub("ses_old", 10, "run_1"), sub("ses_new", 600, "run_2")]);
+    expect(ids(bound.get("p1"))).toEqual(["ses_old", "ses_new"]);
   });
 
-  test("preview is the reply without its footer, else the prompt", () => {
-    expect(subagentPreview(data({ output: `Found  it.\n\nBye${footer("ses_c1")}` }))).toBe("Found it. Bye");
-    expect(subagentPreview(data({ output: undefined, input: { prompt: "do\nthis" } }))).toBe("do this");
+  test("rows follow stage order, and a later stage with no child yet is a row without a session", () => {
+    const part = call(
+      "p1",
+      { status: "running", input: tasks({ prompt: "second", stage: 2 }, { prompt: "first", stage: 1 }) },
+      100,
+    );
+    const rows = bindSubs(chat("run_1", part), [sub("ses_first", 200, "run_1", 1)]).get("p1") as SubRow[];
+    expect(rows.map((r) => [r.title, r.stage, r.sub?.session.id])).toEqual([
+      ["first", 1, "ses_first"],
+      ["second", 2, undefined],
+    ]);
+    expect(rows.map((r) => rowState(r, true))).toEqual(["done", "queued"]);
+    expect(rowState(rows[1] as SubRow, false)).toBe("not started");
+  });
+
+  test("a call from before `tasks` existed (a single prompt) still gets its row", () => {
+    const part = call("p1", { input: { prompt: "old style" }, output: footer("ses_a") });
+    const rows = bindSubs(chat(null, part), [sub("ses_a")]).get("p1") as SubRow[];
+    expect(rows.map((r) => [r.title, r.sub?.session.id])).toEqual([["old style", "ses_a"]]);
+  });
+
+  test("a row's title prefers the child's own title, then the task's title, then its prompt", () => {
+    const part = call("p1", {
+      input: tasks({ prompt: "p one", title: "T one" }, { prompt: "Line\ntwo" }, { prompt: "x".repeat(200) }),
+      output: [footer("ses_a")].join(""),
+    });
+    const bound = bindSubs(chat("run_1", part), [sub("ses_a", 1, "run_1", 1, "Child title")]);
+    const rows = bound.get("p1") as SubRow[];
+    expect(rows.map((r) => r.title.slice(0, 12))).toEqual(["Child title", "Line two", "xxxxxxxxxxxx"]);
+    expect(rows[2]?.title).toHaveLength(80);
   });
 
   test("subCount pluralises", () => {

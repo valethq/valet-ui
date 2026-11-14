@@ -14,73 +14,127 @@ export interface SessionLinks {
   subs: SubInfo[];
 }
 
-const FOOTER = /\n*\[subagent session (ses_[\w-]+);[^\]]*\]\s*$/;
+/** One subagent in a call's card: what was asked, and the child session once there is one. */
+export interface SubRow {
+  title: string;
+  stage: number;
+  sub?: SubInfo;
+}
+
+interface Task {
+  prompt?: string;
+  title?: string;
+  session?: string;
+  stage: number;
+}
+
+const FOOTER = /\[subagent session (ses_[\w-]+);/g;
 
 /** valet-agent's tool is `subagent`; a harness may prefix it (`mcp__valet__subagent`). */
 export const isSubagentCall = (d: ToolData): boolean => /(^|[^a-z])subagent$/i.test(d.name);
 
-const inputOf = (d: ToolData): { prompt?: string; title?: string; session?: string } =>
-  typeof d.input === "object" && d.input !== null ? (d.input as Record<string, string>) : {};
+const obj = (v: unknown): Record<string, unknown> =>
+  typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
+const text = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
 
-/** The child session a finished (or continued) call names: the input's `session`, the result's meta, or the footer valet-agent appends to the reply. */
-function namedSession(d: ToolData): string | undefined {
-  const given = inputOf(d).session;
-  if (typeof given === "string" && given !== "") return given;
-  const meta = (d.result as { meta?: { sessionId?: unknown } } | undefined)?.meta?.sessionId;
-  if (typeof meta === "string") return meta;
-  return FOOTER.exec(d.output ?? "")?.[1];
+/** The call's tasks in run order (by stage, then as listed). A call from before `tasks` existed carried a single `prompt`. */
+function tasksOf(d: ToolData): Task[] {
+  const input = obj(d.input);
+  const raw = Array.isArray(input.tasks) ? input.tasks : text(input.prompt) ? [input] : [];
+  return raw
+    .map((item) => {
+      const t = obj(item);
+      const stage = typeof t.stage === "number" && Number.isInteger(t.stage) && t.stage >= 1 ? t.stage : 1;
+      return { prompt: text(t.prompt), title: text(t.title), session: text(t.session), stage };
+    })
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => a.t.stage - b.t.stage || a.i - b.i)
+    .map(({ t }) => t);
 }
 
-/**
- * Binds each subagent call in a chat to its child session. Calls that name their session bind to it. A call
- * still running names none yet, so it takes the oldest unclaimed child created since it started.
- */
-export function bindSubs(messages: ChatMessage[], subs: SubInfo[]): Map<string, SubInfo> {
-  const byId = new Map(subs.map((s) => [s.session.id, s]));
-  const calls: { part: Part; d: ToolData }[] = [];
-  for (const { parts } of messages)
-    for (const part of parts)
-      if (part.data.type === "tool-call" && isSubagentCall(part.data)) calls.push({ part, d: part.data });
-  const bound = new Map<string, SubInfo>();
-  const claimed = new Set<string>();
-  for (const { part, d } of calls) {
-    const id = namedSession(d);
-    const sub = id === undefined ? undefined : byId.get(id);
-    if (sub !== undefined) {
-      bound.set(part.id, sub);
-      claimed.add(sub.session.id);
-    }
-  }
-  const free = subs
-    .filter((s) => !claimed.has(s.session.id))
-    .sort((a, b) => a.session.createdAt - b.session.createdAt);
-  for (const { part, d } of calls) {
-    if (bound.has(part.id) || namedSession(d) !== undefined) continue;
-    const at = free.findIndex((s) => s.session.createdAt >= part.createdAt);
-    const [sub] = at < 0 ? [] : free.splice(at, 1);
-    if (sub !== undefined) bound.set(part.id, sub);
-  }
-  return bound;
+/** Child sessions the finished call names: its result's meta, or the footer valet-agent appends to each reply. */
+function namedBy(d: ToolData): string[] {
+  const meta = obj(obj(d.result).meta);
+  const fromMeta = Array.isArray(meta.sessions)
+    ? meta.sessions.flatMap((s) => text(obj(s).sessionId) ?? [])
+    : (text(meta.sessionId) ?? []);
+  const fromText = [...(d.output ?? "").matchAll(FOOTER)].map((m) => m[1] as string);
+  return [...new Set([fromMeta, fromText].flat())];
 }
+
+const stageOf = (s: Session): number => {
+  const stage = obj(s.settings.agent).stage;
+  return typeof stage === "number" ? stage : 1;
+};
 
 const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim();
 
-/** Card title: the child's own title, else the call's title, else the start of its prompt. */
-export function subagentTitle(d: ToolData, sub: SubInfo | undefined): string {
-  const { title, prompt } = inputOf(d);
-  const text =
-    sub?.session.title ?? (typeof title === "string" ? title : typeof prompt === "string" ? prompt : "");
-  const line = oneLine(text);
+function titleOf(task: Task | undefined, sub: SubInfo | undefined): string {
+  const line = oneLine(sub?.session.title ?? task?.title ?? task?.prompt ?? "");
   if (line === "") return "Subagent";
   return line.length <= 80 ? line : `${line.slice(0, 79)}…`;
 }
 
-/** Card preview: the child's reply once there is one, else the prompt it was given. */
-export function subagentPreview(d: ToolData): string {
-  const reply = oneLine((d.output ?? "").replace(FOOTER, ""));
-  if (reply !== "") return reply;
-  const { prompt } = inputOf(d);
-  return typeof prompt === "string" ? oneLine(prompt) : "";
+interface Call {
+  part: Part;
+  d: ToolData;
+  runId: string | null;
+  tasks: Task[];
+}
+
+/**
+ * Binds each subagent call in a chat to the rows of its card. A task that continues a session binds to it,
+ * a finished call also names its children, and every other child binds through the run that started it
+ * (`settings.agent.parentRunId`): it belongs to the last call of that run that began before the child did.
+ */
+export function bindSubs(messages: ChatMessage[], subs: SubInfo[]): Map<string, SubRow[]> {
+  const byId = new Map(subs.map((s) => [s.session.id, s]));
+  const calls: Call[] = [];
+  for (const { message, parts } of messages)
+    for (const part of parts)
+      if (part.data.type === "tool-call" && isSubagentCall(part.data))
+        calls.push({ part, d: part.data, runId: message.runId, tasks: tasksOf(part.data) });
+
+  const taken = new Set<string>();
+  const pools = new Map<Call, SubInfo[]>(calls.map((c) => [c, []]));
+  for (const c of calls) {
+    for (const id of [...namedBy(c.d), ...c.tasks.flatMap((t) => t.session ?? [])]) taken.add(id);
+    for (const id of namedBy(c.d)) {
+      const sub = byId.get(id);
+      if (sub !== undefined) pools.get(c)?.push(sub);
+    }
+  }
+  const order = (a: SubInfo, b: SubInfo): number =>
+    a.session.createdAt - b.session.createdAt || a.session.id.localeCompare(b.session.id);
+  for (const sub of [...subs].sort(order)) {
+    const runId = obj(sub.session.settings.agent).parentRunId;
+    if (taken.has(sub.session.id) || typeof runId !== "string") continue;
+    const ofRun = calls.filter((c) => c.runId === runId);
+    const owner = ofRun.filter((c) => c.part.createdAt <= sub.session.createdAt).at(-1) ?? ofRun[0];
+    if (owner !== undefined) pools.get(owner)?.push(sub);
+  }
+
+  const out = new Map<string, SubRow[]>();
+  for (const c of calls) {
+    const own = new Set(c.tasks.flatMap((t) => t.session ?? []));
+    const loose = (pools.get(c) ?? []).filter((s) => !own.has(s.session.id)).sort(order);
+    const rows: SubRow[] = c.tasks.map((task) => {
+      const sub = task.session === undefined ? loose.shift() : byId.get(task.session);
+      return { title: titleOf(task, sub), stage: task.stage, ...(sub ? { sub } : {}) };
+    });
+    for (const sub of loose) rows.push({ title: titleOf(undefined, sub), stage: stageOf(sub.session), sub });
+    out.set(c.part.id, rows);
+  }
+  return out;
+}
+
+export type RowState = "working" | "needs you" | "done" | "queued" | "not started";
+
+/** `live` is whether the call itself is still running: a row with no child yet is then queued behind an earlier stage. */
+export function rowState(row: SubRow, live: boolean): RowState {
+  if (row.sub === undefined) return live ? "queued" : "not started";
+  if (row.sub.indicator === "running") return "working";
+  return row.sub.indicator === "attention" ? "needs you" : "done";
 }
 
 export const subCount = (n: number): string => `${n} sub${n === 1 ? "" : "s"}`;

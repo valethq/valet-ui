@@ -9,10 +9,11 @@ import type { SessionView } from "../state";
 import {
   bindSubs,
   isSubagentCall,
+  rowState,
   type SessionLinks,
   type SubInfo,
-  subagentPreview,
-  subagentTitle,
+  type SubRow,
+  type ToolData,
 } from "../subagents";
 import type { ChatMessage, Part, PartData, PartInput, ProviderModels } from "../types";
 import { createAttachments, filePart } from "./attachments";
@@ -125,8 +126,8 @@ export function toolStatusClass(part: Part): string {
 }
 
 interface PartUi {
-  /** part id -> the child session its subagent call started. */
-  subs: Map<string, SubInfo>;
+  /** part id -> the subagents its call started. */
+  subs: Map<string, SubRow[]>;
   openState: Map<string, boolean>;
   showAll: Map<string, boolean>;
   bodyStick: Map<string, boolean>;
@@ -195,24 +196,22 @@ function toolBody(part: Part, input: unknown, output: string, ui: PartUi): HTMLE
   return [el("pre", {}, ...children)];
 }
 
-/** One subagent call as a card: status dot, child title, a preview of its reply, and a way into its session. */
-function subagentCard(
-  part: Part,
-  d: Extract<PartData, { type: "tool-call" }>,
-  sub: SubInfo | undefined,
-): HTMLElement {
+/** One subagent call as a card: a row per subagent with its status, each opening that child's session. Stages show as labels when the call has more than one. */
+function subagentCard(part: Part, d: ToolData, rows: SubRow[]): HTMLElement {
   const failed = toolStatusClass(part) === "failed" || d.status === "cancelled";
   const live = d.status === "running" || d.status === "pending";
-  const dot =
-    sub?.indicator === "attention" || sub?.indicator === "running"
-      ? sub.indicator
+  const states = rows.map((r) => rowState(r, live));
+  const busy = states.some((s) => s === "working" || s === "needs you");
+  const done = states.filter((s) => s === "done").length;
+  const dot = states.includes("needs you")
+    ? "attention"
+    : busy || live
+      ? "running"
       : failed
         ? "failed"
-        : live
-          ? "running"
-          : "done";
-  const status = live ? toolStatus(part) : quietStatus(toolStatus(part));
-  const preview = subagentPreview(d);
+        : "done";
+  const tag =
+    rows.length > 1 ? `${rows.length} subagents${live ? ` · ${done}/${rows.length} done` : ""}` : "subagent";
   const card = el(
     "div",
     { class: `sub-card${failed ? " failed" : ""}`, "data-part-id": part.id },
@@ -220,28 +219,46 @@ function subagentCard(
       "div",
       { class: "sub-top" },
       el("span", { class: `dot ${dot}` }),
-      el("span", { class: "sub-tag", text: "subagent" }),
-      el("span", { class: "sub-status", text: status }),
+      el("span", { class: "sub-tag", text: tag }),
+      el("span", { class: "sub-status", text: live ? toolStatus(part) : quietStatus(toolStatus(part)) }),
     ),
-    el("div", { class: "sub-title", text: subagentTitle(d, sub) }),
   );
-  if (preview !== "") card.append(el("div", { class: "sub-preview", text: preview }));
-  if (sub !== undefined) {
+  const staged = new Set(rows.map((r) => r.stage)).size > 1;
+  let stage = 0;
+  rows.forEach((row, i) => {
+    if (staged && row.stage !== stage) {
+      stage = row.stage;
+      card.append(el("div", { class: "sub-stage", text: `Stage ${stage}` }));
+    }
+    const state = states[i] as string;
+    const dotClass =
+      row.sub?.indicator === "running" || row.sub?.indicator === "attention"
+        ? row.sub.indicator
+        : row.sub
+          ? "done"
+          : "idle";
+    const inner = [
+      el("span", { class: `dot ${dotClass}` }),
+      el("span", { class: "sub-title", text: row.title }),
+      el("span", { class: "sub-state", text: state }),
+    ];
     card.append(
-      el(
-        "button",
-        { class: "sub-open", "data-open-session": sub.session.id },
-        el("span", { text: "Open session" }),
-        icon("arrowRight"),
-      ),
+      row.sub === undefined
+        ? el("div", { class: "sub-row idle" }, ...inner)
+        : el(
+            "button",
+            { class: "sub-row", "data-open-session": row.sub.session.id },
+            ...inner,
+            icon("arrowRight"),
+          ),
     );
-  }
+  });
   return card;
 }
 
 function renderPart(part: Part, ui: PartUi): HTMLElement | null {
   const d = part.data;
-  if (d.type === "tool-call" && isSubagentCall(d)) return subagentCard(part, d, ui.subs.get(part.id));
+  if (d.type === "tool-call" && isSubagentCall(d)) return subagentCard(part, d, ui.subs.get(part.id) ?? []);
   switch (d.type) {
     case "text":
       return renderMarkdown(d.text);
@@ -346,18 +363,18 @@ function messageSig(
   cm: ChatMessage,
   view: SessionView,
   showAll: Map<string, boolean>,
-  subs: Map<string, SubInfo>,
+  subs: Map<string, SubRow[]>,
 ): string {
   const parts = cm.parts.map((p) => {
     const d = p.data;
-    const sub = subs.get(p.id);
+    const rows = subs.get(p.id);
     const size =
       d.type === "text"
         ? d.text.length
         : d.type === "reasoning"
           ? `${d.text.length}${p.status === "streaming" ? Math.floor(Date.now() / 1000) : ""}`
           : d.type === "tool-call"
-            ? `${sub ? `${sub.session.id}${sub.session.title}${sub.indicator}` : ""}${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
+            ? `${rows ? rows.map((r) => `${r.title}${r.stage}${r.sub?.session.id}${r.sub?.indicator}`).join("|") : ""}${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
             : d.type === "notice"
               ? d.text.length
               : d.type === "compaction"
@@ -664,7 +681,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   // Delegated: morph() keeps the old button node on re-render, so the text is
   // looked up from the current view at click time rather than captured.
   messages.addEventListener("click", (ev) => {
-    const open = (ev.target as Element | null)?.closest<HTMLButtonElement>(".sub-open")?.dataset.openSession;
+    const open = (ev.target as Element | null)?.closest<HTMLElement>(".sub-row")?.dataset.openSession;
     if (open !== undefined) {
       cb.onOpenSession(open);
       return;
