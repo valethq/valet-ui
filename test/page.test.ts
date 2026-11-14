@@ -35,6 +35,11 @@ describe("page css", () => {
     expect(/\.hint\.send-error \{[^}]*color: var\(--danger\)/.test(html)).toBe(true);
   });
 
+  test("the new-chat screen centers the greeting and composer together", () => {
+    expect(html).toContain(".main[data-landing] { justify-content: center; }");
+    expect(html).toContain(".main[data-landing] .messages { flex: none;");
+  });
+
   test("mobile browsers do not inflate long text blocks such as tool output", () => {
     expect(html).toContain("html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }");
   });

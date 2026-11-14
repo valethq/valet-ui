@@ -11,7 +11,7 @@ ${themeCss()}
   --st-need: #eab308;
   --sb-w: 232px;
   --sb-inset: 12px;
-  --sb-vinset: 16px;
+  --sb-vinset: 10px;
   --sb-pad-l: 14px;
   --sb-pad-r: 12px;
   --sb-ease: cubic-bezier(.22, 1, .36, 1);
@@ -407,6 +407,8 @@ button.chip:active:not(:disabled) { transform: none; }
   flex-direction: column;
   gap: 18px;
 }
+.main[data-landing] { justify-content: center; }
+.main[data-landing] .messages { flex: none; overflow: visible; padding-block: 0 20px; }
 .msg { max-width: 100%; }
 .messages > .enter { animation: msg-in .28s var(--sb-ease); }
 .messages > .msg.user.enter { transform-origin: right bottom; animation-name: msg-in-user; }
@@ -815,11 +817,10 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .auth .error { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 18px; }
 
 .landing {
-  flex: 1;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-bottom: 12vh;
   font-size: 26px;
   font-weight: 400;
   letter-spacing: -0.02em;

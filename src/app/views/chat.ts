@@ -749,6 +749,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         stickToBottom = true;
       }
 
+      if (view === null) main.setAttribute("data-landing", "");
+      else main.removeAttribute("data-landing");
       if (view === null) {
         title.textContent = "";
         titleNum.style.display = "none";
