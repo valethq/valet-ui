@@ -291,6 +291,7 @@ describe("send error line", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       const errNode = findByClass(root, "send-error") as FakeEl;
       const connNode = findByClass(root, "conn") as FakeEl;
@@ -383,6 +384,7 @@ describe("tool output rendering", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       const part = toolPart({
         input: { command: "ls" },
@@ -419,6 +421,7 @@ describe("message entrance", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       const note = (id: string, text: string): ChatMessage => ({
         message: { ...message, id },
@@ -471,6 +474,7 @@ describe("streaming updates", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       const reasoning = (text: string): Part => ({
         id: "prt_r",
@@ -525,6 +529,7 @@ describe("composer attachments", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       const row = findByClass(root, "attach-row") as FakeEl;
@@ -567,6 +572,7 @@ describe("composer attachments", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       const file = new File(["x"], "x.bin");
@@ -591,6 +597,7 @@ describe("composer attachments", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       textarea.dispatch("paste", {
@@ -619,6 +626,7 @@ describe("composer attachments", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       const big = { name: "big.bin", size: 21 * 1024 * 1024, type: "" } as unknown as File;
       (findTag(root, "textarea") as FakeEl).dispatch("paste", {
@@ -642,6 +650,7 @@ describe("composer attachments", () => {
         onRename() {},
         onDelete() {},
         onToggleNav() {},
+        onOpenSession() {},
       });
       let prevented = false;
       (findTag(root, "textarea") as FakeEl).dispatch("paste", {
@@ -712,5 +721,101 @@ describe("file parts", () => {
     } finally {
       g.document = saved;
     }
+  });
+});
+
+describe("subagent sessions", () => {
+  const withDom = (
+    fn: (root: FakeEl, chat: ReturnType<typeof createChat>, opened: string[]) => void,
+  ): void => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      const root = new FakeEl("div");
+      const opened: string[] = [];
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+        onOpenSession: (id) => opened.push(id),
+      });
+      fn(root, chat, opened);
+    } finally {
+      g.document = saved;
+    }
+  };
+  const child = {
+    ...session,
+    id: "ses_c1",
+    title: "Audit queue",
+    parentSessionId: "ses_p",
+    createdAt: 2_000,
+  };
+  const text = (n: FakeEl | undefined): string =>
+    n === undefined
+      ? ""
+      : n.children.map((c) => (c instanceof FakeEl ? text(c) : String(c))).join("") + n.textContent;
+
+  test("a subagent call renders as a card that opens its child, not as a tool row", () => {
+    withDom((root, chat) => {
+      const part = toolPart({
+        name: "subagent",
+        input: { prompt: "audit it" },
+        output: 'All clear.\n\n[subagent session ses_c1; pass it as "session" to continue this subagent]',
+      });
+      chat.update(viewWith([part]), [], undefined, undefined, {
+        subs: [{ session: child, indicator: "running" }],
+      });
+      expect(findByClass(root, "part-row")).toBeUndefined();
+      const card = findByClass(root, "sub-card") as FakeEl;
+      expect(text(findByClass(card, "sub-title"))).toBe("Audit queue");
+      expect(text(findByClass(card, "sub-preview"))).toBe("All clear.");
+      expect((findByClass(card, "dot") as FakeEl).attrs.get("class")).toBe("dot running");
+      expect((findByClass(card, "sub-open") as FakeEl).attrs.get("data-open-session")).toBe("ses_c1");
+    });
+  });
+
+  test("a call whose child is gone is a card without an open button", () => {
+    withDom((root, chat) => {
+      chat.update(viewWith([toolPart({ name: "subagent", input: { prompt: "x" } })]), []);
+      expect(findByClass(root, "sub-card")).toBeDefined();
+      expect(findByClass(root, "sub-open")).toBeUndefined();
+    });
+  });
+
+  test("the card follows its child's status", () => {
+    withDom((root, chat) => {
+      const part = toolPart({ name: "subagent", input: { prompt: "x" }, output: "ok" });
+      const show = (indicator: "running" | "done") =>
+        chat.update(viewWith([part]), [], undefined, undefined, { subs: [{ session: child, indicator }] });
+      show("running");
+      expect((findByClass(root, "dot") as FakeEl).attrs.get("class")).toBe("dot running");
+      show("done");
+      expect((findByClass(root, "dot") as FakeEl).attrs.get("class")).toBe("dot done");
+    });
+  });
+
+  test("a child's header shows the subagent tag and a breadcrumb to its parent", () => {
+    withDom((root, chat, opened) => {
+      const parent = { ...session, id: "ses_p", title: "Parent chat" };
+      const view = { ...viewWith([]), session: child };
+      chat.update(view, [], undefined, undefined, { parent, subs: [] });
+      const crumb = findByClass(root, "crumb") as FakeEl;
+      expect(crumb.style.display).toBe("");
+      expect(text(findByClass(crumb, "crumb-text"))).toBe("Parent chat");
+      crumb.dispatch("click", {});
+      expect(opened).toEqual(["ses_p"]);
+      const tag = (findByClass(root, "title-line") as FakeEl).children[2] as FakeEl;
+      expect(tag.style.display).toBe("");
+
+      chat.update(viewWith([]), [], undefined, undefined, { subs: [] });
+      expect(crumb.style.display).toBe("none");
+      expect(tag.style.display).toBe("none");
+    });
   });
 });

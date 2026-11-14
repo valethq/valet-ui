@@ -6,6 +6,14 @@ import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { familyOf, groupModels, type ModelFamily, type ModelVariant } from "../models";
 import type { SessionView } from "../state";
+import {
+  bindSubs,
+  isSubagentCall,
+  type SessionLinks,
+  type SubInfo,
+  subagentPreview,
+  subagentTitle,
+} from "../subagents";
 import type { ChatMessage, Part, PartData, PartInput, ProviderModels } from "../types";
 import { createAttachments, filePart } from "./attachments";
 
@@ -18,6 +26,8 @@ export interface ChatCallbacks {
   onRename(): void;
   onDelete(): void;
   onToggleNav(): void;
+  /** A subagent card or the parent breadcrumb was clicked. */
+  onOpenSession(id: string): void;
 }
 
 export interface ModelSel {
@@ -27,7 +37,13 @@ export interface ModelSel {
 
 export interface ChatHandle {
   /** `titleSuffix` is the session's duplicate-title number, when it has one. */
-  update(view: SessionView | null, providers: ProviderModels[], titleSuffix?: number, draft?: ModelSel): void;
+  update(
+    view: SessionView | null,
+    providers: ProviderModels[],
+    titleSuffix?: number,
+    draft?: ModelSel,
+    links?: SessionLinks,
+  ): void;
   setConnection(open: boolean): void;
   setSendError(message: string | null): void;
 }
@@ -109,6 +125,8 @@ export function toolStatusClass(part: Part): string {
 }
 
 interface PartUi {
+  /** part id -> the child session its subagent call started. */
+  subs: Map<string, SubInfo>;
   openState: Map<string, boolean>;
   showAll: Map<string, boolean>;
   bodyStick: Map<string, boolean>;
@@ -177,8 +195,53 @@ function toolBody(part: Part, input: unknown, output: string, ui: PartUi): HTMLE
   return [el("pre", {}, ...children)];
 }
 
+/** One subagent call as a card: status dot, child title, a preview of its reply, and a way into its session. */
+function subagentCard(
+  part: Part,
+  d: Extract<PartData, { type: "tool-call" }>,
+  sub: SubInfo | undefined,
+): HTMLElement {
+  const failed = toolStatusClass(part) === "failed" || d.status === "cancelled";
+  const live = d.status === "running" || d.status === "pending";
+  const dot =
+    sub?.indicator === "attention" || sub?.indicator === "running"
+      ? sub.indicator
+      : failed
+        ? "failed"
+        : live
+          ? "running"
+          : "done";
+  const status = live ? toolStatus(part) : quietStatus(toolStatus(part));
+  const preview = subagentPreview(d);
+  const card = el(
+    "div",
+    { class: `sub-card${failed ? " failed" : ""}`, "data-part-id": part.id },
+    el(
+      "div",
+      { class: "sub-top" },
+      el("span", { class: `dot ${dot}` }),
+      el("span", { class: "sub-tag", text: "subagent" }),
+      el("span", { class: "sub-status", text: status }),
+    ),
+    el("div", { class: "sub-title", text: subagentTitle(d, sub) }),
+  );
+  if (preview !== "") card.append(el("div", { class: "sub-preview", text: preview }));
+  if (sub !== undefined) {
+    card.append(
+      el(
+        "button",
+        { class: "sub-open", "data-open-session": sub.session.id },
+        el("span", { text: "Open session" }),
+        icon("arrowRight"),
+      ),
+    );
+  }
+  return card;
+}
+
 function renderPart(part: Part, ui: PartUi): HTMLElement | null {
   const d = part.data;
+  if (d.type === "tool-call" && isSubagentCall(d)) return subagentCard(part, d, ui.subs.get(part.id));
   switch (d.type) {
     case "text":
       return renderMarkdown(d.text);
@@ -279,16 +342,22 @@ function metaModel(cm: ChatMessage): { provider: string; model: string } | undef
 
 /** Changes whenever a message would render differently, so unchanged messages
  * keep their DOM (selection, scroll and hover survive streaming elsewhere). */
-function messageSig(cm: ChatMessage, view: SessionView, showAll: Map<string, boolean>): string {
+function messageSig(
+  cm: ChatMessage,
+  view: SessionView,
+  showAll: Map<string, boolean>,
+  subs: Map<string, SubInfo>,
+): string {
   const parts = cm.parts.map((p) => {
     const d = p.data;
+    const sub = subs.get(p.id);
     const size =
       d.type === "text"
         ? d.text.length
         : d.type === "reasoning"
           ? `${d.text.length}${p.status === "streaming" ? Math.floor(Date.now() / 1000) : ""}`
           : d.type === "tool-call"
-            ? `${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
+            ? `${sub ? `${sub.session.id}${sub.session.title}${sub.indicator}` : ""}${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
             : d.type === "notice"
               ? d.text.length
               : d.type === "compaction"
@@ -428,6 +497,20 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const title = el("span", { class: "session-title" });
   const titleNum = el("span", { class: "suffix" });
   titleNum.style.display = "none";
+  const subTag = el("span", { class: "sub-tag", text: "subagent" });
+  subTag.style.display = "none";
+  const crumbText = el("span", { class: "crumb-text" });
+  const crumb = el(
+    "button",
+    { class: "crumb", "aria-label": "Back to parent session" },
+    icon("arrowLeft"),
+    crumbText,
+  );
+  crumb.style.display = "none";
+  let parentId: string | null = null;
+  crumb.addEventListener("click", () => {
+    if (parentId !== null) cb.onOpenSession(parentId);
+  });
   const modelChip = chipButton("model", icon("sparkles"), "Model");
   const effortChip = chipButton("effort", icon("gauge"), "Effort");
   const ring = el("span", { class: "ring" });
@@ -581,6 +664,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   // Delegated: morph() keeps the old button node on re-render, so the text is
   // looked up from the current view at click time rather than captured.
   messages.addEventListener("click", (ev) => {
+    const open = (ev.target as Element | null)?.closest<HTMLButtonElement>(".sub-open")?.dataset.openSession;
+    if (open !== undefined) {
+      cb.onOpenSession(open);
+      return;
+    }
     const btn = (ev.target as Element | null)?.closest<HTMLButtonElement>(".copy-btn");
     const id = btn?.dataset.copyId;
     if (btn === null || btn === undefined || id === undefined) return;
@@ -616,7 +704,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       "div",
       { class: "chat-header" },
       navToggle,
-      el("div", { class: "title-group" }, title, titleNum),
+      el("div", { class: "title-group" }, crumb, el("div", { class: "title-line" }, title, titleNum, subTag)),
       sessionMenu,
     ),
     messages,
@@ -646,6 +734,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   setContext(null);
   setModels(null, null);
 
+  let subs: SubInfo[] = [];
+
   function renderMessages(view: SessionView): void {
     const scrollTops = new Map<string, number>();
     for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
@@ -663,7 +753,9 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         if (p.data.type === "reasoning" && p.status === "streaming") liveReasoning = true;
       }
     }
+    const bound = bindSubs(view.messages, subs);
     const ui: PartUi = {
+      subs: bound,
       openState,
       showAll,
       bodyStick,
@@ -676,7 +768,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     const nodes: HTMLElement[] = [];
     for (const cm of view.messages) {
       const id = cm.message.id;
-      const sig = messageSig(cm, view, showAll);
+      const sig = messageSig(cm, view, showAll, bound);
       let hit = cache.get(id);
       if (hit === undefined || hit.sig !== sig) {
         // New messages animate in once; a re-render mid-entrance resumes it.
@@ -795,8 +887,10 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   };
 
   return {
-    update(view, providers, titleSuffix, draft) {
+    update(view, providers, titleSuffix, draft, links) {
       current = view;
+      subs = links?.subs ?? [];
+      parentId = links?.parent?.id ?? null;
       const sid = view?.session.id ?? null;
       if (sid !== sessionId) {
         sessionId = sid;
@@ -813,6 +907,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       if (view === null) {
         title.textContent = "";
         titleNum.style.display = "none";
+        subTag.style.display = "none";
+        crumb.style.display = "none";
         sessionMenu.style.display = "none";
         rebuildModels(draftPick(draft, providers), providers);
         if (messages.querySelector(".landing") === null) {
@@ -833,6 +929,9 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
 
       title.textContent = view.session.title ?? "Untitled";
       sessionMenu.style.display = "";
+      subTag.style.display = view.session.parentSessionId === null ? "none" : "";
+      crumb.style.display = links?.parent === undefined ? "none" : "";
+      crumbText.textContent = links?.parent?.title ?? "Untitled";
       if (titleSuffix !== undefined) {
         titleNum.textContent = `#${titleSuffix}`;
         titleNum.style.display = "";

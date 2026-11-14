@@ -40,6 +40,29 @@ export function sortSessions(list: Session[]): Session[] {
   return [...list].sort((a, b) => sessionActivityAt(b) - sessionActivityAt(a));
 }
 
+/** Sessions that appear in the sidebar: subagent children show up in their parent's chat instead. */
+export const topLevel = (list: Session[]): Session[] => list.filter((s) => s.parentSessionId === null);
+
+/** Children of `id`, oldest first (the order their parent started them). */
+export const childrenOf = (list: Session[], id: string): Session[] =>
+  list.filter((s) => s.parentSessionId === id).sort((a, b) => a.createdAt - b.createdAt);
+
+/** The top-level ancestor of `id` (itself when it has no parent), or undefined when `id` is unknown. */
+export function rootOf(list: Session[], id: string): Session | undefined {
+  const byId = new Map(list.map((s) => [s.id, s]));
+  let at = byId.get(id);
+  for (let hops = 0; hops < list.length; hops++) {
+    const parent = at?.parentSessionId ? byId.get(at.parentSessionId) : undefined;
+    if (parent === undefined) break;
+    at = parent;
+  }
+  return at;
+}
+
+/** Core detaches the children of a deleted session without an event; mirror that locally. */
+export const orphanChildren = (list: Session[], id: string): Session[] =>
+  list.map((s) => (s.parentSessionId === id ? { ...s, parentSessionId: null } : s));
+
 export function upsertSession(list: Session[], session: Session): Session[] {
   return sortSessions(list.filter((s) => s.id !== session.id).concat(session));
 }

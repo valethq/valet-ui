@@ -13,6 +13,8 @@ import {
   applyRunUpdate,
   EventBuffer,
   newSessionView,
+  orphanChildren,
+  childrenOf,
   replaceMessages,
   type Indicator,
   type SessionView,
@@ -20,6 +22,7 @@ import {
   sessionIndicator,
   sortSessions,
   titleSuffixes,
+  topLevel,
   upsertSession,
 } from "./state";
 import type { Message, MessageDelta, Part, Project, ProviderModels, Run, RunStatus, Session } from "./types";
@@ -228,7 +231,7 @@ function sidebarSig(
     Math.floor(Date.now() / 60_000),
     [...unread],
     [...indicators],
-    app.sessions.map((s) => [s.id, s.title, s.status, s.lastMessageAt, s.updatedAt]),
+    app.sessions.map((s) => [s.id, s.title, s.status, s.parentSessionId, s.lastMessageAt, s.updatedAt]),
   ]);
 }
 
@@ -281,7 +284,19 @@ function scheduleRender(): void {
       });
     }
     const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
-    app.chat?.update(app.view, app.providers, suffix, draftModel);
+    const links =
+      open === undefined
+        ? undefined
+        : {
+            ...(open.parentSessionId === null
+              ? {}
+              : { parent: app.sessions.find((s) => s.id === open.parentSessionId) }),
+            subs: childrenOf(app.sessions, open.id).map((session) => ({
+              session,
+              indicator: indicators.get(session.id) ?? ("done" as const),
+            })),
+          };
+    app.chat?.update(app.view, app.providers, suffix, draftModel, links);
   });
 }
 
@@ -344,7 +359,7 @@ function pickSession(preferHash: boolean): Session | undefined {
     const hit = id === null ? undefined : app.sessions.find((s) => s.id === id);
     if (hit !== undefined) return hit;
   }
-  return app.sessions[0];
+  return topLevel(app.sessions)[0];
 }
 
 let openSeq = 0;
@@ -450,7 +465,10 @@ async function deleteSession(id: string): Promise<void> {
     },
   );
   if (!deleted) return;
-  app.sessions = app.sessions.filter((s) => s.id !== id);
+  app.sessions = orphanChildren(
+    app.sessions.filter((s) => s.id !== id),
+    id,
+  );
   syncTopics();
   if (app.view?.session.id !== id) {
     scheduleRender();
@@ -478,7 +496,10 @@ function onEvent(topic: string, name: string, data: unknown): void {
       if (name === "session.create") syncTopics();
       if (app.view?.session.id === payload.session.id) app.view.session = payload.session;
     } else if (name === "session.delete") {
-      app.sessions = app.sessions.filter((s) => s.id !== payload.session.id);
+      app.sessions = orphanChildren(
+        app.sessions.filter((s) => s.id !== payload.session.id),
+        payload.session.id,
+      );
       syncTopics();
       if (app.view?.session.id === payload.session.id) app.view = null;
     }
@@ -646,6 +667,7 @@ async function startApp(): Promise<void> {
         });
     },
     onToggleNav: toggleNav,
+    onOpenSession: (id) => void openSession(id),
   });
 
   const backdrop = el("div", { class: "nav-backdrop" });

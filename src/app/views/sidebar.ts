@@ -1,6 +1,7 @@
 import { el } from "../dom";
 import { icon, iconButton, selectChip } from "../icons";
-import { type Indicator, timeAgo, titleSuffixes } from "../state";
+import { childrenOf, type Indicator, rootOf, timeAgo, titleSuffixes, topLevel } from "../state";
+import { subCount } from "../subagents";
 import type { Project, Session } from "../types";
 import { sessionMenuButton, syncSessionMenu } from "./session-menu";
 
@@ -33,7 +34,8 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   // changes (new row, new open row, dot state, unread) animate.
   const prevList = node.querySelector<HTMLElement>(".sessions");
   const project = p.projectId ?? "";
-  const openId = p.openId ?? "";
+  // a subagent chat highlights (and animates as) its top-level parent
+  const openId = (p.openId === null ? undefined : rootOf(p.sessions, p.openId)?.id) ?? "";
   const same = prevList?.dataset.project === project;
   const prevOpen = prevList?.dataset.open;
   const prev = new Map<string, DOMStringMap>();
@@ -41,11 +43,12 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
     prev.set(r.dataset.id ?? "", r.dataset);
   }
 
-  const suffixes = titleSuffixes(p.sessions);
+  const shown = topLevel(p.sessions);
+  const suffixes = titleSuffixes(shown);
   const now = Date.now();
   const list = el("div", { class: "sessions", "data-project": project, "data-open": openId });
-  for (const session of p.sessions) {
-    const open = session.id === p.openId;
+  for (const session of shown) {
+    const open = session.id === openId;
     const was = same ? prev.get(session.id) : undefined;
     const dot = p.indicators.get(session.id) ?? "done";
     const unread = p.unread.has(session.id);
@@ -67,6 +70,9 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
     });
     const suffix = suffixes.get(session.id);
     const label = dot === "running" ? "Working" : timeAgo(session.lastMessageAt ?? session.updatedAt, now);
+    const subs = childrenOf(p.sessions, session.id);
+    const subDots = subs.map((s) => p.indicators.get(s.id));
+    const subState = subDots.includes("attention") ? " need" : subDots.includes("running") ? " live" : "";
     row.append(
       el(
         "span",
@@ -77,13 +83,23 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
           { class: "meta" },
           el("span", { class: `dot ${dot}${was !== undefined && was.dot !== dot ? " pop" : ""}` }),
           el("span", { class: "meta-text", text: suffix === undefined ? label : `${label} · #${suffix}` }),
+          ...(subs.length === 0
+            ? []
+            : [
+                el(
+                  "span",
+                  { class: `subs${subState}` },
+                  icon("branch"),
+                  el("span", { text: subCount(subs.length) }),
+                ),
+              ]),
         ),
       ),
     );
     row.addEventListener("click", () => p.onSession(session.id));
     list.append(el("div", { class: "session-item" }, row, sessionMenuButton(session.id, p)));
   }
-  if (p.sessions.length === 0) list.append(el("div", { class: "hint", text: "No sessions yet." }));
+  if (shown.length === 0) list.append(el("div", { class: "hint", text: "No sessions yet." }));
 
   const add = iconButton("compose", "New session", "new-session");
   add.disabled = p.projectId === null;
