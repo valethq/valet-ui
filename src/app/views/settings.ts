@@ -12,51 +12,56 @@ export interface SettingsDeps {
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
-  const form = schemaForm(entry.schema, entry.values);
-  const status = el("span", { class: "form-status" });
-  const save = el("button", { class: "primary", text: "Save" });
-  const section = el(
-    "section",
-    { class: "settings-section" },
-    el(
-      "h3",
-      {},
-      entry.title,
-      entry.pluginName === undefined
-        ? el("span", { class: "plugin-id", text: entry.plugin })
-        : el("span", { class: "plugin-name", text: entry.pluginName, title: entry.plugin }),
-    ),
-    ...(entry.description === undefined ? [] : [el("p", { class: "section-desc", text: entry.description })]),
-    form.node,
-    el("div", { class: "form-actions" }, status, save),
-  );
-  save.addEventListener("click", () => {
-    status.className = "form-status";
-    status.textContent = "";
-    let values: Record<string, unknown>;
-    try {
-      values = form.read();
-    } catch (e) {
-      status.className = "form-status error";
-      status.textContent = errorText(e);
-      return;
-    }
-    save.disabled = true;
-    deps
-      .save(entry.key, values)
-      .then((next) => {
-        // The save response has no plugin name; keep the one the panel was listed with.
-        const fresh = panelSection({ ...next, pluginName: entry.pluginName }, deps);
-        section.replaceWith(fresh);
-        const s = fresh.querySelector(".form-status");
-        if (s !== null) s.textContent = "Saved";
-      })
-      .catch((e: unknown) => {
-        save.disabled = false;
+  // The section node is the tabpanel tabbed() wires up; keep it stable and
+  // re-render only its children, or the tab's hidden/id wiring is lost.
+  const section = el("section", { class: "settings-section" });
+  const render = (panel: SettingsEntry): void => {
+    const form = schemaForm(panel.schema, panel.values);
+    const status = el("span", { class: "form-status" });
+    const save = el("button", { class: "primary", text: "Save" });
+    section.replaceChildren(
+      el(
+        "h3",
+        {},
+        panel.title,
+        panel.pluginName === undefined
+          ? el("span", { class: "plugin-id", text: panel.plugin })
+          : el("span", { class: "plugin-name", text: panel.pluginName, title: panel.plugin }),
+      ),
+      ...(panel.description === undefined
+        ? []
+        : [el("p", { class: "section-desc", text: panel.description })]),
+      form.node,
+      el("div", { class: "form-actions" }, status, save),
+    );
+    save.addEventListener("click", () => {
+      status.className = "form-status";
+      status.textContent = "";
+      let values: Record<string, unknown>;
+      try {
+        values = form.read();
+      } catch (e) {
         status.className = "form-status error";
         status.textContent = errorText(e);
-      });
-  });
+        return;
+      }
+      save.disabled = true;
+      deps
+        .save(panel.key, values)
+        .then((next) => {
+          // The save response has no plugin name; keep the one the panel was listed with.
+          render({ ...next, pluginName: panel.pluginName });
+          const s = section.querySelector(".form-status");
+          if (s !== null) s.textContent = "Saved";
+        })
+        .catch((e: unknown) => {
+          save.disabled = false;
+          status.className = "form-status error";
+          status.textContent = errorText(e);
+        });
+    });
+  };
+  render(entry);
   return section;
 }
 
