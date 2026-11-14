@@ -279,7 +279,12 @@ function scheduleRender(): void {
         onCollapse: toggleNav,
         onSettings: () => {
           closeNav();
-          openSettings({ load: api.listSettings, save: api.saveSettings });
+          openSettings({
+            load: api.listSettings,
+            save: api.saveSettings,
+            refresh: api.getSettings,
+            action: api.runSettingsAction,
+          });
         },
       });
     }

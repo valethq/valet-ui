@@ -187,6 +187,20 @@ export async function listSettings(): Promise<SettingsEntry[]> {
   });
 }
 
+export const getSettings = (key: string): Promise<SettingsEntry> =>
+  get(`/plugins/valet-ui/settings/${encodeURIComponent(key)}`);
+
+export const runSettingsAction = (
+  key: string,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<SettingsEntry> =>
+  req(
+    "POST",
+    `/plugins/valet-ui/settings/${encodeURIComponent(key)}/actions/${encodeURIComponent(name)}`,
+    args,
+  );
+
 export const saveSettings = (key: string, values: Record<string, unknown>): Promise<SettingsEntry> =>
   req("PUT", `/plugins/valet-ui/settings/${encodeURIComponent(key)}`, values);
 

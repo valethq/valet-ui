@@ -1,12 +1,15 @@
 import { el, leave } from "../dom";
 import { iconButton } from "../icons";
 import type { SettingsEntry } from "../types";
+import { refreshInterval, renderBlocks } from "./blocks";
 import { schemaForm } from "./schema-form";
 import { themeSection } from "./themes";
 
 export interface SettingsDeps {
   load(): Promise<SettingsEntry[]>;
   save(key: string, values: Record<string, unknown>): Promise<SettingsEntry>;
+  refresh(key: string): Promise<SettingsEntry>;
+  action(key: string, name: string, args: Record<string, unknown>): Promise<SettingsEntry>;
 }
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -15,10 +18,44 @@ function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
   // The section node is the tabpanel tabbed() wires up; keep it stable and
   // re-render only its children, or the tab's hidden/id wiring is lost.
   const section = el("section", { class: "settings-section" });
+  const blocks = el("div", { class: "blocks" });
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let latest = entry;
+
+  const showBlocks = (panel: SettingsEntry): void => {
+    latest = panel;
+    const nodes = renderBlocks(panel.blocks ?? [], {
+      run: async (name, args) => {
+        showBlocks(await deps.action(panel.key, name, args));
+      },
+    });
+    if (panel.viewError !== undefined) {
+      nodes.push(el("div", { class: "hint error", text: `Could not load this panel: ${panel.viewError}` }));
+    }
+    blocks.replaceChildren(...nodes);
+    blocks.hidden = nodes.length === 0;
+  };
+
+  // Poll only while the panel is on screen; stop for good once the dialog is gone.
+  const startRefresh = (ms: number): void => {
+    clearInterval(timer);
+    timer = setInterval(() => {
+      if (!section.isConnected) return clearInterval(timer);
+      if (section.hidden || document.hidden) return;
+      deps
+        .refresh(latest.key)
+        .then(showBlocks)
+        .catch(() => {});
+    }, ms);
+  };
+
   const render = (panel: SettingsEntry): void => {
-    const form = schemaForm(panel.schema, panel.values);
+    const form = panel.schema === undefined ? undefined : schemaForm(panel.schema, panel.values ?? {});
     const status = el("span", { class: "form-status" });
     const save = el("button", { class: "primary", text: "Save" });
+    showBlocks(panel);
+    const ms = refreshInterval(panel.refreshMs);
+    if (ms !== undefined) startRefresh(ms);
     section.replaceChildren(
       el(
         "h3",
@@ -31,10 +68,11 @@ function panelSection(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
       ...(panel.description === undefined
         ? []
         : [el("p", { class: "section-desc", text: panel.description })]),
-      form.node,
-      el("div", { class: "form-actions" }, status, save),
+      blocks,
+      ...(form === undefined ? [] : [form.node, el("div", { class: "form-actions" }, status, save)]),
     );
     save.addEventListener("click", () => {
+      if (form === undefined) return;
       status.className = "form-status";
       status.textContent = "";
       let values: Record<string, unknown>;

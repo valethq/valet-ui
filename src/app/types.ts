@@ -129,8 +129,12 @@ export interface SettingsEntry {
   pluginName?: string;
   title: string;
   description?: string;
-  schema: Record<string, unknown>;
-  values: Record<string, unknown>;
+  schema?: Record<string, unknown>;
+  values?: Record<string, unknown>;
+  /** Raw view blocks; views/blocks.ts validates them. */
+  blocks?: unknown[];
+  viewError?: string;
+  refreshMs?: number;
 }
 
 // ---- WS frames (10.3) ----
