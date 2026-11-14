@@ -1,4 +1,5 @@
 import { el } from "../dom";
+import { icon } from "../icons";
 import {
   allThemes,
   applyTheme,
@@ -19,31 +20,35 @@ import {
   saveCustom,
 } from "../themes";
 
-const MAIN: (keyof ThemeColors)[] = ["bg", "text", "accent"];
-const DETAIL: (keyof ThemeColors)[] = [
-  "panel",
-  "surface",
-  "raised",
-  "border",
-  "strong",
-  "muted",
-  "faint",
-  "on-accent",
-  "user",
-  "code",
-  "danger",
-  "warn",
-  "ok",
+type Key = keyof ThemeColors;
+
+const BASE: Key[] = ["bg", "text", "accent"];
+const GROUPS: [string, Key[]][] = [
+  ["Surfaces", ["panel", "surface", "raised", "code", "user"]],
+  ["Text", ["muted", "faint", "on-accent"]],
+  ["Lines", ["border", "strong"]],
+  ["Status", ["ok", "warn", "danger"]],
 ];
-const LABELS: Partial<Record<keyof ThemeColors, string>> = {
-  bg: "Background",
-  text: "Text",
-  accent: "Accent",
-  "on-accent": "Text on accent",
-  user: "Your messages",
-  strong: "Strong border",
+
+const INFO: Record<Exclude<Key, "shadow">, [string, string]> = {
+  bg: ["Background", "The page behind everything"],
+  text: ["Text", "Messages and headings"],
+  accent: ["Accent", "Send button, switches, selection"],
+  panel: ["Panel", "Sidebar and side panes"],
+  surface: ["Surface", "Composer, dialogs and menus"],
+  raised: ["Raised", "Inputs and the selected row"],
+  code: ["Code", "Code blocks and tool output"],
+  user: ["Your messages", "Bubbles for what you send"],
+  muted: ["Muted", "Secondary text"],
+  faint: ["Faint", "Placeholders and timestamps"],
+  "on-accent": ["On accent", "Icons and text on the accent"],
+  border: ["Border", "Dividers and outlines"],
+  strong: ["Strong border", "Focused fields, scrollbars"],
+  ok: ["Success", "Finished runs"],
+  warn: ["Warning", "Things that need a look"],
+  danger: ["Danger", "Errors and delete buttons"],
 };
-const label = (k: string): string => LABELS[k as keyof ThemeColors] ?? k.charAt(0).toUpperCase() + k.slice(1);
+const name = (k: Key): string => (k === "shadow" ? "Shadow" : INFO[k][0]);
 
 /** `<input type=color>` only takes #rrggbb. */
 function pickerValue(c: string): string {
@@ -52,46 +57,71 @@ function pickerValue(c: string): string {
   return "#000000";
 }
 
-function colorRow(t: Theme, key: keyof ThemeColors, save: () => void): HTMLElement {
-  const picker = el("input", { type: "color", class: "color-pick", "aria-label": label(key) });
-  const text = el("input", {
-    type: "text",
-    class: "input mono color-text",
-    "aria-label": `${label(key)} value`,
-    spellcheck: "false",
-  });
-  const set = (v: string): void => {
-    t.colors[key] = v;
-    save();
-  };
-  const sync = (): void => {
-    picker.value = pickerValue(t.colors[key]);
-    text.value = t.colors[key];
-    text.removeAttribute("aria-invalid");
-  };
-  picker.addEventListener("input", () => {
-    set(picker.value);
-    text.value = picker.value;
-    text.removeAttribute("aria-invalid");
-  });
-  text.addEventListener("input", () => {
-    const v = text.value.trim();
-    if (COLOR_RE.test(v)) {
-      set(v);
-      picker.value = pickerValue(v);
-      text.removeAttribute("aria-invalid");
-    } else text.setAttribute("aria-invalid", "true");
-  });
-  sync();
-  const row = el(
-    "label",
-    { class: "color-row" },
-    el("span", { class: "color-name", text: label(key) }),
-    picker,
-    text,
+/** Scopes a theme's variables to one element, so previews of other themes
+ * render inside whatever theme is applied. */
+function paintVars(node: HTMLElement, t: Theme): void {
+  for (const [k, v] of Object.entries(t.colors)) node.style.setProperty(`--${k}`, v);
+  const f = t.fonts ?? DEFAULT_FONTS;
+  node.style.setProperty("--font", `${f.sans}, sans-serif`);
+  node.style.setProperty("--mono", `${f.mono}, monospace`);
+  node.style.setProperty("--font-head", f.heading === undefined ? "var(--font)" : `${f.heading}, sans-serif`);
+}
+
+function tileArt(t: Theme): HTMLElement {
+  const art = el(
+    "span",
+    { class: "tile-art", "aria-hidden": "true" },
+    el("span", { class: "ta-side" }, el("span", { class: "ta-row" }), el("span", { class: "ta-row dim" })),
+    el("span", { class: "ta-bubble" }),
+    el("span", { class: "ta-line" }),
+    el("span", { class: "ta-line dim" }),
+    el("span", { class: "ta-composer" }, el("span", { class: "ta-send" })),
   );
-  row.addEventListener("resync", sync);
-  return row;
+  paintVars(art, t);
+  return art;
+}
+
+const spot = (tag: "span" | "div" | "p", key: Key, cls: string, ...kids: (Node | string)[]): HTMLElement =>
+  el(tag, { class: cls, "data-key": key }, ...kids);
+
+/** A small mock of the app. Every part is tagged with the colour it uses. */
+function preview(): HTMLElement {
+  const send = spot("span", "accent", "tp-send", spot("span", "on-accent", "tp-arrow", icon("send")));
+  return el(
+    "div",
+    { class: "theme-preview" },
+    spot(
+      "div",
+      "panel",
+      "tp-side",
+      spot("span", "text", "tp-brand", "valet"),
+      spot("span", "raised", "tp-row on", spot("span", "text", "", "Build fixes")),
+      spot("span", "muted", "tp-row", "Trip ideas"),
+      spot("span", "faint", "tp-row", "Last week"),
+    ),
+    spot(
+      "div",
+      "bg",
+      "tp-main",
+      spot("div", "user", "tp-user", spot("span", "text", "", "Did the build pass?")),
+      spot("p", "text", "tp-reply", "All green in 4.2s."),
+      spot("p", "muted", "tp-sub", "Two warnings, nothing urgent."),
+      spot(
+        "div",
+        "code",
+        "tp-code",
+        spot("span", "text", "", "$ bun test"),
+        el(
+          "span",
+          { class: "tp-status" },
+          spot("span", "ok", "", "14 pass"),
+          spot("span", "warn", "", "2 warn"),
+          spot("span", "danger", "", "0 fail"),
+        ),
+      ),
+      spot("div", "surface", "tp-composer", spot("span", "faint", "tp-ph", "Reply..."), send),
+    ),
+  );
 }
 
 function fontField(
@@ -138,52 +168,236 @@ function fontField(
     "div",
     { class: "field" },
     el("span", { class: "field-label", text: title }),
-    el("div", { class: "chip field-select" }, select),
+    el("div", { class: "chip field-select" }, select, el("span", { class: "chevron" }, icon("chevron"))),
     input,
   );
 }
 
-function editor(t: Theme, onRename: () => void, onDelete: () => void): HTMLElement {
-  const persist = (): void => saveCustom(customThemes());
-  const name = el("input", { type: "text", class: "input", "aria-label": "Theme name", maxlength: "40" });
-  name.value = t.name;
-  name.addEventListener("input", () => {
-    t.name = name.value.trim() || "Untitled";
+interface PaneHooks {
+  /** The theme changed in a way the library tile should show. */
+  changed(): void;
+  customize(): void;
+  remove(): void;
+}
+
+/** The right-hand side: a clickable preview, the colour swatches and fonts.
+ * Built-in themes are shown read-only. */
+function pane(t: Theme, hooks: PaneHooks): HTMLElement {
+  const editable = t.custom === true;
+  let frame = 0;
+  const persist = (): void => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      saveCustom(customThemes());
+      hooks.changed();
+    });
+  };
+
+  const view = preview();
+  view.classList.toggle("editable", editable);
+  const swatches = new Map<Key, HTMLElement>();
+  let picked: Key = "accent";
+
+  const chip = el("span", { class: "ci-chip" });
+  const picker = el("input", {
+    type: "color",
+    class: "ci-picker",
+    "aria-label": "Pick colour",
+    tabindex: "-1",
+  });
+  const ciName = el("span", { class: "ci-name" });
+  const ciDesc = el("span", { class: "ci-desc" });
+  const hex = el("input", {
+    type: "text",
+    class: "input mono ci-hex",
+    "aria-label": "Colour value",
+    spellcheck: "false",
+  });
+  hex.readOnly = !editable;
+  picker.disabled = !editable;
+  const inspector = el(
+    "div",
+    { class: "color-inspector" },
+    el("label", { class: "ci-swatch" }, chip, picker),
+    el("div", { class: "ci-text" }, ciName, ciDesc),
+    hex,
+  );
+
+  const refresh = (): void => {
+    paintVars(view, t);
+    for (const [k, s] of swatches) s.style.setProperty("--c", t.colors[k]);
+    const v = t.colors[picked];
+    chip.style.background = v;
+    picker.value = pickerValue(v);
+    if (document.activeElement !== hex) hex.value = v;
+  };
+
+  const pick = (k: Key, open: boolean): void => {
+    picked = k;
+    ciName.textContent = name(k);
+    ciDesc.textContent = k === "shadow" ? "" : INFO[k][1];
+    hex.removeAttribute("aria-invalid");
+    for (const [sk, s] of swatches) s.setAttribute("aria-pressed", String(sk === k));
+    for (const n of view.querySelectorAll<HTMLElement>("[data-key]"))
+      n.classList.toggle("picked", n.dataset.key === k);
+    refresh();
+    if (open && editable) {
+      try {
+        picker.showPicker();
+      } catch {
+        picker.click();
+      }
+    }
+  };
+
+  const set = (v: string): void => {
+    t.colors[picked] = v;
+    refresh();
     persist();
-    onRename();
+  };
+  picker.addEventListener("input", () => {
+    hex.removeAttribute("aria-invalid");
+    set(picker.value);
+  });
+  hex.addEventListener("input", () => {
+    const v = hex.value.trim();
+    if (!COLOR_RE.test(v)) {
+      hex.setAttribute("aria-invalid", "true");
+      return;
+    }
+    hex.removeAttribute("aria-invalid");
+    set(v);
+  });
+  hex.addEventListener("blur", refresh);
+
+  view.addEventListener("click", (ev) => {
+    const n = (ev.target as Element).closest<HTMLElement>("[data-key]");
+    if (n?.dataset.key !== undefined) pick(n.dataset.key as Key, true);
   });
 
-  const scheme = el(
-    "select",
-    { "aria-label": "Light or dark" },
-    el("option", { text: "Dark" }),
-    el("option", { text: "Light" }),
-  );
-  scheme.selectedIndex = t.scheme === "dark" ? 0 : 1;
-  scheme.addEventListener("change", () => {
-    t.scheme = scheme.selectedIndex === 0 ? "dark" : "light";
-    t.colors.shadow = deriveColors(t.colors, t.scheme).shadow;
-    persist();
-  });
+  const swatch = (k: Key, big = false): HTMLElement => {
+    const b = el(
+      "button",
+      { class: big ? "swatch-tile big" : "swatch-tile", type: "button", title: name(k) },
+      el("span", { class: "swatch-chip" }),
+      el("span", { class: "swatch-name", text: name(k) }),
+    );
+    b.addEventListener("click", () => pick(k, true));
+    swatches.set(k, b);
+    return b;
+  };
+
+  const group = (title: string, keys: Key[], big = false, ...extra: HTMLElement[]): HTMLElement =>
+    el(
+      "div",
+      { class: "swatch-group" },
+      el("span", { class: "group-label", text: title }),
+      el(
+        "div",
+        { class: big ? "swatch-row big" : "swatch-row" },
+        ...keys.map((k) => swatch(k, big)),
+        ...extra,
+      ),
+    );
+
+  const extras: HTMLElement[] = [];
+  if (editable) {
+    const derive = el("button", {
+      class: "chip",
+      type: "button",
+      title: "Work out every other colour from these three",
+    });
+    derive.append(icon("sparkles"), "Fill in the rest");
+    derive.addEventListener("click", () => {
+      const d = deriveColors(t.colors, t.scheme);
+      for (const [, keys] of GROUPS) for (const k of keys) t.colors[k] = d[k];
+      t.colors.shadow = d.shadow;
+      refresh();
+      persist();
+    });
+    extras.push(el("div", { class: "derive" }, derive));
+  }
+
+  const head = el("div", { class: "pane-head" });
+  if (editable) {
+    const title = el("input", {
+      type: "text",
+      class: "pane-name",
+      "aria-label": "Theme name",
+      maxlength: "40",
+    });
+    title.value = t.name;
+    title.addEventListener("input", () => {
+      t.name = title.value.trim() || "Untitled";
+      persist();
+    });
+    const seg = el("div", { class: "segmented", role: "radiogroup", "aria-label": "Light or dark" });
+    const opts = (["dark", "light"] as const).map((s) => {
+      const b = el("button", { type: "button", role: "radio", text: s === "dark" ? "Dark" : "Light" });
+      b.addEventListener("click", () => {
+        t.scheme = s;
+        t.colors.shadow = deriveColors(t.colors, s).shadow;
+        for (const [o, os] of opts) o.setAttribute("aria-checked", String(os === t.scheme));
+        persist();
+      });
+      return [b, s] as const;
+    });
+    for (const [o, os] of opts) {
+      o.setAttribute("aria-checked", String(os === t.scheme));
+      seg.append(o);
+    }
+    head.append(title, seg);
+  } else {
+    const customize = el("button", { class: "primary", type: "button" });
+    customize.append(icon("pencil"), "Customize");
+    customize.addEventListener("click", hooks.customize);
+    head.append(
+      el(
+        "div",
+        { class: "pane-title" },
+        el("h3", { text: t.name }),
+        el("span", { class: "pane-sub", text: `Built in · ${t.scheme === "dark" ? "Dark" : "Light"}` }),
+      ),
+      customize,
+    );
+  }
 
   const fonts = (): NonNullable<Theme["fonts"]> => {
     t.fonts ??= { ...DEFAULT_FONTS };
     return t.fonts;
   };
   const current = t.fonts ?? DEFAULT_FONTS;
-
-  const rows = [...MAIN, ...DETAIL].map((k) => colorRow(t, k, persist));
-  const autofill = el("button", { class: "chip", type: "button", text: "Fill in the rest from these three" });
-  autofill.addEventListener("click", () => {
-    const d = deriveColors(t.colors, t.scheme);
-    for (const k of DETAIL) t.colors[k] = d[k];
-    t.colors.shadow = d.shadow;
-    persist();
-    for (const r of rows) r.dispatchEvent(new Event("resync"));
-  });
+  const fontGroup = editable
+    ? [
+        el(
+          "div",
+          { class: "swatch-group" },
+          el("span", { class: "group-label", text: "Fonts" }),
+          el(
+            "div",
+            { class: "font-fields" },
+            fontField("Interface", SANS_FONTS, current.sans, DEFAULT_FONTS.sans, (s) => {
+              fonts().sans = s;
+              paintVars(view, t);
+              persist();
+            }),
+            fontField("Code", MONO_FONTS, current.mono, DEFAULT_FONTS.mono, (s) => {
+              fonts().mono = s;
+              paintVars(view, t);
+              persist();
+            }),
+          ),
+          el("p", {
+            class: "field-desc",
+            text: "Fonts must be installed on this device, except Public Sans which is built in.",
+          }),
+        ),
+      ]
+    : [];
 
   const status = el("span", { class: "form-status" });
-  const exportBtn = el("button", { class: "chip", type: "button", text: "Copy as JSON" });
+  const exportBtn = el("button", { class: "chip", type: "button" });
+  exportBtn.append(icon("copy"), "Copy as JSON");
   exportBtn.addEventListener("click", () => {
     navigator.clipboard.writeText(exportTheme(t)).then(
       () => {
@@ -194,55 +408,44 @@ function editor(t: Theme, onRename: () => void, onDelete: () => void): HTMLEleme
       },
     );
   });
-  const del = el("button", { class: "chip danger", type: "button", text: "Delete theme" });
-  del.addEventListener("click", () => {
-    if (confirm(`Delete "${t.name}"?`)) onDelete();
-  });
+  const actions = el("div", { class: "form-actions" }, status, exportBtn);
+  if (editable) {
+    const del = el("button", { class: "chip danger", type: "button" });
+    del.append(icon("trash"), "Delete");
+    del.addEventListener("click", () => {
+      if (confirm(`Delete "${t.name}"?`)) hooks.remove();
+    });
+    actions.append(del);
+  }
 
-  return el(
+  const node = el(
     "div",
-    { class: "theme-editor" },
-    el("div", { class: "field" }, el("span", { class: "field-label", text: "Name" }), name),
+    { class: "theme-pane" },
+    head,
+    el("div", { class: "pane-stick" }, view, inspector),
     el(
-      "div",
-      { class: "field" },
-      el("span", { class: "field-label", text: "Base" }),
-      el("div", { class: "chip field-select" }, scheme),
+      "p",
+      { class: "field-desc pane-hint" },
+      editable
+        ? "Click any part of the preview or a swatch to change its colour."
+        : "Built-in themes can't be changed. Customize makes an editable copy.",
     ),
-    el(
-      "div",
-      { class: "font-fields" },
-      fontField("Interface font", SANS_FONTS, current.sans, DEFAULT_FONTS.sans, (s) => {
-        fonts().sans = s;
-        persist();
-      }),
-      fontField("Code font", MONO_FONTS, current.mono, DEFAULT_FONTS.mono, (s) => {
-        fonts().mono = s;
-        persist();
-      }),
-    ),
-    el("p", {
-      class: "section-desc",
-      text: "Fonts must be installed on this device, except Public Sans which is built in.",
-    }),
-    el("div", { class: "color-grid" }, ...rows.slice(0, MAIN.length)),
-    el("div", { class: "form-actions start" }, autofill),
-    el(
-      "details",
-      { class: "color-more" },
-      el("summary", { text: "All colors" }),
-      el("div", { class: "color-grid" }, ...rows.slice(MAIN.length)),
-    ),
-    el("div", { class: "form-actions" }, status, exportBtn, del),
+    group("Base", BASE, true, ...extras),
+    ...GROUPS.map(([title, keys]) => group(title, keys)),
+    ...fontGroup,
+    actions,
   );
+  pick(picked, false);
+  return node;
 }
 
 export function themeSection(): HTMLElement {
-  const grid = el("div", { class: "theme-grid", role: "radiogroup", "aria-label": "Theme" });
-  const editorSlot = el("div");
+  const lists = el("div", { class: "theme-lists" });
+  const paneSlot = el("div", { class: "theme-pane-slot" });
   const importBox = el("div", { class: "theme-import" });
   importBox.hidden = true;
   const importStatus = el("span", { class: "form-status" });
+  const tiles = new Map<string, HTMLButtonElement>();
 
   const choose = (id: string): void => {
     const swap = (): void => {
@@ -253,65 +456,88 @@ export function themeSection(): HTMLElement {
     else swap();
   };
 
-  const renderGrid = (): void => {
-    grid.replaceChildren(
-      ...allThemes().map((t) => {
-        const swatch = el("span", { class: "swatch" });
-        swatch.style.background = `linear-gradient(135deg, ${t.colors.bg} 50%, ${t.colors.accent} 50%)`;
-        const b = el(
-          "button",
-          { class: "theme-option", role: "radio", "data-theme": t.id, type: "button" },
-          swatch,
-          t.name,
-        );
-        b.addEventListener("click", () => choose(t.id));
-        return b;
-      }),
+  const tile = (t: Theme): HTMLButtonElement => {
+    const b = el(
+      "button",
+      { class: "theme-tile", role: "radio", "data-theme": t.id, type: "button", title: t.name },
+      tileArt(t),
+      el("span", { class: "tile-name", text: t.name }),
+    );
+    b.addEventListener("click", () => choose(t.id));
+    tiles.set(t.id, b);
+    return b;
+  };
+
+  const grid = (title: string, list: Theme[]): HTMLElement =>
+    el(
+      "div",
+      { class: "theme-group" },
+      el("span", { class: "group-label", text: title }),
+      el("div", { class: "theme-grid", role: "radiogroup", "aria-label": title }, ...list.map(tile)),
+    );
+
+  const renderLists = (): void => {
+    tiles.clear();
+    const mine = customThemes();
+    lists.replaceChildren(
+      ...(mine.length > 0 ? [grid("Yours", mine)] : []),
+      grid(
+        "Built in",
+        allThemes().filter((t) => t.custom !== true),
+      ),
     );
   };
 
   function paint(): void {
     const id = currentTheme();
-    for (const b of grid.children)
-      b.setAttribute("aria-checked", String((b as HTMLElement).dataset.theme === id));
-    const t = customThemes().find((c) => c.id === id);
-    editorSlot.replaceChildren(
-      ...(t === undefined
-        ? []
-        : [
-            editor(
-              t,
-              () => {
-                const b = grid.querySelector(`[data-theme="${t.id}"]`);
-                if (b?.lastChild) b.lastChild.textContent = t.name;
-              },
-              () => {
-                saveCustom(customThemes().filter((c) => c.id !== t.id));
-                applyTheme(allThemes()[0]?.id ?? "mono");
-                renderGrid();
-                paint();
-              },
-            ),
-          ]),
+    for (const [tid, b] of tiles) b.setAttribute("aria-checked", String(tid === id));
+    const on = tiles.get(id);
+    const row = on?.parentElement;
+    if (on !== undefined && row != null && row.scrollWidth > row.clientWidth)
+      row.scrollLeft = on.offsetLeft - row.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
+    const t = allThemes().find((x) => x.id === id);
+    if (t === undefined) {
+      paneSlot.replaceChildren();
+      return;
+    }
+    paneSlot.replaceChildren(
+      pane(t, {
+        changed: () => {
+          const old = tiles.get(t.id);
+          if (old !== undefined) {
+            old.title = t.name;
+            old.replaceChildren(tileArt(t), el("span", { class: "tile-name", text: t.name }));
+          }
+        },
+        customize: () => add(copyTheme(t, `My ${t.name}`)),
+        remove: () => {
+          saveCustom(customThemes().filter((c) => c.id !== t.id));
+          renderLists();
+          choose(allThemes()[0]?.id ?? "mono");
+        },
+      }),
     );
   }
 
   const add = (t: Theme): void => {
     saveCustom([...customThemes(), t]);
-    renderGrid();
+    renderLists();
     choose(t.id);
   };
 
-  const copy = el("button", { class: "chip", type: "button", text: "New theme from this one" });
-  copy.addEventListener("click", () => {
+  const newBtn = el("button", { class: "chip", type: "button", title: "New theme based on the current one" });
+  newBtn.append(icon("plus"), "New");
+  newBtn.addEventListener("click", () => {
     const base = allThemes().find((t) => t.id === currentTheme());
     if (base !== undefined) add(copyTheme(base, base.custom ? `${base.name} copy` : `My ${base.name}`));
   });
 
-  const toggleImport = el("button", { class: "chip", type: "button", text: "Import" });
+  const toggleImport = el("button", { class: "chip", type: "button", "aria-expanded": "false" });
+  toggleImport.append(icon("import"), "Import");
   toggleImport.addEventListener("click", () => {
     importBox.hidden = !importBox.hidden;
-    if (!importBox.hidden) importBox.querySelector("textarea")?.focus();
+    toggleImport.setAttribute("aria-expanded", String(!importBox.hidden));
+    if (!importBox.hidden) paste.focus();
   });
   const paste = el("textarea", {
     class: "input mono",
@@ -331,18 +557,28 @@ export function themeSection(): HTMLElement {
     paste.value = "";
     importStatus.textContent = "";
     importBox.hidden = true;
+    toggleImport.setAttribute("aria-expanded", "false");
     add(t);
   });
   importBox.append(paste, el("div", { class: "form-actions" }, importStatus, addImported));
 
-  renderGrid();
+  renderLists();
   paint();
   return el(
     "section",
-    { class: "settings-section" },
-    grid,
-    el("div", { class: "form-actions start" }, copy, toggleImport),
-    importBox,
-    editorSlot,
+    { class: "settings-section theme-studio" },
+    el(
+      "div",
+      { class: "theme-library" },
+      el(
+        "div",
+        { class: "library-head" },
+        el("h3", { text: "Themes" }),
+        el("div", { class: "library-actions" }, newBtn, toggleImport),
+      ),
+      importBox,
+      lists,
+    ),
+    paneSlot,
   );
 }

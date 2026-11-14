@@ -52,6 +52,15 @@ describe("page css", () => {
     expect(html).toContain("html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }");
   });
 
+  test("the theme studio splits in two on desktop and still respects hidden", () => {
+    expect(html).toContain(".theme-studio[hidden] { display: none; }");
+    expect(html).toContain(".theme-import[hidden] { display: none; }");
+    expect(html).toContain(".theme-studio { display: grid; grid-template-columns: 304px minmax(0, 1fr);");
+    const mobile = html.slice(html.indexOf("@media (max-width: 900px)"));
+    expect(mobile).toContain(".theme-studio { display: block; }");
+    expect(mobile).toContain("grid-auto-flow: column;");
+  });
+
   test("the stored theme applies from the head before the app loads", () => {
     const head = html.slice(0, html.indexOf("</head>"));
     expect(head).toContain('localStorage.getItem("valet-ui.theme")');
