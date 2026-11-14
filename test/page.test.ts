@@ -40,6 +40,14 @@ describe("page css", () => {
     expect(html).toContain(".main[data-landing] .messages { flex: none;");
   });
 
+  test("mobile keeps margins and the same max content width as desktop", () => {
+    const mobile = html.slice(html.indexOf("@media (max-width: 900px)"));
+    expect(mobile).toContain(".composer-wrap { padding: 2px max(16px, calc((100% - 812px) / 2))");
+    expect(mobile).toContain(
+      ".messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) max(16px, calc((100% - 780px) / 2))",
+    );
+  });
+
   test("mobile browsers do not inflate long text blocks such as tool output", () => {
     expect(html).toContain("html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }");
   });

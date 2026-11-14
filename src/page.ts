@@ -866,11 +866,11 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   }
   .app.nav-open .nav-backdrop { display: block; animation: fade-in .2s ease-out; }
   .app .nav-toggle, .app.collapsed .nav-toggle { width: 40px; margin: 0 0 0 -8px; opacity: 1; transform: none; visibility: visible; transition: none; }
-  .chat-header { gap: 8px; justify-content: space-between; padding: max(8px, env(safe-area-inset-top)) 14px 24px; }
+  .chat-header { gap: 8px; justify-content: space-between; padding: max(8px, env(safe-area-inset-top)) max(16px, calc((100% - 780px) / 2)) 24px; }
   .chat-header .session-title { display: block; white-space: nowrap; text-overflow: ellipsis; }
-  .messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) 14px 16px; }
+  .messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) max(16px, calc((100% - 780px) / 2)) 16px; }
   .msg.user { max-width: 90%; }
-  .composer-wrap { padding: 2px 10px max(10px, env(safe-area-inset-bottom)); }
+  .composer-wrap { padding: 2px max(16px, calc((100% - 812px) / 2)) max(14px, env(safe-area-inset-bottom)); }
   .composer textarea { padding: 13px 16px 2px; }
   .model-pop { max-width: 46vw; }
   .context-bar { width: 38px; height: 38px; }
