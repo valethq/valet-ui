@@ -491,10 +491,6 @@ export function themeSection(): HTMLElement {
   function paint(): void {
     const id = currentTheme();
     for (const [tid, b] of tiles) b.setAttribute("aria-checked", String(tid === id));
-    const on = tiles.get(id);
-    const row = on?.parentElement;
-    if (on !== undefined && row != null && row.scrollWidth > row.clientWidth)
-      row.scrollLeft = on.offsetLeft - row.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
     const t = allThemes().find((x) => x.id === id);
     if (t === undefined) {
       paneSlot.replaceChildren();
@@ -564,6 +560,14 @@ export function themeSection(): HTMLElement {
 
   renderLists();
   paint();
+  // Bring the current theme into view once, when the tab opens. Clicking a
+  // tile never scrolls the list.
+  requestAnimationFrame(() => {
+    const on = tiles.get(currentTheme());
+    const row = on?.parentElement;
+    if (on !== undefined && row != null && row.scrollWidth > row.clientWidth)
+      row.scrollLeft = on.offsetLeft - row.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
+  });
   return el(
     "section",
     { class: "settings-section theme-studio" },

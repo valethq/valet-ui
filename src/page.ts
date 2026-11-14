@@ -740,9 +740,9 @@ button.primary { display: inline-flex; align-items: center; gap: 7px; }
   border-radius: var(--r-md);
   background: var(--bg);
   box-shadow: 0 0 0 1px var(--border);
-  transition: box-shadow .18s ease, transform .18s var(--sb-ease);
+  transition: box-shadow .18s ease;
 }
-.theme-tile:hover .tile-art { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--strong), 0 8px 18px -10px var(--shadow); }
+.theme-tile:hover .tile-art { box-shadow: 0 0 0 1px var(--strong), 0 8px 18px -10px var(--shadow); }
 .theme-tile[aria-checked=true] .tile-art { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
 .tile-art > span { position: absolute; border-radius: 999px; }
 .tile-art .ta-side { inset: 0 auto 0 0; width: 28%; border-radius: 0; background: var(--panel); box-shadow: 1px 0 0 var(--border); display: flex; flex-direction: column; gap: 9%; padding: 30% 14% 0; }
