@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { SessionView } from "../src/app/state";
 import type { ChatMessage, Message, Part, PartData, Session } from "../src/app/types";
 import {
+  copyText,
   createChat,
   fileNode,
   quietStatus,
@@ -23,6 +24,53 @@ const toolPart = (data: Partial<ToolData> = {}, over: Partial<Part> = {}): Part 
   createdAt: 1_000,
   updatedAt: 13_000,
   ...over,
+});
+
+describe("copyText", () => {
+  const textPart = (text: string): Part =>
+    toolPart({}, { type: "text", data: { type: "text", text } as PartData });
+  const msg = (role: "user" | "assistant", parts: Part[]): ChatMessage => ({
+    message: { ...baseMessage, role },
+    parts,
+  });
+  const baseMessage = {
+    id: "m",
+    sessionId: "s",
+    seq: 1,
+    authorPrincipalId: null,
+    runId: null,
+    status: "complete",
+    origin: null,
+    meta: {},
+    createdAt: 1,
+    updatedAt: 1,
+  } as Message;
+
+  test("a model message copies only the text after its last tool call", () => {
+    const cm = msg("assistant", [
+      textPart("Let me check."),
+      toolPart(),
+      textPart("Done."),
+      textPart("All good."),
+    ]);
+    expect(copyText(cm)).toBe("Done.\n\nAll good.");
+  });
+
+  test("reasoning before the answer is left out", () => {
+    const reasoning = toolPart(
+      {},
+      { type: "reasoning", data: { type: "reasoning", text: "hm" } as PartData },
+    );
+    expect(copyText(msg("assistant", [reasoning, textPart("Answer")]))).toBe("Answer");
+  });
+
+  test("a message with no trailing text has nothing to copy", () => {
+    expect(copyText(msg("assistant", [textPart("Looking."), toolPart()]))).toBe("");
+  });
+
+  test("a user message copies all its text", () => {
+    expect(copyText(msg("user", [textPart("one"), textPart("two")]))).toBe("one\n\ntwo");
+  });
 });
 
 describe("toolStatus", () => {

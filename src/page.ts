@@ -452,6 +452,14 @@ button.chip:active:not(:disabled) { transform: none; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); margin: 5px 4px 0; }
 .msg .meta .logo { width: 13px; height: 13px; filter: grayscale(1); opacity: .7; }
 .msg.user .meta { justify-content: flex-end; }
+.msg .meta .copy-btn { width: 26px; height: 26px; color: var(--faint); margin: -4px 0 -4px -6px; }
+.msg.user .meta .copy-btn { margin-left: 0; margin-right: -6px; }
+.msg .meta .copy-btn .icon { width: 14px; height: 14px; }
+.msg .meta .copy-btn:hover { color: var(--text); }
+@media (hover: hover) {
+  .msg .meta .copy-btn { opacity: 0; transition: opacity .15s, background .15s, color .15s; }
+  .msg:hover .meta .copy-btn, .msg .meta .copy-btn:focus-visible { opacity: 1; }
+}
 
 .part-row {
   width: fit-content;

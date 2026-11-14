@@ -255,6 +255,19 @@ export function fileNode(d: Extract<PartData, { type: "file" }>): HTMLElement {
   return img;
 }
 
+/** What the copy button puts on the clipboard. A user message copies all its
+ * text; a model message copies only its final response, the trailing run of
+ * text after the last tool call or reasoning step. */
+export function copyText(cm: ChatMessage): string {
+  const texts: string[] = [];
+  for (let i = cm.parts.length - 1; i >= 0; i--) {
+    const d = (cm.parts[i] as Part).data;
+    if (d.type === "text") texts.unshift(d.text);
+    else if (cm.message.role === "assistant" && (d.type === "tool-call" || d.type === "reasoning")) break;
+  }
+  return texts.join("\n\n").trim();
+}
+
 function metaModel(cm: ChatMessage): { provider: string; model: string } | undefined {
   const m = cm.message.meta.model;
   if (typeof m !== "object" || m === null) return undefined;
@@ -347,11 +360,17 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
     const meta: string[] = [];
     if (shown !== undefined) meta.push(shown.model);
     if (cm.message.status !== "complete") meta.push(cm.message.status);
-    if (meta.length > 0) {
+    const copyable = cm.message.status === "complete" && copyText(cm) !== "";
+    if (meta.length > 0 || copyable) {
       const line = el("div", { class: "meta" });
+      if (copyable) {
+        const btn = iconButton("copy", "Copy", "copy-btn");
+        btn.dataset.copyId = cm.message.id;
+        line.append(btn);
+      }
       const logo = shown === undefined ? undefined : logoFor(shown.model, shown.provider);
       if (logo !== undefined) line.append(logoMark(logo));
-      line.append(meta.join(" · "));
+      if (meta.length > 0) line.append(meta.join(" · "));
       lastMsg.append(line);
     }
   }
@@ -391,6 +410,17 @@ function draftPick(draft: ModelSel | undefined, providers: ProviderModels[]): Mo
   if (draft !== undefined) return draft;
   const first = groupModels(providers).find((f) => !f.more);
   return first === undefined ? undefined : { provider: first.provider, model: pickVariant(first).id };
+}
+
+function flashCopy(btn: HTMLButtonElement, name: "check" | "close", label: string): void {
+  btn.replaceChildren(icon(name));
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+  setTimeout(() => {
+    btn.replaceChildren(icon("copy"));
+    btn.title = "Copy";
+    btn.setAttribute("aria-label", "Copy");
+  }, 1500);
 }
 
 export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
@@ -548,6 +578,19 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     ],
     "attach-pop",
   );
+  // Delegated: morph() keeps the old button node on re-render, so the text is
+  // looked up from the current view at click time rather than captured.
+  messages.addEventListener("click", (ev) => {
+    const btn = (ev.target as Element | null)?.closest<HTMLButtonElement>(".copy-btn");
+    const id = btn?.dataset.copyId;
+    if (btn === null || btn === undefined || id === undefined) return;
+    const cm = current?.messages.find((m) => m.message.id === id);
+    if (cm === undefined) return;
+    navigator.clipboard.writeText(copyText(cm)).then(
+      () => flashCopy(btn, "check", "Copied"),
+      () => flashCopy(btn, "close", "Copy failed"),
+    );
+  });
   messages.addEventListener("scroll", () => {
     stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
   });
