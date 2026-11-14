@@ -644,6 +644,8 @@ button.chip:active:not(:disabled) { transform: none; }
   border-radius: var(--r-md);
   font-size: 13px;
 }
+button.part-file { background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+button.part-file:hover { background: var(--tint); }
 .part-file .icon { width: 16px; height: 16px; flex: none; color: var(--muted); }
 .part-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

@@ -3,6 +3,7 @@ import type { SessionView } from "../src/app/state";
 import type { ChatMessage, Message, Part, PartData, Session } from "../src/app/types";
 import {
   createChat,
+  fileNode,
   quietStatus,
   reasoningStatus,
   stripAnsi,
@@ -614,5 +615,54 @@ describe("quietStatus", () => {
     expect(quietStatus("done · 0:12")).toBe("0:12");
     expect(quietStatus("failed · exit 2 · 0:12")).toBe("failed · exit 2 · 0:12");
     expect(quietStatus("running 0:03")).toBe("running 0:03");
+  });
+});
+
+describe("file parts", () => {
+  test("a non-image file renders as a download button that saves the blob under its name", async () => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = { document: g.document, fetch: g.fetch, URL: g.URL };
+    const clicked: FakeEl[] = [];
+    g.document = {
+      createElement: (tag: string) => {
+        const node = new FakeEl(tag);
+        if (tag === "a") Object.assign(node, { click: () => clicked.push(node) });
+        return node;
+      },
+    };
+    g.fetch = async () => new Response("zipbytes");
+    g.URL = Object.assign(function URLStub() {}, { createObjectURL: () => "blob:test-url" });
+    try {
+      const node = fileNode({
+        type: "file",
+        blobId: "blb_dl",
+        name: "out/report.zip",
+        mime: "application/zip",
+      });
+      const button = node as unknown as FakeEl;
+      expect(button.tag).toBe("button");
+      expect(button.attrs.get("class")).toBe("part-file");
+      expect(findByClass(button, "icon")).toBeDefined();
+      expect(button.children.map((c) => (c as FakeEl).textContent).includes("out/report.zip")).toBe(true);
+      button.dispatch("click", {});
+      await new Promise((r) => setTimeout(r, 0));
+      expect(clicked).toHaveLength(1);
+      expect(clicked[0]?.attrs.get("download")).toBe("out/report.zip");
+      expect(clicked[0]?.attrs.get("href")).toBe("blob:test-url");
+    } finally {
+      Object.assign(g, saved);
+    }
+  });
+
+  test("an image file still renders inline", () => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      const node = fileNode({ type: "file", blobId: "blb_img", name: "a.png", mime: "image/png" });
+      expect((node as unknown as FakeEl).tag).toBe("img");
+    } finally {
+      g.document = saved;
+    }
   });
 });

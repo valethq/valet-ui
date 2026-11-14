@@ -226,9 +226,25 @@ function compactionLabel(d: Extract<PartData, { type: "compaction" }>): string {
   }
 }
 
-function fileNode(d: Extract<PartData, { type: "file" }>): HTMLElement {
+async function saveBlob(blobId: string, name: string): Promise<void> {
+  el("a", { href: await blobUrl(blobId), download: name }).click();
+}
+
+export function fileNode(d: Extract<PartData, { type: "file" }>): HTMLElement {
   if (!d.mime.startsWith("image/")) {
-    return el("div", { class: "part-file" }, icon("file"), el("span", { text: d.name }));
+    const button = el(
+      "button",
+      { class: "part-file", type: "button", title: `Download ${d.name}` },
+      icon("file"),
+      el("span", { text: d.name }),
+      icon("import"),
+    );
+    button.addEventListener("click", () => {
+      saveBlob(d.blobId, d.name).catch(() => {
+        button.title = `Download failed, click to retry: ${d.name}`;
+      });
+    });
+    return button;
   }
   const img = el("img", { class: "part-image", alt: d.name });
   blobUrl(d.blobId)
