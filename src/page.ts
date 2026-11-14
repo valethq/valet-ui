@@ -323,8 +323,7 @@ button.chip:active:not(:disabled) { transform: none; }
 }
 .session-row {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
   width: 100%;
   text-align: left;
   padding: 5px 10px;
@@ -348,17 +347,18 @@ button.chip:active:not(:disabled) { transform: none; }
 @keyframes row-in { from { opacity: 0; transform: translateX(-8px); } }
 @keyframes row-open { from { background-color: transparent; color: var(--muted); } }
 @keyframes row-close { from { background-color: var(--raised); color: var(--text); } }
-.dot { flex: none; width: 8px; height: 8px; margin-top: calc((1.3em - 8px) / 2); border-radius: 50%; background: var(--st-done); }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--st-done); }
 .dot.running { background: var(--st-run); animation: pulse 1.4s ease-in-out infinite; }
 .dot.attention { background: var(--st-need); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-need) 30%, transparent); }
 .dot.stale { background: var(--faint); }
-.dot.pop, .session-row .unread.pop { animation: dot-pop .36s var(--sb-ease); }
+.dot.pop { animation: dot-pop .36s var(--sb-ease); }
 .dot.running.pop { animation: dot-pop .36s var(--sb-ease), pulse 1.4s ease-in-out .36s infinite; }
 @keyframes dot-pop { from { opacity: .3; transform: scale(.3); } 55% { transform: scale(1.2); } }
 .session-row .text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.session-row .meta { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-row .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); }
+.session-row .meta-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-row[data-unread="1"] .title { font-weight: 550; }
 .session-row .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.session-row .unread { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .session-item { position: relative; display: flex; flex: none; }
 .session-item .session-row { padding-right: 36px; }
 .session-item .row-more { position: absolute; top: auto; bottom: 4px; right: 6px; width: 28px; height: 28px; opacity: 0; transition: opacity .15s ease, background-color .15s ease, color .15s ease; }

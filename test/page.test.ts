@@ -4,13 +4,13 @@ import { indexHtml } from "../src/page";
 const html = indexHtml();
 
 describe("page css", () => {
-  test("sidebar titles are clamped to one line", () => {
+  test("sidebar titles are one line, with the status dot beside the time and unread shown as weight", () => {
     const title = /\.session-row \.title \{[^}]*\}/.exec(html)?.[0] ?? "";
     expect(title).toContain("white-space: nowrap");
     expect(title).toContain("text-overflow: ellipsis");
-    const row = /\.session-row \{[^}]*\}/.exec(html)?.[0] ?? "";
-    expect(row).toContain("align-items: flex-start");
-    expect(/\.dot \{[^}]*margin-top: calc\(\(1\.3em - 8px\) \/ 2\)/.test(html)).toBe(true);
+    expect(html).toContain(".session-row .meta { display: flex; align-items: center;");
+    expect(html).toContain('.session-row[data-unread="1"] .title { font-weight: 550; }');
+    expect(html).not.toContain(".session-row .unread");
   });
 
   test("the chat header lines up with the content column and spreads out on mobile", () => {

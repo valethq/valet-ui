@@ -68,16 +68,18 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
     const suffix = suffixes.get(session.id);
     const label = dot === "running" ? "Working" : timeAgo(session.lastMessageAt ?? session.updatedAt, now);
     row.append(
-      el("span", { class: `dot ${dot}${was !== undefined && was.dot !== dot ? " pop" : ""}` }),
       el(
         "span",
         { class: "text" },
         el("span", { class: "title", text: session.title ?? "Untitled" }),
-        el("span", { class: "meta", text: suffix === undefined ? label : `${label} · #${suffix}` }),
+        el(
+          "span",
+          { class: "meta" },
+          el("span", { class: `dot ${dot}${was !== undefined && was.dot !== dot ? " pop" : ""}` }),
+          el("span", { class: "meta-text", text: suffix === undefined ? label : `${label} · #${suffix}` }),
+        ),
       ),
     );
-    if (unread)
-      row.append(el("span", { class: `unread${was !== undefined && was.unread !== "1" ? " pop" : ""}` }));
     row.addEventListener("click", () => p.onSession(session.id));
     list.append(el("div", { class: "session-item" }, row, sessionMenuButton(session.id, p)));
   }
