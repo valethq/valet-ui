@@ -216,7 +216,7 @@ button.chip:active:not(:disabled) { transform: none; }
 }
 .app.collapsed .nav-toggle {
   width: 36px;
-  margin-right: 0;
+  margin: 0 0 0 -46px;
   opacity: 1;
   transform: none;
   visibility: visible;
@@ -323,11 +323,10 @@ button.chip:active:not(:disabled) { transform: none; }
 }
 .session-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   width: 100%;
   text-align: left;
-  height: calc(3 * 1.3em + 10px);
   padding: 5px 10px;
   border: none;
   border-radius: var(--r-md);
@@ -349,23 +348,16 @@ button.chip:active:not(:disabled) { transform: none; }
 @keyframes row-in { from { opacity: 0; transform: translateX(-8px); } }
 @keyframes row-open { from { background-color: transparent; color: var(--muted); } }
 @keyframes row-close { from { background-color: var(--raised); color: var(--text); } }
-.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--st-done); }
+.dot { flex: none; width: 8px; height: 8px; margin-top: calc((1.3em - 8px) / 2); border-radius: 50%; background: var(--st-done); }
 .dot.running { background: var(--st-run); animation: pulse 1.4s ease-in-out infinite; }
 .dot.attention { background: var(--st-need); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-need) 30%, transparent); }
 .dot.stale { background: var(--faint); }
 .dot.pop, .session-row .unread.pop { animation: dot-pop .36s var(--sb-ease); }
 .dot.running.pop { animation: dot-pop .36s var(--sb-ease), pulse 1.4s ease-in-out .36s infinite; }
 @keyframes dot-pop { from { opacity: .3; transform: scale(.3); } 55% { transform: scale(1.2); } }
-.session-row .text { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.session-row .text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .session-row .meta { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.session-row .title {
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
+.session-row .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-row .unread { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .session-item { position: relative; display: flex; flex: none; }
 .session-item .session-row { padding-right: 36px; }
@@ -397,11 +389,12 @@ button.chip:active:not(:disabled) { transform: none; }
   align-items: center;
   gap: 10px;
   min-height: calc(2 * 1.35em + 32px);
-  padding: 12px 20px 28px;
+  padding: 12px max(24px, calc((100% - 780px) / 2)) 28px;
   background: linear-gradient(var(--bg) 62%, color-mix(in srgb, var(--bg) 0%, transparent));
   pointer-events: none;
 }
 .chat-header > * { pointer-events: auto; }
+.chat-header .title-group { display: flex; align-items: baseline; gap: 6px; flex: 0 1 auto; min-width: 0; }
 .chat-header .session-title { font-family: var(--font-head); font-weight: 400; font-size: 15px; line-height: 1.35; letter-spacing: -0.01em; flex: 0 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .chat-header .suffix { flex: none; color: var(--faint); }
 @keyframes pulse { 50% { opacity: .3; } }
@@ -870,8 +863,9 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
     display: none;
   }
   .app.nav-open .nav-backdrop { display: block; animation: fade-in .2s ease-out; }
-  .app .nav-toggle { width: 40px; margin: 0 0 0 -8px; opacity: 1; transform: none; visibility: visible; transition: none; }
-  .chat-header { gap: 8px; padding: max(8px, env(safe-area-inset-top)) 14px 24px; }
+  .app .nav-toggle, .app.collapsed .nav-toggle { width: 40px; margin: 0 0 0 -8px; opacity: 1; transform: none; visibility: visible; transition: none; }
+  .chat-header { gap: 8px; justify-content: space-between; padding: max(8px, env(safe-area-inset-top)) 14px 24px; }
+  .chat-header .session-title { display: block; white-space: nowrap; text-overflow: ellipsis; }
   .messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) 14px 16px; }
   .msg.user { max-width: 90%; }
   .composer-wrap { padding: 2px 10px max(10px, env(safe-area-inset-bottom)); }

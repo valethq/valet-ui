@@ -553,7 +553,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const main = el(
     "div",
     { class: "main" },
-    el("div", { class: "chat-header" }, navToggle, title, titleNum, sessionMenu),
+    el(
+      "div",
+      { class: "chat-header" },
+      navToggle,
+      el("div", { class: "title-group" }, title, titleNum),
+      sessionMenu,
+    ),
     messages,
     el(
       "div",
