@@ -14,6 +14,13 @@ describe("page css", () => {
     expect(title).not.toContain("text-overflow");
   });
 
+  test("the session three-dot button shows on hover and is always visible on touch", () => {
+    expect(html).toContain(".session-item .row-more { position: absolute;");
+    expect(html).toContain(".session-item:hover .row-more");
+    expect(html).toContain("@media (hover: none) { .session-item .row-more { opacity: 1; } }");
+    expect(html).toContain(".menu.session-menu { position: fixed;");
+  });
+
   test("failed tool status and send errors use the theme's danger colour", () => {
     expect(html).toContain(".part-row .status.failed { color: var(--danger); }");
     expect(/\.hint\.send-error \{[^}]*color: var\(--danger\)/.test(html)).toBe(true);

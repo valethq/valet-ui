@@ -260,6 +260,11 @@ function scheduleRender(): void {
           closeNav();
           void openSession(id);
         },
+        onRename: (id) => {
+          const session = app.sessions.find((s) => s.id === id);
+          if (session !== undefined) promptRename(session);
+        },
+        onDelete: (id) => void deleteSession(id),
         onNew: () => {
           closeNav();
           newSession();
@@ -446,11 +451,20 @@ async function deleteSession(id: string): Promise<void> {
   );
   if (!deleted) return;
   app.sessions = app.sessions.filter((s) => s.id !== id);
-  if (app.view?.session.id === id) app.view = null;
   syncTopics();
+  if (app.view?.session.id !== id) {
+    scheduleRender();
+    return;
+  }
+  app.view = null;
   const next = pickSession(false);
   if (next !== undefined) await openSession(next.id);
   else scheduleRender();
+}
+
+function promptRename(session: Session): void {
+  const title = window.prompt("Rename session", session.title ?? "")?.trim();
+  if (title) void renameSession(session.id, title);
 }
 
 function onEvent(topic: string, name: string, data: unknown): void {
@@ -590,9 +604,7 @@ async function startApp(): Promise<void> {
     onUpload: api.uploadBlob,
     onRename: () => {
       const session = app.view?.session;
-      if (session === undefined) return;
-      const title = window.prompt("Rename session", session.title ?? "")?.trim();
-      if (title) void renameSession(session.id, title);
+      if (session !== undefined) promptRename(session);
     },
     onDelete: () => {
       if (app.view !== null) void deleteSession(app.view.session.id);

@@ -2,6 +2,7 @@ import { el } from "../dom";
 import { icon, iconButton, selectChip } from "../icons";
 import { type Indicator, timeAgo, titleSuffixes } from "../state";
 import type { Project, Session } from "../types";
+import { sessionMenuButton, syncSessionMenu } from "./session-menu";
 
 export interface SidebarProps {
   projects: Project[];
@@ -12,6 +13,8 @@ export interface SidebarProps {
   indicators: ReadonlyMap<string, Indicator>;
   onProject(id: string): void;
   onSession(id: string): void;
+  onRename(id: string): void;
+  onDelete(id: string): void;
   onNew(): void;
   onLogout(): void;
   onSettings(): void;
@@ -63,20 +66,20 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
       "data-unread": unread ? "1" : "",
     });
     const suffix = suffixes.get(session.id);
-    const ago = timeAgo(session.lastMessageAt ?? session.updatedAt, now);
+    const label = dot === "running" ? "Working" : timeAgo(session.lastMessageAt ?? session.updatedAt, now);
     row.append(
       el("span", { class: `dot ${dot}${was !== undefined && was.dot !== dot ? " pop" : ""}` }),
       el(
         "span",
         { class: "text" },
         el("span", { class: "title", text: session.title ?? "Untitled" }),
-        el("span", { class: "meta", text: suffix === undefined ? ago : `${ago} · #${suffix}` }),
+        el("span", { class: "meta", text: suffix === undefined ? label : `${label} · #${suffix}` }),
       ),
     );
     if (unread)
       row.append(el("span", { class: `unread${was !== undefined && was.unread !== "1" ? " pop" : ""}` }));
     row.addEventListener("click", () => p.onSession(session.id));
-    list.append(row);
+    list.append(el("div", { class: "session-item" }, row, sessionMenuButton(session.id, p)));
   }
   if (p.sessions.length === 0) list.append(el("div", { class: "hint", text: "No sessions yet." }));
 
@@ -110,4 +113,5 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
     el("div", { class: "sidebar-foot" }, settings, logout),
   );
   list.scrollTop = scrollTop;
+  syncSessionMenu(list, p);
 }
