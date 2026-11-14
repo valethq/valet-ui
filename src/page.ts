@@ -277,6 +277,34 @@ button.chip:active:not(:disabled) { transform: none; }
   transition-duration: var(--sb-dur);
   transition-delay: 0s;
 }
+.sidebar-resizer {
+  position: fixed;
+  z-index: 21;
+  top: calc(var(--sb-inset) + 30px);
+  bottom: calc(var(--sb-inset) + 30px);
+  left: calc(var(--sb-w) - 4px);
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: 4px;
+}
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 2px;
+  height: 40px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after, .app.resizing .sidebar-resizer::after { opacity: .5; }
+.app.collapsed .sidebar-resizer { display: none; }
+.app.resizing { user-select: none; }
+.app.resizing .sidebar, .app.resizing .main { transition: none; }
 .sidebar-head .actions { display: flex; align-items: center; }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 2px 16px; }
 .sidebar .brand { font-family: var(--font-head); font-weight: 650; font-size: 16px; letter-spacing: -0.02em; }
@@ -818,7 +846,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
     pointer-events: auto;
     transition-timing-function: var(--sb-ease);
   }
-  .sidebar-edge, .app.collapsed .sidebar-edge, .collapse-btn { display: none; }
+  .sidebar-edge, .app.collapsed .sidebar-edge, .sidebar-resizer, .collapse-btn { display: none; }
   .nav-backdrop {
     position: fixed;
     inset: 0;

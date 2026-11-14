@@ -105,6 +105,69 @@ const closeNav = (): void => {
   appEl?.classList.remove("nav-open");
 };
 
+const SIDEBAR_W_KEY = "valet-ui.sidebar-width";
+const SIDEBAR_W_DEFAULT = 232;
+const SIDEBAR_W_MIN = 180;
+const SIDEBAR_W_MAX = 420;
+const clampSidebarWidth = (w: number): number =>
+  Math.round(Math.min(SIDEBAR_W_MAX, Math.max(SIDEBAR_W_MIN, w)));
+const savedSidebarWidth = (): number => {
+  try {
+    const n = Number(localStorage.getItem(SIDEBAR_W_KEY));
+    return n ? clampSidebarWidth(n) : SIDEBAR_W_DEFAULT;
+  } catch {
+    return SIDEBAR_W_DEFAULT;
+  }
+};
+/** Drag the sidebar's right edge to resize it (desktop only). The width lives in
+ * `--sb-w` on the app root, so the sidebar and the main pane follow together.
+ * Arrow keys nudge it, double-click resets it. */
+function bindSidebarResize(handle: HTMLElement, app: HTMLElement): void {
+  let width = SIDEBAR_W_DEFAULT;
+  const apply = (w: number): void => {
+    width = clampSidebarWidth(w);
+    app.style.setProperty("--sb-w", `${width}px`);
+    handle.setAttribute("aria-valuenow", String(width));
+  };
+  const save = (): void => {
+    try {
+      localStorage.setItem(SIDEBAR_W_KEY, String(width));
+    } catch {
+      // private mode; the width lasts until reload
+    }
+  };
+  apply(savedSidebarWidth());
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    app.classList.add("resizing");
+    const move = (ev: PointerEvent): void => apply(ev.clientX);
+    const up = (): void => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      app.classList.remove("resizing");
+      save();
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  });
+  handle.addEventListener("dblclick", () => {
+    apply(SIDEBAR_W_DEFAULT);
+    save();
+  });
+  handle.addEventListener("keydown", (e) => {
+    const step = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
+    if (step === 0) return;
+    e.preventDefault();
+    apply(width + step);
+    save();
+  });
+}
+
 // `valet-ui.seen.<sessionId>` stores the last seen lastMessageAt so unread
 // dots survive a reload.
 const seenKey = (sessionId: string): string => `valet-ui.seen.${sessionId}`;
@@ -570,14 +633,26 @@ async function startApp(): Promise<void> {
 
   const backdrop = el("div", { class: "nav-backdrop" });
   backdrop.addEventListener("click", closeNav);
+  const resizer = el("div", {
+    class: "sidebar-resizer",
+    role: "separator",
+    "aria-orientation": "vertical",
+    "aria-label": "Resize sidebar",
+    "aria-valuemin": String(SIDEBAR_W_MIN),
+    "aria-valuemax": String(SIDEBAR_W_MAX),
+    tabindex: "0",
+    title: "Drag to resize - double-click to reset",
+  });
   appEl = el(
     "div",
     { class: `app${sidebarCollapsed() ? " collapsed" : ""}` },
     el("div", { class: "sidebar-edge" }),
     app.sidebar,
+    resizer,
     chatRoot,
     backdrop,
   );
+  bindSidebarResize(resizer, appEl);
   root.replaceChildren(appEl);
 
   app.socket.onEvent = onEvent;
