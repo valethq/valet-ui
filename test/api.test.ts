@@ -4,6 +4,7 @@ import {
   authStatus,
   blobUrl,
   deleteSession,
+  isCommandHandled,
   listProjects,
   listSettings,
   saveSettings,
@@ -57,6 +58,29 @@ describe("sendMessage failure", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(0);
     expect((err as ApiError).message).toBe("Network unreachable, try again");
+  });
+});
+
+describe("slash commands", () => {
+  const cancelled = (reason: string) =>
+    new Response(JSON.stringify({ error: { code: "cancelled", reason } }), { status: 409 });
+
+  test("a command the server ran is not a send failure", async () => {
+    stubFetch(() => cancelled("command /compact"));
+    const err = await sendMessage("ses_1", [{ type: "text", text: "/compact" }], "cm_1").catch(
+      (e: unknown) => e,
+    );
+    expect(isCommandHandled(err)).toBe(true);
+  });
+
+  test("other cancellations and errors still fail the send", async () => {
+    stubFetch(() => cancelled("role policy"));
+    const policy = await sendMessage("ses_1", [{ type: "text", text: "hi" }], "cm_1").catch(
+      (e: unknown) => e,
+    );
+    expect(isCommandHandled(policy)).toBe(false);
+    expect(isCommandHandled(new ApiError(500, "command /compact"))).toBe(false);
+    expect(isCommandHandled(new Error("command /compact"))).toBe(false);
   });
 });
 

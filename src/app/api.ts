@@ -19,6 +19,14 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A slash command (`/compact`, `/model`, ...) is run by a `message.create` before hook that cancels the
+ * message, so core answers 409 with the reason "command /<name>". The command ran: its result shows in the
+ * chat, and the send itself did not fail.
+ */
+export const isCommandHandled = (e: unknown): boolean =>
+  e instanceof ApiError && e.status === 409 && e.message.startsWith("command /");
+
 /** Called when a non-auth request comes back 401 (session expired). */
 export const hooks = { onUnauthorized: (): void => {} };
 

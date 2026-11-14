@@ -595,6 +595,11 @@ async function startApp(): Promise<void> {
         app.chat?.setSendError(null);
         return true;
       } catch (e) {
+        if (api.isCommandHandled(e)) {
+          // the command ran server-side; it counts as sent, so the composer clears and no error shows
+          app.chat?.setSendError(null);
+          return true;
+        }
         const message = e instanceof Error ? e.message : "send failed";
         app.chat?.setSendError(message);
         toast(message);
