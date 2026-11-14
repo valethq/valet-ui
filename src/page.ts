@@ -327,7 +327,7 @@ button.chip:active:not(:disabled) { transform: none; }
   align-items: center;
   width: 100%;
   text-align: left;
-  padding: 5px 10px;
+  padding: 8px 10px;
   border: none;
   border-radius: var(--r-md);
   background: transparent;
