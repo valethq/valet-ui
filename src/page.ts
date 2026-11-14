@@ -684,23 +684,26 @@ button.chip:active:not(:disabled) { transform: none; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 8px 24px; }
 .modal-head h2 { font-family: var(--font-head); margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; }
 .modal-body { overflow-y: auto; padding: 0 0 24px; }
-.settings-tabs { display: flex; gap: 2px; overflow-x: auto; padding: 0 24px; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.modal.settings-modal { width: min(720px, 100%); max-height: min(640px, 100%); }
+.settings-tabbed { display: flex; flex: 1; min-height: 0; }
+.settings-tabs { display: flex; flex-direction: column; gap: 2px; flex: none; width: 176px; overflow-y: auto; padding: 4px 12px 16px 16px; border-right: 1px solid var(--border); scrollbar-width: none; }
 .settings-tabs::-webkit-scrollbar { display: none; }
 .settings-tab {
   flex: none;
-  margin-bottom: -1px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--muted);
   font-size: 13px;
   font-weight: 550;
+  text-align: left;
   white-space: nowrap;
 }
-.settings-tab:hover { color: var(--text); }
-.settings-tab[aria-selected=true] { color: var(--text); border-bottom-color: var(--text); }
-.settings-panels { padding: 16px 24px 0; }
+.settings-tab:hover { background: var(--tint); color: var(--text); }
+.settings-tab[aria-selected=true] { background: var(--tint-strong); color: var(--text); font-weight: 650; }
+.settings-tab:focus-visible { outline-offset: -2px; }
+.settings-panels { flex: 1; min-width: 0; padding: 18px 24px 8px; }
 .settings-section { padding: 0; }
 .settings-section h3 { font-family: var(--font-head); display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 13.5px; font-weight: 600; }
 .settings-section .plugin-id { font-size: 11.5px; font-weight: 400; color: var(--faint); font-family: var(--mono); }
@@ -883,8 +886,11 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   @keyframes sheet-in { from { transform: translateY(40px); opacity: .4; } }
   @keyframes sheet-out { to { transform: translateY(40px); opacity: 0; } }
   .modal-body { padding: 0 0 20px; }
-  .settings-tabs { padding: 0 18px; }
+  .settings-tabbed { flex-direction: column; }
+  .settings-tabs { flex-direction: row; width: auto; padding: 0 18px; border-right: none; border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; }
+  .settings-tab { padding: 8px 12px; }
   .settings-panels { padding: 16px 18px 0; }
+  .modal.settings-modal { max-height: 90dvh; }
   .modal-head { padding-left: 18px; }
   .theme-grid { grid-template-columns: repeat(2, 1fr); }
   .font-fields, .color-grid { grid-template-columns: 1fr; }

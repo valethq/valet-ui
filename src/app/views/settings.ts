@@ -70,10 +70,15 @@ interface Tab {
   panel: HTMLElement;
 }
 
-/** A tab strip with one visible panel at a time. Arrow, Home and End keys move
- * between tabs (WAI-ARIA tabs pattern). */
+/** A vertical tab list beside one visible panel at a time. Up/Down, Home and End
+ * move between tabs (WAI-ARIA tabs pattern, vertical orientation). */
 function tabbed(tabs: Tab[]): HTMLElement {
-  const bar = el("div", { class: "settings-tabs", role: "tablist", "aria-label": "Settings sections" });
+  const bar = el("div", {
+    class: "settings-tabs",
+    role: "tablist",
+    "aria-orientation": "vertical",
+    "aria-label": "Settings sections",
+  });
   const body = el("div", { class: "settings-panels" });
   const buttons = tabs.map((t, i) => {
     const id = `settings-tab-${i}`;
@@ -101,9 +106,9 @@ function tabbed(tabs: Tab[]): HTMLElement {
     b.addEventListener("keydown", (ev) => {
       const n = buttons.length;
       const next =
-        ev.key === "ArrowRight"
+        ev.key === "ArrowDown" || ev.key === "ArrowRight"
           ? (i + 1) % n
-          : ev.key === "ArrowLeft"
+          : ev.key === "ArrowUp" || ev.key === "ArrowLeft"
             ? (i - 1 + n) % n
             : ev.key === "Home"
               ? 0
@@ -130,7 +135,7 @@ export function openSettings(deps: SettingsDeps): void {
   const dialog = el(
     "div",
     {
-      class: "modal",
+      class: "modal settings-modal",
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": "settings-title",
