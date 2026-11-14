@@ -1,13 +1,19 @@
-# Rules for this repo (a valet plugin)
+# valet-ui
 
-- Runtime Bun 1.4.4 (`~/.npm-global/bin/bun`). Strict TypeScript.
-- **Dependencies:** avoid external ones. Add a runtime dependency only when it is the point of the plugin (the SDK or client for the thing the plugin integrates, e.g. the Claude Agent SDK in `valet-claudecode`) or the plugin can't reasonably work without it. Don't add one for something you can write in a few lines. Pin versions exactly. Dev tooling (typescript, `@types/bun`, biome) is fine.
-- Import only `@valethq/sdk`, the plugin's own dependencies, and `node:*` / `bun:*` builtins. Never import `@valethq/core`, another plugin, or any file under `../valet-core` or `../valet-*`. No private APIs, no `ctx.internal`-style bypasses: everything goes through the `PluginContext` the kernel passes to `activate`.
-- The contract is `../valet-core/docs/ARCHITECTURE.md` (normative) and the SDK types in `../valet-core/packages/sdk/src/*.ts`. Read them; do not guess signatures. You may read `../valet-core/packages/core/src/**` to understand behaviour, never import it.
-- Another valet plugin's scope types are redeclared locally by module augmentation (`declare module "@valethq/sdk" { interface ValetScopes { context: ContextManager } }`), copied from the architecture doc.
-- Checks, all green before you finish: `bun run typecheck`, `bun run lint` (fix with `bunx biome check --write .`), and `flock /tmp/example-heavy.lock bun test`.
-- Tests live in `test/`. Unit tests use a small fake `PluginContext`. To boot the real kernel in a test, spawn `bun /home/user/valet/valet-core/packages/core/src/cli.ts start --home <tmpdir>` (write `<tmpdir>/config.json` with a free `server.port`, `pluginPaths`, and `plugins.<id>.config`), poll `GET http://127.0.0.1:<port>/` until 200, and kill it in `afterAll`.
-- Small files, minimal comments, no dead code. Keep the existing `package.json` scripts, `tsconfig.json` and `biome.json`.
-- Each plugin is its own private repo under `valethq` (`valethq/valet-<name>`). Commit your work there; use `gh` to create the repo for a new plugin.
-- Don't touch `~/.openclaw`: OpenClaw stays a clean fallback.
-- Finish with a short summary of what you built and the check results.
+Minimal web chat UI served on its own port (default 127.0.0.1:7418).
+
+Rules for this repo. The contract lives in `../valet-core`.
+
+- Runtime: Bun 1.4.4 (`~/.npm-global/bin/bun`). Strict TypeScript.
+- Contract: `../valet-core/docs/ARCHITECTURE.md` is normative. Read it and the SDK types in `../valet-core/packages/sdk/src/*.ts` before coding. Do not guess signatures. Don't edit the spec unless the human tells you to. You may read `../valet-core/packages/core/src/**` to understand behaviour, but never import it.
+- Imports: only `@valethq/sdk`, this plugin's own dependencies, and `node:*` / `bun:*`. Never import `@valethq/core`, another plugin, or any `../valet-*` path.
+- Scope types: the SDK declares `inference`, `tools`, `platform`, `identity` and `context`; import those from `@valethq/sdk`. A scope the SDK does not declare is redeclared with module augmentation (`declare module "@valethq/sdk" { interface ValetScopes { ... } }`), copied from the architecture doc.
+- No private APIs: no `ctx.internal`, no core-only hooks, no bypass flags. Everything goes through the `PluginContext` passed to `activate`.
+- Dependencies: avoid runtime dependencies. Add one only when it is the point of the plugin or the plugin cannot reasonably work without it. Pin exact versions. Dev tooling (typescript, `@types/bun`, `@biomejs/biome`) is fine.
+- Tests live in `test/`. Unit tests use a small fake `PluginContext`. Kernel-boot tests run `bun ../valet-core/packages/core/src/cli.ts start --home <tmpdir>` with a `<tmpdir>/config.json` (free `server.port`, `pluginPaths`, `plugins.<id>.config`), poll `GET http://127.0.0.1:<port>/` until 200, and kill the process in `afterAll`.
+- Checks, all green before you finish: `bun run typecheck`, `bun run lint` (auto-fix with `bunx biome check --write .`), `bun test`.
+- Keep the existing `package.json` scripts, `tsconfig.json` and `biome.json`.
+- Small files named after what they hold. Minimal comments. No dead code. Add a one-line `// spec-gap:` comment where the spec is silent.
+- Do not start long-running servers outside tests.
+- Git: commit when the work is finished and the checks pass, unless it is extremely large, breaking or unfinished. Don't push unless asked. Author and committer rules are in `../AGENTS.md`.
+- Finish with a short summary of what you built and the results of each check.
