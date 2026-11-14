@@ -35,6 +35,10 @@ describe("page css", () => {
     expect(/\.hint\.send-error \{[^}]*color: var\(--danger\)/.test(html)).toBe(true);
   });
 
+  test("mobile browsers do not inflate long text blocks such as tool output", () => {
+    expect(html).toContain("html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }");
+  });
+
   test("the stored theme applies from the head before the app loads", () => {
     const head = html.slice(0, html.indexOf("</head>"));
     expect(head).toContain('localStorage.getItem("valet-ui.theme")');

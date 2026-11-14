@@ -27,6 +27,7 @@ ${themeCss()}
   font-display: swap;
 }
 * { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { height: 100%; }
 body {
   margin: 0;
