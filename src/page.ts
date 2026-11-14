@@ -11,7 +11,7 @@ ${themeCss()}
   --st-need: #eab308;
   --sb-w: 232px;
   --sb-inset: 12px;
-  --sb-vinset: 24px;
+  --sb-vinset: 16px;
   --sb-pad-l: 14px;
   --sb-pad-r: 12px;
   --sb-ease: cubic-bezier(.22, 1, .36, 1);
@@ -250,7 +250,7 @@ button.chip:active:not(:disabled) { transform: none; }
   z-index: 20;
   top: var(--sb-vinset);
   bottom: var(--sb-vinset);
-  left: 0;
+  left: var(--sb-vinset);
   width: var(--sb-w);
   display: flex;
   flex-direction: column;
@@ -258,13 +258,12 @@ button.chip:active:not(:disabled) { transform: none; }
   overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-left: none;
-  border-radius: 0 30px 30px 0;
+  border-radius: 30px;
   box-shadow: 0 24px 64px -28px var(--shadow);
   transition: transform var(--sb-dur) var(--sb-ease), filter var(--sb-dur) var(--sb-ease), opacity var(--sb-dur) var(--sb-ease);
 }
 .app.collapsed .sidebar {
-  transform: translateX(calc(-100% - 24px));
+  transform: translateX(calc(-100% - var(--sb-vinset) - 24px));
   filter: blur(16px);
   opacity: 0;
   pointer-events: none;
@@ -286,7 +285,7 @@ button.chip:active:not(:disabled) { transform: none; }
   z-index: 21;
   top: calc(var(--sb-vinset) + 30px);
   bottom: calc(var(--sb-vinset) + 30px);
-  left: calc(var(--sb-w) - 4px);
+  left: calc(var(--sb-vinset) + var(--sb-w) - 4px);
   width: 8px;
   cursor: col-resize;
   touch-action: none;
@@ -375,7 +374,7 @@ button.chip:active:not(:disabled) { transform: none; }
   height: 100%;
   min-width: 0;
   min-height: 0;
-  margin-left: calc(var(--sb-w) + var(--sb-inset));
+  margin-left: calc(var(--sb-vinset) + var(--sb-w) + var(--sb-inset));
   transition: margin-left var(--sb-dur) var(--sb-ease);
 }
 .app.collapsed .main { margin-left: 0; }
@@ -840,6 +839,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   .sidebar, .app.collapsed .sidebar {
     top: max(10px, env(safe-area-inset-top));
     bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
     width: min(85vw, 300px);
     transform: translateX(calc(-100% - 24px));
     filter: blur(16px);
