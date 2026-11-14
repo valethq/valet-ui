@@ -25,6 +25,7 @@ describe("page css", () => {
   test("the session three-dot button shows on hover and is always visible on touch", () => {
     expect(html).toContain(".session-item .row-more { position: absolute;");
     expect(html).toContain(".session-item:hover .row-more");
+    expect(html).toContain("top: calc(50% - 21px); bottom: auto;");
     expect(html).toContain("@media (hover: none) { .session-item .row-more { opacity: 1; } }");
     expect(html).toContain(".menu.session-menu { position: fixed;");
   });

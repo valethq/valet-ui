@@ -361,7 +361,7 @@ button.chip:active:not(:disabled) { transform: none; }
 .session-row .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-item { position: relative; display: flex; flex: none; }
 .session-item .session-row { padding-right: 36px; }
-.session-item .row-more { position: absolute; top: auto; bottom: 4px; right: 6px; width: 28px; height: 28px; opacity: 0; transition: opacity .15s ease, background-color .15s ease, color .15s ease; }
+.session-item .row-more { position: absolute; top: calc(50% - 21px); bottom: auto; right: 6px; width: 28px; height: 28px; opacity: 0; transition: opacity .15s ease, background-color .15s ease, color .15s ease; }
 .session-item:hover .row-more, .session-item:focus-within .row-more, .row-more[aria-expanded=true] { opacity: 1; }
 .menu.session-menu { position: fixed; bottom: auto; }
 .menu-item.danger { color: var(--danger); }
