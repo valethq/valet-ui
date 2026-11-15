@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   PartInput,
+  PartType,
   PluginStatus,
   Project,
   ProviderModels,
@@ -185,6 +186,17 @@ export async function listSettings(): Promise<SettingsEntry[]> {
     const pluginName = names.get(e.plugin);
     return pluginName === undefined ? e : { ...e, pluginName };
   });
+}
+
+/** The part type registry, each entry marked loaded or not. Without core's plugin list the entries come back unmarked. */
+export async function listPartTypes(): Promise<PartType[]> {
+  const [types, plugins] = await Promise.all([
+    get<PartType[]>("/api/core/part-types"),
+    get<PluginStatus[]>("/api/core/plugins").catch((): PluginStatus[] | null => null),
+  ]);
+  if (plugins === null) return types;
+  const active = new Set(plugins.filter((p) => p.state === "active").map((p) => p.id));
+  return types.map((t) => ({ ...t, loaded: active.has(t.plugin.id) }));
 }
 
 export const getSettings = (key: string): Promise<SettingsEntry> =>

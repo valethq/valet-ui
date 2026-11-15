@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionView } from "../src/app/state";
-import type { ChatMessage, Message, Part, PartData, Session } from "../src/app/types";
+import type { ChatMessage, Message, Part, PartData, PartType, Session } from "../src/app/types";
 import {
   copyText,
   createChat,
@@ -852,6 +852,116 @@ describe("subagent sessions", () => {
       chat.update(viewWith([]), [], undefined, undefined, { subs: [] });
       expect(crumb.style.display).toBe("none");
       expect(tag.style.display).toBe("none");
+    });
+  });
+});
+
+describe("custom parts", () => {
+  const withDom = (fn: (root: FakeEl, chat: ReturnType<typeof createChat>) => void): void => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onToggleNav() {},
+        onOpenSession() {},
+      });
+      fn(root, chat);
+    } finally {
+      g.document = saved;
+    }
+  };
+  const text = (n: FakeEl | undefined): string =>
+    n === undefined
+      ? ""
+      : n.textContent + n.children.map((c) => (c instanceof FakeEl ? text(c) : String(c))).join("");
+  const jobData = {
+    jobId: "j1",
+    status: "done",
+    exitCode: 0,
+    killReason: null,
+    label: "build",
+    durationMs: 30_000,
+  };
+  const custom = (over: Partial<Extract<PartData, { type: "custom" }>> = {}): Part => ({
+    ...toolPart(),
+    id: "prt_c",
+    type: "custom",
+    data: {
+      type: "custom",
+      kind: "valet-exec/job-end@1",
+      title: "Process finished: build (exit 0, 30s)",
+      text: "Background job j1 (build) exited 0 after 30s.",
+      data: jobData,
+      ...over,
+    },
+  });
+  const systemView = (...parts: Part[]): SessionView => ({
+    ...viewWith(parts),
+    messages: [{ message: { ...message, role: "system" }, parts }],
+  });
+  const jobEnd: PartType = {
+    id: "valet-exec/job-end@1",
+    view: { fields: ["label", "exitCode"], level: "warn" },
+    plugin: { id: "valet-exec", version: "0.1.0", repository: "https://github.com/valethq/valet-exec" },
+    loaded: false,
+  };
+
+  test("a system message of only custom parts is a bare collapsed row titled by the part", () => {
+    withDom((root, chat) => {
+      chat.update(systemView(custom()), []);
+      const msg = findByClass(root, "msg") as FakeEl;
+      expect(msg.attrs.get("class")).toBe("msg system bare fade");
+      const row = findByClass(msg, "part-row") as FakeEl;
+      expect((row as unknown as { open: boolean }).open).toBe(false);
+      expect(text(findTag(row, "summary"))).toBe("Process finished: build (exit 0, 30s)");
+      const body = findByClass(row, "body") as FakeEl;
+      expect(text(findTag(body, "pre"))).toBe("Background job j1 (build) exited 0 after 30s.");
+      expect(text(findByClass(body, "part-origin"))).toBe("valet-exec/job-end@1");
+      expect(findTag(body, "dl")).toBeUndefined();
+    });
+  });
+
+  test("the registry adds fields, origin, level and the raw data behind a second row", () => {
+    withDom((root, chat) => {
+      chat.update(systemView(custom()), []);
+      chat.setPartTypes([jobEnd]);
+      const row = findByClass(root, "part-row") as FakeEl;
+      expect(row.attrs.get("class")).toBe("part-row warn");
+      const body = findByClass(row, "body") as FakeEl;
+      const dl = findTag(body, "dl") as FakeEl;
+      expect(dl.children.map((c) => text(c as FakeEl))).toEqual(["label", "build", "exitCode", "0"]);
+      const origin = findByClass(body, "part-origin") as FakeEl;
+      expect(text(origin)).toBe("valet-exec/job-end@1 · valet-exec 0.1.0 · not loaded");
+      expect(findTag(origin, "a")?.attrs.get("href")).toBe("https://github.com/valethq/valet-exec");
+      const raw = findByClass(body, "part-row") as FakeEl;
+      expect((raw as unknown as { open: boolean }).open).toBe(false);
+      expect(text(findTag(raw, "summary"))).toBe("Data");
+      expect(JSON.parse(text(findTag(findByClass(raw, "body") as FakeEl, "pre")))).toEqual(jobData);
+    });
+  });
+
+  test("view.collapsed false opens the row, and a mixed system message keeps its chrome", () => {
+    withDom((root, chat) => {
+      chat.setPartTypes([{ ...jobEnd, view: { collapsed: false } }]);
+      const note = {
+        ...toolPart(),
+        id: "prt_n",
+        type: "notice",
+        data: { type: "notice", level: "error", text: "hook failed" },
+      } as Part;
+      chat.update(systemView(custom(), note), []);
+      expect(findByClass(root, "msg")?.attrs.get("class")).toBe("msg system fade");
+      const row = findByClass(root, "part-row") as FakeEl;
+      expect((row as unknown as { open: boolean }).open).toBe(true);
+      expect(row.attrs.get("class")).toBe("part-row");
     });
   });
 });

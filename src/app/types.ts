@@ -80,7 +80,8 @@ export type PartData =
       coversThroughSeq: number;
       summary?: string;
       error?: string;
-    };
+    }
+  | { type: "custom"; kind: string; title: string; text: string; data: unknown };
 
 export interface Part {
   id: string;
@@ -119,6 +120,16 @@ export interface PluginStatus {
   version?: string;
   state: "active" | "failed" | "disabled";
   error?: string;
+}
+
+/** One entry of core's GET /api/core/part-types (mirrors PartType in the SDK's parttypes.ts, 9.4). */
+export interface PartType {
+  id: string;
+  description?: string;
+  view?: { collapsed?: boolean; level?: "info" | "warn" | "error"; icon?: string; fields?: string[] };
+  plugin: { id: string; version: string; repository?: string };
+  /** Whether the defining plugin is active; set by listPartTypes when core's plugin list loads. */
+  loaded?: boolean;
 }
 
 /** A plugin's settings panel from GET /plugins/valet-ui/settings (mirrors src/settings.ts). */

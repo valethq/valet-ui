@@ -15,7 +15,7 @@ import {
   type SubRow,
   type ToolData,
 } from "../subagents";
-import type { ChatMessage, Part, PartData, PartInput, ProviderModels } from "../types";
+import type { ChatMessage, Part, PartData, PartInput, PartType, ProviderModels } from "../types";
 import { createAttachments, filePart } from "./attachments";
 
 export interface ChatCallbacks {
@@ -47,6 +47,8 @@ export interface ChatHandle {
   ): void;
   setConnection(open: boolean): void;
   setSendError(message: string | null): void;
+  /** Core's part type registry; custom parts look their kind up here. */
+  setPartTypes(types: PartType[]): void;
 }
 
 const LANDING = ["How are you?", "Ready when you are.", "What should we work on?", "What's on your mind?"];
@@ -131,6 +133,7 @@ interface PartUi {
   openState: Map<string, boolean>;
   showAll: Map<string, boolean>;
   bodyStick: Map<string, boolean>;
+  partTypes: Map<string, PartType>;
   refresh(): void;
 }
 
@@ -138,7 +141,7 @@ interface PartUi {
 export const quietStatus = (label: string): string => label.replace(/^(complete|done)( · )?/, "");
 
 function partRow(
-  part: Part,
+  part: Pick<Part, "id">,
   title: string,
   statusClass: string,
   statusLabel: string,
@@ -148,12 +151,8 @@ function partRow(
 ): HTMLElement {
   const details = el("details", { class: "part-row", "data-part-id": part.id });
   details.open = ui.openState.get(part.id) ?? defaultOpen;
-  const summary = el(
-    "summary",
-    {},
-    el("span", { text: title }),
-    el("span", { class: `status ${statusClass}`, text: statusLabel }),
-  );
+  const summary = el("summary", {}, el("span", { text: title }));
+  if (statusLabel !== "") summary.append(el("span", { class: `status ${statusClass}`, text: statusLabel }));
   const body = el("div", { class: "body" }, ...bodyChildren);
   body.addEventListener("scroll", () => {
     ui.bodyStick.set(part.id, body.scrollHeight - body.scrollTop - body.clientHeight < STICK_PX);
@@ -195,6 +194,65 @@ function toolBody(part: Part, input: unknown, output: string, ui: PartUi): HTMLE
   children.push(lines.slice(hidden).join("\n"));
   return [el("pre", {}, ...children)];
 }
+
+type CustomData = Extract<PartData, { type: "custom" }>;
+
+const fieldValue = (v: unknown): string => (typeof v === "string" ? v : (JSON.stringify(v) ?? String(v)));
+
+/** "valet-exec 0.1.0", linked to its repository when it has one, and flagged when the plugin is not loaded. */
+function partOrigin(kind: string, type: PartType | undefined): HTMLElement {
+  const line = el("div", { class: "part-origin" }, kind);
+  if (type === undefined) return line;
+  const name = `${type.plugin.id} ${type.plugin.version}`;
+  const repo = type.plugin.repository;
+  line.append(
+    " · ",
+    repo !== undefined && /^https?:\/\//.test(repo)
+      ? el("a", { href: repo, target: "_blank", rel: "noopener noreferrer", text: name })
+      : name,
+  );
+  if (type.loaded === false) line.append(" · not loaded");
+  return line;
+}
+
+/** A plugin-defined part (9.4): its title collapsed; open, the registry's fields, its text, origin and raw data. Unknown kinds render from title and text alone. */
+function customPart(part: Part, d: CustomData, ui: PartUi): HTMLElement {
+  const type = ui.partTypes.get(d.kind);
+  const view = type?.view;
+  const body: HTMLElement[] = [];
+  const data = typeof d.data === "object" && d.data !== null ? (d.data as Record<string, unknown>) : {};
+  const fields = (view?.fields ?? []).filter((k) => data[k] !== undefined);
+  if (fields.length > 0) {
+    body.push(
+      el(
+        "dl",
+        { class: "part-fields" },
+        ...fields.flatMap((k) => [el("dt", { text: k }), el("dd", { text: fieldValue(data[k]) })]),
+      ),
+    );
+  }
+  if (d.text !== "") body.push(el("pre", { text: d.text }));
+  body.push(partOrigin(d.kind, type));
+  if (d.data !== undefined) {
+    body.push(
+      partRow(
+        { id: `${part.id}/data` },
+        "Data",
+        "",
+        "",
+        false,
+        ui,
+        el("pre", { text: JSON.stringify(d.data, null, 2) }),
+      ),
+    );
+  }
+  const row = partRow(part, d.title, "", "", view?.collapsed === false, ui, ...body);
+  if (view?.level !== undefined) row.setAttribute("class", `part-row ${view.level}`);
+  return row;
+}
+
+const isCustomOnly = (cm: ChatMessage): boolean =>
+  cm.parts.length > 0 && cm.parts.every((p) => p.data.type === "custom");
 
 /** One subagent call as a card: a row per subagent with its status, each opening that child's session. Stages show as labels when the call has more than one. */
 function subagentCard(part: Part, d: ToolData, rows: SubRow[]): HTMLElement {
@@ -286,6 +344,8 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
       return el("div", { class: `part-notice ${d.level}`, text: d.text });
     case "file":
       return fileNode(d);
+    case "custom":
+      return customPart(part, d, ui);
     default:
       return null;
   }
@@ -364,6 +424,7 @@ function messageSig(
   view: SessionView,
   showAll: Map<string, boolean>,
   subs: Map<string, SubRow[]>,
+  typesRev: number,
 ): string {
   const parts = cm.parts.map((p) => {
     const d = p.data;
@@ -379,25 +440,31 @@ function messageSig(
               ? d.text.length
               : d.type === "compaction"
                 ? d.status
-                : 0;
+                : d.type === "custom"
+                  ? `${d.kind}${d.title}${d.text.length}`
+                  : 0;
     return `${p.id}:${p.status}:${d.type}:${size}`;
   });
   const err = cm.message.runId === null ? "" : (view.runErrors.get(cm.message.runId) ?? "");
-  return `${cm.message.status}|${cm.message.updatedAt}|${err}|${parts.join(",")}`;
+  const types = cm.parts.some((p) => p.data.type === "custom") ? typesRev : "";
+  return `${cm.message.status}|${cm.message.updatedAt}|${err}|${types}|${parts.join(",")}`;
 }
 
 /** Renders a message as one or more flow elements: non-error notice parts
  * break out of the bubble into a full-width divider, splitting the message
- * into a new `.msg` chunk on either side. `anim` is an entrance class. */
+ * into a new `.msg` chunk on either side. A system message of only custom
+ * parts is `bare`: its rows sit in the timeline without the system chrome.
+ * `anim` is an entrance class. */
 function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: string): HTMLElement[] {
   const out: HTMLElement[] = [];
   const msgs: HTMLElement[] = [];
   const fx = anim === "" ? "" : ` ${anim}`;
+  const bare = cm.message.role === "system" && isCustomOnly(cm) ? " bare" : "";
   let bubble: HTMLElement | null = null;
   const currentBubble = (): HTMLElement => {
     if (bubble === null) {
       bubble = el("div", { class: "bubble" });
-      const msg = el("div", { class: `msg ${cm.message.role}${fx}` }, bubble);
+      const msg = el("div", { class: `msg ${cm.message.role}${bare}${fx}` }, bubble);
       msgs.push(msg);
       out.push(msg);
     }
@@ -550,6 +617,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const openState = new Map<string, boolean>();
   const showAll = new Map<string, boolean>();
   const bodyStick = new Map<string, boolean>();
+  const partTypes = new Map<string, PartType>();
+  let typesRev = 0;
   const cache = new Map<string, { sig: string; nodes: HTMLElement[]; anim: string; born: number }>();
   let primed = false;
   let leadKey: string | undefined;
@@ -776,6 +845,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       openState,
       showAll,
       bodyStick,
+      partTypes,
       refresh: () => {
         if (current !== null) renderMessages(current);
       },
@@ -785,7 +855,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     const nodes: HTMLElement[] = [];
     for (const cm of view.messages) {
       const id = cm.message.id;
-      const sig = messageSig(cm, view, showAll, bound);
+      const sig = messageSig(cm, view, showAll, bound, typesRev);
       let hit = cache.get(id);
       if (hit === undefined || hit.sig !== sig) {
         // New messages animate in once; a re-render mid-entrance resumes it.
@@ -968,5 +1038,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       if (open) setSendError(null);
     },
     setSendError,
+    setPartTypes(types) {
+      partTypes.clear();
+      for (const t of types) partTypes.set(t.id, t);
+      typesRev++;
+      if (current !== null) renderMessages(current);
+    },
   };
 }

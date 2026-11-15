@@ -576,10 +576,18 @@ function onEvent(topic: string, name: string, data: unknown): void {
 }
 
 function onGap(_topic: string): void {
+  loadPartTypes();
   void loadSessions().then(() => {
     if (app.view !== null) refetchMessagesSoon();
     scheduleRender();
   });
+}
+
+function loadPartTypes(): void {
+  api.listPartTypes().then(
+    (types) => app.chat?.setPartTypes(types),
+    () => {},
+  );
 }
 
 function showLogin(): void {
@@ -708,6 +716,7 @@ async function startApp(): Promise<void> {
 
   app.projects = await api.listProjects();
   app.providers = await api.listModels().catch(() => []);
+  loadPartTypes();
   const remembered = (() => {
     try {
       return localStorage.getItem("valet-ui.project");

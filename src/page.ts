@@ -434,6 +434,7 @@ button.chip:active:not(:disabled) { transform: none; }
 .msg.user .bubble { background: var(--user); border-radius: var(--r-lg); border-bottom-right-radius: 8px; padding: 10px 16px; }
 .msg.assistant .bubble { padding: 0 2px; }
 .msg.system .bubble, .msg.tool .bubble { border: 1px dashed var(--border); border-radius: var(--r-md); padding: 8px 14px; color: var(--muted); font-size: 13px; }
+.msg.system.bare .bubble { border: none; padding: 0 2px; color: inherit; font-size: inherit; }
 .msg .bubble pre {
   background: var(--code);
   border: 1px solid var(--border);
@@ -509,6 +510,13 @@ button.chip:active:not(:disabled) { transform: none; }
 .part-row .status.running { color: var(--accent); }
 .part-row .status.failed { color: var(--danger); }
 .part-row .status.error, .part-row .status.denied { color: var(--danger); }
+.part-row.warn > summary { color: var(--warn); }
+.part-row.error > summary { color: var(--danger); }
+.part-fields { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 6px; font-family: var(--mono); font-size: 11.5px; }
+.part-fields dt { color: var(--faint); }
+.part-fields dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.part-origin { margin-top: 6px; font-size: 10.5px; color: var(--faint); }
+.part-origin a { color: inherit; text-underline-offset: 2px; }
 .part-row .body { margin: 4px 0 0 8px; padding: 2px 0 2px 12px; border-left: 2px solid var(--border); max-height: 260px; overflow-y: auto; }
 .part-row::details-content {
   block-size: 0;

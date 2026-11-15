@@ -6,6 +6,7 @@ import {
   deleteSession,
   isCommandHandled,
   listProjects,
+  listPartTypes,
   listSettings,
   saveSettings,
   sendMessage,
@@ -201,6 +202,29 @@ describe("settings panels get friendly plugin names", () => {
     const entries = await listSettings();
     expect(entries.map((e) => e.title)).toEqual(["Agent", "Web"]);
     expect(entries.every((e) => e.pluginName === undefined)).toBe(true);
+  });
+});
+
+describe("part types", () => {
+  const types = [
+    { id: "valet-exec/job-end@1", plugin: { id: "valet-exec", version: "0.1.0" } },
+    { id: "gone/thing@1", plugin: { id: "gone", version: "1.0.0" } },
+  ];
+  const stubRoutes = (plugins: () => Response) => {
+    g.fetch = ((url: string) =>
+      Promise.resolve(
+        url.startsWith("/api/core/plugins") ? plugins() : new Response(JSON.stringify(types)),
+      )) as unknown as typeof fetch;
+  };
+
+  test("each type is marked loaded when its plugin is active", async () => {
+    stubRoutes(() => new Response(JSON.stringify([{ id: "valet-exec", state: "active" }])));
+    expect((await listPartTypes()).map((t) => t.loaded)).toEqual([true, false]);
+  });
+
+  test("a failed plugin list leaves types unmarked", async () => {
+    stubRoutes(() => new Response('{"error":"nope"}', { status: 500 }));
+    expect((await listPartTypes()).map((t) => t.loaded)).toEqual([undefined, undefined]);
   });
 });
 
