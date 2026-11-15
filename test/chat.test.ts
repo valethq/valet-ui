@@ -343,6 +343,7 @@ const session: Session = {
   createdAt: 1,
   updatedAt: 1,
   lastMessageAt: null,
+  lastResponseAt: null,
 };
 
 const message: Message = {

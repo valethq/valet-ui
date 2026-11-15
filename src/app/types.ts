@@ -22,6 +22,7 @@ export interface Session {
   createdAt: number;
   updatedAt: number;
   lastMessageAt: number | null;
+  lastResponseAt: number | null;
 }
 
 export interface SessionSettings {

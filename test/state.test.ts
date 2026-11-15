@@ -31,6 +31,7 @@ const session = (over: Partial<Session> = {}): Session => ({
   createdAt: 1,
   updatedAt: 1,
   lastMessageAt: null,
+  lastResponseAt: null,
   ...over,
 });
 

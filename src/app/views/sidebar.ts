@@ -69,7 +69,7 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
       "data-unread": unread ? "1" : "",
     });
     const suffix = suffixes.get(session.id);
-    const label = dot === "running" ? "Working" : timeAgo(session.lastMessageAt ?? session.updatedAt, now);
+    const label = dot === "running" ? "Working" : timeAgo(session.lastResponseAt ?? session.createdAt, now);
     const subs = childrenOf(p.sessions, session.id);
     const subDots = subs.map((s) => p.indicators.get(s.id));
     const subState = subDots.includes("attention") ? " need" : subDots.includes("running") ? " live" : "";

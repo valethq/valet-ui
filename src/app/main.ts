@@ -564,9 +564,12 @@ function onEvent(topic: string, name: string, data: unknown): void {
   } else if (name === "message.create") {
     const s = app.sessions.find((x) => x.id === id);
     if (s !== undefined) {
+      const msg = (data as { message: Message }).message;
       app.sessions = upsertSession(app.sessions, {
         ...s,
-        lastMessageAt: (data as { message: Message }).message.createdAt,
+        lastMessageAt: msg.createdAt,
+        // the sidebar shows model replies only, so user messages don't move it
+        ...(msg.role === "assistant" ? { lastResponseAt: msg.createdAt } : {}),
       });
     }
   } else {
