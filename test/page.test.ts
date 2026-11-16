@@ -15,7 +15,7 @@ describe("page css", () => {
 
   test("the chat header lines up with the content column and spreads out on mobile", () => {
     const header = /\.chat-header \{[^}]*\}/.exec(html)?.[0] ?? "";
-    expect(header).toContain("max(24px, calc((100% - 780px) / 2))");
+    expect(header).toContain("max(16px, calc((100% - 812px) / 2))");
     expect(html).toContain("justify-content: space-between; padding: max(8px, env(safe-area-inset-top))");
     expect(html).toContain(
       ".chat-header .session-title { display: block; white-space: nowrap; text-overflow: ellipsis; }",
@@ -50,7 +50,7 @@ describe("page css", () => {
     const mobile = html.slice(html.indexOf("@media (max-width: 900px)"));
     expect(mobile).toContain(".composer-wrap { padding: 2px max(16px, calc((100% - 812px) / 2))");
     expect(mobile).toContain(
-      ".messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) max(16px, calc((100% - 780px) / 2))",
+      ".messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) max(16px, calc((100% - 812px) / 2))",
     );
   });
 

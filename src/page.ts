@@ -226,7 +226,7 @@ button.chip:active:not(:disabled) { transform: none; }
 }
 .app.collapsed .nav-toggle {
   width: 36px;
-  margin: 0 0 0 -46px;
+  margin: 0;
   opacity: 1;
   transform: none;
   visibility: visible;
@@ -403,12 +403,15 @@ button.chip:active:not(:disabled) { transform: none; }
   align-items: center;
   gap: 10px;
   min-height: calc(2 * 1.35em + 32px);
-  padding: 12px max(24px, calc((100% - 780px) / 2)) 28px;
+  padding: 12px max(16px, calc((100% - 812px) / 2)) 28px;
   background: linear-gradient(var(--bg) 62%, color-mix(in srgb, var(--bg) 0%, transparent));
   pointer-events: none;
 }
 .chat-header > * { pointer-events: auto; }
 .chat-header .title-group { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex: 0 1 auto; min-width: 0; }
+/* Toggle + title stay left (the toggle's width transition makes room for the
+ * title when collapsed); the session menu is pinned right. */
+.chat-header > :last-child { margin-left: auto; }
 .chat-header .title-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; }
 .chat-header .crumb { display: inline-flex; align-items: center; gap: 4px; max-width: min(100%, 320px); padding: 2px 6px 2px 2px; margin-left: -2px; border: none; border-radius: var(--r-md); background: none; color: var(--faint); font-size: 11.5px; line-height: 1.3; cursor: pointer; transition: color .15s, background-color .15s; }
 .chat-header .crumb:hover { color: var(--text); background: var(--tint); }
@@ -423,7 +426,7 @@ button.chip:active:not(:disabled) { transform: none; }
   flex: 1;
   container: chat / inline-size;
   overflow-y: auto;
-  padding: calc(2 * 1.35em + 44px) max(24px, calc((100% - 780px) / 2)) 20px;
+  padding: calc(2 * 1.35em + 44px) max(16px, calc((100% - 812px) / 2)) 20px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -1218,9 +1221,9 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   }
   .app.nav-open .nav-backdrop { display: block; animation: fade-in var(--dur-focus) var(--ease-focus); }
   .app .nav-toggle, .app.collapsed .nav-toggle { width: 40px; margin: 0 0 0 -8px; opacity: 1; transform: none; visibility: visible; transition: none; }
-  .chat-header { gap: 8px; justify-content: space-between; padding: max(8px, env(safe-area-inset-top)) max(16px, calc((100% - 780px) / 2)) 24px; }
+  .chat-header { gap: 8px; justify-content: space-between; padding: max(8px, env(safe-area-inset-top)) max(16px, calc((100% - 812px) / 2)) 24px; }
   .chat-header .session-title { display: block; white-space: nowrap; text-overflow: ellipsis; }
-  .messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) max(16px, calc((100% - 780px) / 2)) 16px; }
+  .messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) max(16px, calc((100% - 812px) / 2)) 16px; }
   .msg.user { max-width: 90%; }
   .lb-stage { padding: 8px 12px; }
   .lightbox .lb-nav, .lb-src { display: none; }
