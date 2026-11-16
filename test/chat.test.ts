@@ -11,6 +11,7 @@ import {
   toolStatus,
   toolStatusClass,
 } from "../src/app/views/chat";
+import { galleryItems } from "../src/app/views/lightbox";
 
 type ToolData = Extract<PartData, { type: "tool-call" }>;
 
@@ -712,16 +713,111 @@ describe("file parts", () => {
     }
   });
 
-  test("an image file still renders inline", () => {
-    const g = globalThis as Record<string, unknown>;
-    const saved = g.document;
-    g.document = { createElement: (tag: string) => new FakeEl(tag) };
-    try {
-      const node = fileNode({ type: "file", blobId: "blb_img", name: "a.png", mime: "image/png" });
-      expect((node as unknown as FakeEl).tag).toBe("img");
-    } finally {
-      g.document = saved;
-    }
+  test("an image file renders as a framed figure that opens the viewer and downloads", () => {
+    withFakeDom(() => {
+      const node = fileNode(imageData("blb_img", "a.png")) as unknown as FakeEl;
+      expect(node.attrs.get("data-gallery")).toBe("presented");
+      const figure = findTag(node, "figure") as FakeEl;
+      expect(findByClass(figure, "fig-pic")?.attrs.get("data-view")).toBe("blb_img");
+      expect(text(findByClass(figure, "name"))).toBe("a.png");
+      const save = figure.querySelectorAll(".fig-act").find((b) => b.attrs.has("data-save"));
+      expect(save?.attrs.get("data-name")).toBe("a.png");
+    });
+  });
+});
+
+const imageData = (blobId: string, name: string): Extract<PartData, { type: "file" }> => ({
+  type: "file",
+  blobId,
+  name,
+  mime: "image/png",
+});
+
+const filePartOf = (id: string, blobId: string, name: string): Part =>
+  toolPart({}, { id, type: "file", data: imageData(blobId, name) as PartData });
+
+const textPartOf = (id: string, body: string): Part =>
+  toolPart({}, { id, type: "text", data: { type: "text", text: body } as PartData });
+
+function withFakeDom(fn: () => void): void {
+  const g = globalThis as Record<string, unknown>;
+  const saved = { document: g.document, fetch: g.fetch };
+  g.document = { createElement: (tag: string) => new FakeEl(tag), createTextNode: (t: string) => t };
+  g.fetch = () => new Promise(() => {});
+  try {
+    fn();
+  } finally {
+    Object.assign(g, saved);
+  }
+}
+
+const text = (n: FakeEl | undefined): string =>
+  n === undefined
+    ? ""
+    : n.children.map((c) => (c instanceof FakeEl ? text(c) : String(c))).join("") + n.textContent;
+
+describe("message images", () => {
+  const render = (role: "user" | "assistant", parts: Part[]): FakeEl => {
+    const root = new FakeEl("div");
+    const chat = createChat(root as unknown as HTMLElement, {
+      onSend: () => Promise.resolve(true),
+      onUpload: () => Promise.resolve("blb_1"),
+      onStop() {},
+      onModel() {},
+      onRename() {},
+      onDelete() {},
+      onToggleNav() {},
+      onOpenSession() {},
+    });
+    chat.update({ ...viewWith(parts), messages: [{ message: { ...message, role }, parts }] }, []);
+    return findByClass(root, "messages") as FakeEl;
+  };
+
+  test("a user's images are dealt into one deck above the text, in order", () => {
+    withFakeDom(() => {
+      const list = render("user", [
+        filePartOf("p1", "blb_a", "a.png"),
+        textPartOf("p2", "look at these"),
+        filePartOf("p3", "blb_b", "b.png"),
+      ]);
+      const msg = findByClass(list, "msg") as FakeEl;
+      const [first, second] = msg.children as FakeEl[];
+      expect(first?.attrs.get("class")).toBe("deck");
+      expect(first?.attrs.get("style")).toBe("--n:2");
+      expect(first?.attrs.get("data-gallery")).toBe("your message");
+      const cards = (first as FakeEl).querySelectorAll(".deck-card");
+      expect(cards.map((c) => c.attrs.get("data-view"))).toEqual(["blb_a", "blb_b"]);
+      expect(cards.map((c) => c.attrs.get("style"))).toEqual(["--i:0", "--i:1"]);
+      expect(second?.attrs.get("class")).toBe("bubble");
+      expect(findByClass(second as FakeEl, "figures")).toBeUndefined();
+    });
+  });
+
+  test("a user message of only images is a deck with no empty bubble", () => {
+    withFakeDom(() => {
+      const list = render("user", [filePartOf("p1", "blb_a", "a.png")]);
+      const msg = findByClass(list, "msg") as FakeEl;
+      expect(findByClass(msg, "deck")?.attrs.get("class")).toBe("deck single");
+      expect(findByClass(msg, "bubble")).toBeUndefined();
+    });
+  });
+
+  test("presented images become framed figures, a consecutive run sharing one grid", () => {
+    withFakeDom(() => {
+      const list = render("assistant", [
+        textPartOf("p1", "Before and after:"),
+        filePartOf("p2", "blb_a", "before.png"),
+        filePartOf("p3", "blb_b", "after.png"),
+        textPartOf("p4", "Done."),
+        filePartOf("p5", "blb_c", "extra.png"),
+      ]);
+      expect(findByClass(list, "deck")).toBeUndefined();
+      const groups = list.querySelectorAll(".figures");
+      expect(groups.map((g) => g.attrs.get("class"))).toEqual(["figures grid", "figures"]);
+      expect((groups[0] as FakeEl).querySelectorAll(".fig-pic").map((p) => p.attrs.get("data-view"))).toEqual(
+        ["blb_a", "blb_b"],
+      );
+    });
   });
 });
 
@@ -964,5 +1060,15 @@ describe("custom parts", () => {
       expect((row as unknown as { open: boolean }).open).toBe(true);
       expect(row.attrs.get("class")).toBe("part-row");
     });
+  });
+});
+
+describe("galleryItems", () => {
+  test("lists each image once, in order, with the node it opened from", () => {
+    const node = (view: string, name: string) => ({ dataset: { view, name, mime: "image/png" } });
+    const nodes = [node("blb_a", "a.png"), node("blb_b", "b.png"), node("blb_a", "a.png")];
+    const items = galleryItems({ querySelectorAll: () => nodes } as unknown as Element);
+    expect(items.map((i) => i.file.blobId)).toEqual(["blb_a", "blb_b"]);
+    expect(items[1]?.thumb).toBe(nodes[1] as unknown as HTMLElement);
   });
 });

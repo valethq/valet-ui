@@ -1,4 +1,3 @@
-import { blobUrl } from "../api";
 import { clear, el, morph, reconcile } from "../dom";
 import { chipButton, icon, iconButton } from "../icons";
 import { logoFor, logoMark } from "../logos";
@@ -17,6 +16,8 @@ import {
 } from "../subagents";
 import type { ChatMessage, Part, PartData, PartInput, PartType, ProviderModels } from "../types";
 import { createAttachments, filePart } from "./attachments";
+import { galleryItems, openLightbox } from "./lightbox";
+import { copyImage, type FileData, imageDeck, imageFigures, isImage, saveBlob } from "./media";
 
 export interface ChatCallbacks {
   /** Resolves true when the POST succeeded; the draft is kept on failure. */
@@ -366,11 +367,7 @@ function compactionLabel(d: Extract<PartData, { type: "compaction" }>): string {
   }
 }
 
-async function saveBlob(blobId: string, name: string): Promise<void> {
-  el("a", { href: await blobUrl(blobId), download: name }).click();
-}
-
-export function fileNode(d: Extract<PartData, { type: "file" }>): HTMLElement {
+export function fileNode(d: FileData): HTMLElement {
   if (!d.mime.startsWith("image/")) {
     const button = el(
       "button",
@@ -386,13 +383,7 @@ export function fileNode(d: Extract<PartData, { type: "file" }>): HTMLElement {
     });
     return button;
   }
-  const img = el("img", { class: "part-image", alt: d.name });
-  blobUrl(d.blobId)
-    .then((url) => {
-      img.src = url;
-    })
-    .catch(() => {});
-  return img;
+  return imageFigures([d]);
 }
 
 /** What the copy button puts on the clipboard. A user message copies all its
@@ -460,18 +451,34 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
   const msgs: HTMLElement[] = [];
   const fx = anim === "" ? "" : ` ${anim}`;
   const bare = cm.message.role === "system" && isCustomOnly(cm) ? " bare" : "";
+  // A user's images become one deck above their text; a run of presented
+  // images becomes one group of figures.
+  const user = cm.message.role === "user";
+  const deckImages = user ? cm.parts.map((p) => p.data).filter(isImage) : [];
+  let deck: HTMLElement | null = deckImages.length > 0 ? imageDeck(deckImages) : null;
   let bubble: HTMLElement | null = null;
   const currentBubble = (): HTMLElement => {
     if (bubble === null) {
       bubble = el("div", { class: "bubble" });
-      const msg = el("div", { class: `msg ${cm.message.role}${bare}${fx}` }, bubble);
+      const msg = el("div", { class: `msg ${cm.message.role}${bare}${fx}` }, ...(deck ? [deck] : []), bubble);
+      deck = null;
       msgs.push(msg);
       out.push(msg);
     }
     return bubble;
   };
+  let run: FileData[] = [];
+  const flushRun = (): void => {
+    if (run.length > 0) currentBubble().append(imageFigures(run));
+    run = [];
+  };
   for (const part of cm.parts) {
     const d = part.data;
+    if (isImage(d)) {
+      if (!user) run.push(d);
+      continue;
+    }
+    flushRun();
     if (d.type === "notice" && d.level !== "error") {
       bubble = null;
       out.push(el("div", { class: `divider ${d.level}${fx}` }, el("span", { text: d.text })));
@@ -490,6 +497,12 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
     }
     const node = renderPart(part, ui);
     if (node !== null) currentBubble().append(node);
+  }
+  flushRun();
+  if (deck !== null) {
+    const msg = el("div", { class: `msg ${cm.message.role}${fx}` }, deck);
+    msgs.push(msg);
+    out.push(msg);
   }
   if (cm.parts.length === 0) {
     const b = currentBubble();
@@ -566,13 +579,14 @@ function draftPick(draft: ModelSel | undefined, providers: ProviderModels[]): Mo
 }
 
 function flashCopy(btn: HTMLButtonElement, name: "check" | "close", label: string): void {
+  const was = btn.title;
   btn.replaceChildren(icon(name));
   btn.title = label;
   btn.setAttribute("aria-label", label);
   setTimeout(() => {
     btn.replaceChildren(icon("copy"));
-    btn.title = "Copy";
-    btn.setAttribute("aria-label", "Copy");
+    btn.title = was;
+    btn.setAttribute("aria-label", was);
   }, 1500);
 }
 
@@ -755,6 +769,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       cb.onOpenSession(open);
       return;
     }
+    if (mediaClick(ev.target as Element | null)) return;
     const btn = (ev.target as Element | null)?.closest<HTMLButtonElement>(".copy-btn");
     const id = btn?.dataset.copyId;
     if (btn === null || btn === undefined || id === undefined) return;
@@ -765,6 +780,29 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       () => flashCopy(btn, "close", "Copy failed"),
     );
   });
+  /** Image clicks: open the lightbox, download, or copy. True when handled. */
+  function mediaClick(target: Element | null): boolean {
+    const save = target?.closest<HTMLElement>("[data-save]");
+    if (save) {
+      saveBlob(save.dataset.save ?? "", save.dataset.name ?? "").catch(() => setSendError("Download failed"));
+      return true;
+    }
+    const copy = target?.closest<HTMLButtonElement>("[data-copy-image]");
+    if (copy) {
+      copyImage(copy.dataset.copyImage ?? "").then(
+        () => flashCopy(copy, "check", "Copied"),
+        () => flashCopy(copy, "close", "Copy failed"),
+      );
+      return true;
+    }
+    const view = target?.closest<HTMLElement>("[data-view]");
+    const gallery = view?.closest<HTMLElement>("[data-gallery]");
+    if (!view || !gallery) return false;
+    const items = galleryItems(gallery.closest(".msg") ?? gallery);
+    const at = items.findIndex((it) => it.file.blobId === view.dataset.view);
+    openLightbox(items, Math.max(0, at), gallery.dataset.gallery ?? "", setSendError);
+    return true;
+  }
   messages.addEventListener("scroll", () => {
     stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
   });
