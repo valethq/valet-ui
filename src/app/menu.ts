@@ -46,7 +46,7 @@ export function popover(
 
   function close(): void {
     if (menu === null) return;
-    leave(menu, 180);
+    leave(menu, 240);
     menu = null;
     trigger.setAttribute("aria-expanded", "false");
     document.removeEventListener("pointerdown", onDoc, true);

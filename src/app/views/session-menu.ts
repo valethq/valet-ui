@@ -87,7 +87,7 @@ function close(): void {
   const { menu, trigger } = open;
   open = null;
   trigger.setAttribute("aria-expanded", "false");
-  leave(menu, 180);
+  leave(menu, 240);
   document.removeEventListener("pointerdown", onDocPointer, true);
   document.removeEventListener("keydown", onKey);
   window.removeEventListener("resize", close);

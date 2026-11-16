@@ -8,8 +8,8 @@ export interface LightboxItem {
   thumb: HTMLElement | null;
 }
 
-const EASE = "cubic-bezier(.22, 1, .36, 1)"; // --sb-ease
-const EASE_OUT = "cubic-bezier(.64, 0, .78, 0)"; // --sb-ease-out
+const token = (name: string): string =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "ease";
 const MAX_ZOOM = 8;
 
 const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -263,7 +263,7 @@ export function openLightbox(
     hideThumb();
     const a = img.animate([{ transform: flipFrom(from), borderRadius: "24px" }, { transform: "none" }], {
       duration: 420,
-      easing: EASE,
+      easing: token("--ease-focus"),
     });
     a.finished.then(showThumb, showThumb);
   }
@@ -278,7 +278,7 @@ export function openLightbox(
     const to = thumbRect();
     box.classList.add("leaving");
     if (to === null || reducedMotion() || zoom.s > 1) {
-      leave(box, 220);
+      leave(box, 380);
       return;
     }
     hideThumb();
@@ -286,7 +286,7 @@ export function openLightbox(
       [{ transform: "none" }, { transform: flipFrom(to), borderRadius: "24px", opacity: 0.6 }],
       {
         duration: 260,
-        easing: EASE_OUT,
+        easing: token("--ease-exit"),
         fill: "forwards",
       },
     );

@@ -49,7 +49,7 @@ export function morph(from: Element, to: Element): void {
 const tagOf = (n: Node): string | undefined => (n.nodeType === 1 ? (n as Element).tagName : undefined);
 
 /** Plays the `.leaving` exit animation from page.ts, then removes the node. */
-export function leave(node: HTMLElement, ms = 260): void {
+export function leave(node: HTMLElement, ms = 460): void {
   node.classList.add("leaving");
   const done = (): void => node.remove();
   node.addEventListener("animationend", (ev) => {
