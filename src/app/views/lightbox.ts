@@ -11,6 +11,7 @@ export interface LightboxItem {
 const token = (name: string): string =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "ease";
 const MAX_ZOOM = 8;
+const SWIPE = 50;
 
 const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -168,9 +169,13 @@ export function openLightbox(
   });
   stage.addEventListener("pointerup", (ev) => {
     if (drag === null || ev.pointerId !== drag.id) return;
-    const wasDrag = drag.moved;
+    const { moved: wasDrag, sx, sy } = drag;
     drag = null;
     box.classList.remove("panning");
+    const dx = ev.clientX - sx;
+    if (wasDrag && zoom.s === 1 && Math.abs(dx) > SWIPE && Math.abs(dx) > Math.abs(ev.clientY - sy) * 1.5) {
+      go(index + (dx < 0 ? 1 : -1));
+    }
     if (wasDrag) return;
     if (zoom.s > 1) zoomAt(1, ev.clientX, ev.clientY, true);
     else zoomAt(Math.max(2.5, fitScale()), ev.clientX, ev.clientY, true);
@@ -178,10 +183,29 @@ export function openLightbox(
   stage.addEventListener("click", (ev) => {
     if (ev.target === stage) dismiss();
   });
+  let swipe = { sum: 0, lock: 0, last: 0 };
+  /** Horizontal trackpad swipe: one image per gesture; inertia events are ignored until they stop. */
+  function swipeWheel(dx: number): void {
+    const now = performance.now();
+    if (now - swipe.last > 120) swipe.sum = 0;
+    swipe.last = now;
+    if (now < swipe.lock) {
+      swipe.lock = Math.max(swipe.lock, now + 120);
+      return;
+    }
+    swipe.sum += dx;
+    if (Math.abs(swipe.sum) < SWIPE) return;
+    go(index + (swipe.sum > 0 ? 1 : -1));
+    swipe = { sum: 0, lock: now + 300, last: now };
+  }
   stage.addEventListener(
     "wheel",
     (ev) => {
       ev.preventDefault();
+      if (!ev.ctrlKey && zoom.s === 1 && Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
+        swipeWheel(ev.deltaX);
+        return;
+      }
       if (ev.ctrlKey || zoom.s === 1) {
         zoomAt(zoom.s * Math.exp(-ev.deltaY * 0.0022), ev.clientX, ev.clientY, false);
         return;
