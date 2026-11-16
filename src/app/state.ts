@@ -1,4 +1,14 @@
-import type { ChatMessage, Message, MessageDelta, Part, PartData, Run, Session } from "./types";
+import type {
+  ChatMessage,
+  Message,
+  MessageDelta,
+  Part,
+  PartData,
+  QueueMode,
+  Run,
+  Session,
+  SessionState,
+} from "./types";
 
 export interface SessionView {
   session: Session;
@@ -11,6 +21,8 @@ export interface SessionView {
   contextWindow: number | null;
   /** run.id -> run.error, remembered for error rendering. */
   runErrors: Map<string, string>;
+  /** Messages waiting behind the active run, from the agent's session state. */
+  queued: number;
 }
 
 export function newSessionView(session: Session, messages: ChatMessage[]): SessionView {
@@ -30,6 +42,7 @@ export function newSessionView(session: Session, messages: ChatMessage[]): Sessi
     contextTokens: null,
     contextWindow: null,
     runErrors: new Map(),
+    queued: 0,
   };
 }
 
@@ -241,6 +254,40 @@ export function applyRunInfo(view: SessionView, run: Run): void {
 
 export function applyRunStatus(view: SessionView, runId: string, status: string): void {
   if (view.activeRunId === runId || view.activeRunId === null) view.runStatus = status;
+}
+
+/** Seeds the view from the agent's session state. A run that finished or started while the request was in flight wins over its stale active-run answer, so the run is only adopted when the view has none. */
+export function applySessionState(view: SessionView, state: SessionState): void {
+  view.queued = state.queued;
+  if (view.activeRunId === null && state.activeRunId !== undefined) view.activeRunId = state.activeRunId;
+  const tokens = state.usage?.contextTokens;
+  if (view.contextTokens === null && typeof tokens === "number") view.contextTokens = tokens;
+  const win = state.usage?.contextWindow;
+  if (view.contextWindow === null && typeof win === "number" && win > 0) view.contextWindow = win;
+}
+
+/** The session's own queue mode, else the agent default. */
+export function queueModeOf(session: Session, fallback: QueueMode): QueueMode {
+  const agent = session.settings.agent;
+  const mode =
+    typeof agent === "object" && agent !== null ? (agent as { queueMode?: unknown }).queueMode : undefined;
+  return mode === "queue" || mode === "interrupt" ? mode : fallback;
+}
+
+/** `settings` with agent.queueMode set; PATCH replaces settings wholesale, so everything else is kept. */
+export function withQueueMode(settings: Session["settings"], mode: QueueMode): Session["settings"] {
+  const agent = typeof settings.agent === "object" && settings.agent !== null ? settings.agent : {};
+  return { ...settings, agent: { ...agent, queueMode: mode } };
+}
+
+/** The session this one was forked from, when it is still in the list. */
+export function forkSource(list: Session[], session: Session): Session | undefined {
+  const agent = session.settings.agent;
+  const from =
+    typeof agent === "object" && agent !== null ? (agent as { forkedFrom?: unknown }).forkedFrom : undefined;
+  const id =
+    typeof from === "object" && from !== null ? (from as { sessionId?: unknown }).sessionId : undefined;
+  return typeof id === "string" ? list.find((s) => s.id === id) : undefined;
 }
 
 export type Indicator = "running" | "attention" | "done" | "stale";

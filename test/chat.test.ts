@@ -291,6 +291,10 @@ describe("send error line", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -369,6 +373,7 @@ const viewWith = (parts: Part[]): SessionView => ({
   contextTokens: null,
   contextWindow: null,
   runErrors: new Map(),
+  queued: 0,
 });
 
 describe("tool output rendering", () => {
@@ -385,6 +390,10 @@ describe("tool output rendering", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -422,6 +431,10 @@ describe("message entrance", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -475,6 +488,10 @@ describe("streaming updates", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -530,6 +547,10 @@ describe("composer attachments", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -573,6 +594,10 @@ describe("composer attachments", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -598,6 +623,10 @@ describe("composer attachments", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -627,6 +656,10 @@ describe("composer attachments", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -651,6 +684,10 @@ describe("composer attachments", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });
@@ -766,6 +803,10 @@ describe("message images", () => {
       onModel() {},
       onRename() {},
       onDelete() {},
+      onFork() {},
+      onMove() {},
+      onCompact() {},
+      onQueueMode() {},
       onToggleNav() {},
       onOpenSession() {},
     });
@@ -838,6 +879,10 @@ describe("subagent sessions", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession: (id) => opened.push(id),
       });
@@ -953,6 +998,94 @@ describe("subagent sessions", () => {
   });
 });
 
+describe("session actions", () => {
+  const withActions = (
+    fn: (root: FakeEl, chat: ReturnType<typeof createChat>, forks: (string | undefined)[]) => void,
+  ): void => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag), createTextNode: (text: string) => text };
+    try {
+      const root = new FakeEl("div");
+      const forks: (string | undefined)[] = [];
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onFork: (id) => forks.push(id),
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
+        onToggleNav() {},
+        onOpenSession() {},
+      });
+      fn(root, chat, forks);
+    } finally {
+      g.document = saved;
+    }
+  };
+  const textPart = (): Part => ({
+    id: "prt_t",
+    messageId: "msg_1",
+    idx: 0,
+    status: "complete",
+    type: "text",
+    data: { type: "text", text: "hello" },
+    createdAt: 1,
+    updatedAt: 1,
+  });
+
+  test("a finished message has a fork button carrying its id, and clicking it forks from there", () => {
+    withActions((root, chat, forks) => {
+      chat.update(viewWith([textPart()]), []);
+      const btn = findByClass(root, "fork-btn") as FakeEl;
+      expect(btn.dataset.forkId).toBe("msg_1");
+      const target = { closest: (sel: string) => (sel === ".fork-btn" ? btn : null) };
+      findByClass(root, "messages")?.dispatch("click", { target });
+      expect(forks).toEqual(["msg_1"]);
+    });
+  });
+
+  test("a message still streaming has no fork button", () => {
+    withActions((root, chat) => {
+      const view = viewWith([textPart()]);
+      (view.messages[0] as ChatMessage).message = { ...message, status: "streaming" };
+      chat.update(view, []);
+      expect(findByClass(root, "fork-btn")).toBeUndefined();
+    });
+  });
+
+  test("a fork's header links back to its source and hides the link when there is none", () => {
+    withActions((root, chat) => {
+      const source = { ...session, id: "ses_src", title: "Original" };
+      chat.update(viewWith([]), [], undefined, undefined, { forkedFrom: source, subs: [] });
+      const crumbs = root.querySelectorAll("crumb");
+      const forkCrumb = crumbs[1] as FakeEl;
+      expect(forkCrumb.style.display).toBe("");
+      expect(findByClass(forkCrumb, "crumb-text")?.textContent).toBe("Forked from Original");
+      chat.update(viewWith([]), [], undefined, undefined, { subs: [] });
+      expect(forkCrumb.style.display).toBe("none");
+    });
+  });
+
+  test("the queued count shows beside the stop button only while messages wait", () => {
+    withActions((root, chat) => {
+      const view = viewWith([]);
+      view.queued = 2;
+      chat.update(view, []);
+      const badge = findByClass(root, "queued-badge") as FakeEl;
+      expect(badge.style.display).toBe("");
+      expect(badge.textContent).toBe("2 queued");
+      view.queued = 0;
+      chat.update(view, []);
+      expect(badge.style.display).toBe("none");
+    });
+  });
+});
+
 describe("custom parts", () => {
   const withDom = (fn: (root: FakeEl, chat: ReturnType<typeof createChat>) => void): void => {
     const g = globalThis as Record<string, unknown>;
@@ -967,6 +1100,10 @@ describe("custom parts", () => {
         onModel() {},
         onRename() {},
         onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
       });

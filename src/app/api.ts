@@ -5,8 +5,10 @@ import type {
   PluginStatus,
   Project,
   ProviderModels,
+  QueueMode,
   Run,
   Session,
+  SessionState,
   SettingsEntry,
 } from "./types";
 
@@ -217,6 +219,33 @@ export const saveSettings = (key: string, values: Record<string, unknown>): Prom
   req("PUT", `/plugins/valet-ui/settings/${encodeURIComponent(key)}`, values);
 
 // ---- valet-agent (11.1). Normalized like authStatus. ----
+
+const agentSession = (id: string, action: string): string =>
+  `/plugins/valet-agent/sessions/${encodeURIComponent(id)}/${action}`;
+
+/** A new session holding the chat up to `messageId` (default: the latest message). */
+export const forkSession = (id: string, messageId?: string): Promise<Session> =>
+  req("POST", agentSession(id, "fork"), messageId === undefined ? {} : { messageId });
+
+/** Gives the chat a new id in `projectId`; the original is deleted. Refused while a turn is running. */
+export const moveSession = (id: string, projectId: string): Promise<Session> =>
+  req("POST", agentSession(id, "move"), { projectId });
+
+export const getSessionState = (id: string): Promise<SessionState> => get(agentSession(id, "state"));
+
+/** Runs `/compact` through the message hook. It answers 409 once the command has run, which counts as sent. */
+export async function compactSession(id: string, instructions: string): Promise<void> {
+  const text = instructions === "" ? "/compact" : `/compact ${instructions}`;
+  await sendMessage(id, [{ type: "text", text }], crypto.randomUUID()).catch((e: unknown) => {
+    if (!isCommandHandled(e)) throw e;
+  });
+}
+
+/** The agent's default queue mode from its settings panel; "queue" when it is unset or unreadable. */
+export async function defaultQueueMode(): Promise<QueueMode> {
+  const entry = await getSettings("valet-agent").catch(() => undefined);
+  return entry?.values?.defaultQueueMode === "interrupt" ? "interrupt" : "queue";
+}
 
 export async function listModels(): Promise<ProviderModels[]> {
   const d = (await get("/plugins/valet-agent/models")) as unknown;

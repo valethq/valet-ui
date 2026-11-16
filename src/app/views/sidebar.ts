@@ -15,6 +15,8 @@ export interface SidebarProps {
   onProject(id: string): void;
   onSession(id: string): void;
   onRename(id: string): void;
+  onFork(id: string): void;
+  onMove(id: string, projectId: string): void;
   onDelete(id: string): void;
   onNew(): void;
   onLogout(): void;

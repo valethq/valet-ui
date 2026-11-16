@@ -11,7 +11,9 @@ import {
   applyRunStart,
   applyRunStatus,
   applyRunUpdate,
+  applySessionState,
   EventBuffer,
+  forkSource,
   newSessionView,
   orphanChildren,
   childrenOf,
@@ -24,8 +26,19 @@ import {
   titleSuffixes,
   topLevel,
   upsertSession,
+  withQueueMode,
 } from "./state";
-import type { Message, MessageDelta, Part, Project, ProviderModels, Run, RunStatus, Session } from "./types";
+import type {
+  Message,
+  MessageDelta,
+  Part,
+  Project,
+  ProviderModels,
+  QueueMode,
+  Run,
+  RunStatus,
+  Session,
+} from "./types";
 import { syncCustom } from "./themes";
 import { renderAuth } from "./views/auth";
 import { createChat, type ChatHandle } from "./views/chat";
@@ -267,6 +280,8 @@ function scheduleRender(): void {
           const session = app.sessions.find((s) => s.id === id);
           if (session !== undefined) promptRename(session);
         },
+        onFork: (id) => void forkFrom(id),
+        onMove: (id, projectId) => void moveTo(id, projectId),
         onDelete: (id) => void deleteSession(id),
         onNew: () => {
           closeNav();
@@ -289,6 +304,7 @@ function scheduleRender(): void {
       });
     }
     const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
+    const forked = open === undefined ? undefined : forkSource(app.sessions, open);
     const links =
       open === undefined
         ? undefined
@@ -296,6 +312,7 @@ function scheduleRender(): void {
             ...(open.parentSessionId === null
               ? {}
               : { parent: app.sessions.find((s) => s.id === open.parentSessionId) }),
+            ...(forked === undefined ? {} : { forkedFrom: forked }),
             subs: childrenOf(app.sessions, open.id).map((session) => ({
               session,
               indicator: indicators.get(session.id) ?? ("done" as const),
@@ -328,6 +345,25 @@ function refetchMessagesSoon(): void {
       })
       .catch(() => {});
   }, 120);
+}
+
+let stateTimer: ReturnType<typeof setTimeout> | undefined;
+/** Re-reads the open session's queue depth, active run and usage from the agent. */
+function refreshStateSoon(): void {
+  if (stateTimer !== undefined) return;
+  stateTimer = setTimeout(() => {
+    stateTimer = undefined;
+    const view = app.view;
+    if (view === null) return;
+    api
+      .getSessionState(view.session.id)
+      .then((state) => {
+        if (app.view?.session.id !== view.session.id) return;
+        applySessionState(view, state);
+        scheduleRender();
+      })
+      .catch(() => {});
+  }, 150);
 }
 
 async function loadSessions(): Promise<void> {
@@ -388,6 +424,7 @@ async function openSession(id: string): Promise<void> {
   }
   history.replaceState(null, "", `#s=${encodeURIComponent(id)}`);
   scheduleRender();
+  refreshStateSoon();
 
   const lastRunId = [...messages].reverse().find((cm) => cm.message.runId !== null)?.message.runId;
   if (lastRunId !== undefined && lastRunId !== null) {
@@ -447,6 +484,78 @@ async function createSessionForDraft(): Promise<boolean> {
   syncTopics();
   await openSession(session.id);
   return app.view !== null;
+}
+
+async function forkFrom(id: string, messageId?: string): Promise<void> {
+  const forked = await api.forkSession(id, messageId).catch((e: unknown) => {
+    toast(e instanceof Error ? e.message : "fork failed");
+    return undefined;
+  });
+  if (forked === undefined) return;
+  app.sessions = upsertSession(app.sessions, forked);
+  syncTopics();
+  await openSession(forked.id);
+}
+
+async function moveTo(id: string, projectId: string): Promise<void> {
+  const open = app.view?.session.id === id ? app.view : null;
+  if (
+    open !== null ? open.activeRunId !== null : app.sessions.find((s) => s.id === id)?.status === "running"
+  ) {
+    toast("A turn is running; move once it finishes");
+    return;
+  }
+  const moved = await api.moveSession(id, projectId).catch((e: unknown) => {
+    toast(e instanceof Error ? e.message : "move failed");
+    return undefined;
+  });
+  if (moved === undefined) return;
+  const name = app.projects.find((p) => p.id === projectId)?.name ?? "another project";
+  app.sessions = orphanChildren(
+    app.sessions.filter((s) => s.id !== id),
+    id,
+  );
+  syncTopics();
+  toast(`Moved to ${name}`);
+  if (open === null) {
+    scheduleRender();
+    return;
+  }
+  // The move gave the chat a new id in the other project; follow it there.
+  app.view = null;
+  try {
+    localStorage.setItem(sessionKey(projectId), moved.id);
+  } catch {
+    // private mode; the new project opens on its latest session instead
+  }
+  await switchProject(projectId);
+}
+
+function compactOpen(): void {
+  const view = app.view;
+  if (view === null) return;
+  if (view.activeRunId !== null) {
+    toast("A turn is running. Compact once it finishes.");
+    return;
+  }
+  const instructions = window.prompt("Compaction instructions (optional)", "");
+  if (instructions === null) return;
+  api
+    .compactSession(view.session.id, instructions.trim())
+    .catch((e: unknown) => toast(e instanceof Error ? e.message : "compact failed"));
+}
+
+function setQueueMode(mode: QueueMode): void {
+  const view = app.view;
+  if (view === null) return;
+  api
+    .updateSession(view.session.id, { settings: withQueueMode(view.session.settings, mode) })
+    .then((session) => {
+      if (app.view?.session.id === session.id) app.view.session = session;
+      app.sessions = upsertSession(app.sessions, session);
+      scheduleRender();
+    })
+    .catch((e: unknown) => toast(e instanceof Error ? e.message : "queue mode change failed"));
 }
 
 async function renameSession(id: string, title: string): Promise<void> {
@@ -528,6 +637,7 @@ function onEvent(topic: string, name: string, data: unknown): void {
         const p = data as { message: Message; parts: Part[] };
         applyMessageCreate(view, p.message, p.parts);
         noteSeen(id, p.message.createdAt);
+        if (p.message.role === "user") refreshStateSoon();
         break;
       }
       case "message.delta":
@@ -545,6 +655,7 @@ function onEvent(topic: string, name: string, data: unknown): void {
         break;
       case "run.start":
         applyRunStart(view, (data as { run: Run }).run);
+        refreshStateSoon();
         break;
       case "run.update":
         applyRunUpdate(view, (data as { run: Run }).run);
@@ -552,6 +663,7 @@ function onEvent(topic: string, name: string, data: unknown): void {
       case "run.end":
         applyRunEnd(view, (data as { run: Run }).run);
         refetchMessagesSoon();
+        refreshStateSoon();
         break;
       case "run.status": {
         const p = data as RunStatus;
@@ -628,6 +740,7 @@ async function startApp(): Promise<void> {
         if (app.view?.session.id === view.session.id) {
           applyMessageCreate(view, cm.message, cm.parts);
           scheduleRender();
+          refreshStateSoon();
         }
         app.chat?.setSendError(null);
         return true;
@@ -651,6 +764,14 @@ async function startApp(): Promise<void> {
     onDelete: () => {
       if (app.view !== null) void deleteSession(app.view.session.id);
     },
+    onFork: (messageId) => {
+      if (app.view !== null) void forkFrom(app.view.session.id, messageId);
+    },
+    onMove: (projectId) => {
+      if (app.view !== null) void moveTo(app.view.session.id, projectId);
+    },
+    onCompact: compactOpen,
+    onQueueMode: setQueueMode,
     onStop: () => {
       const runId = app.view?.activeRunId;
       if (runId == null) return;
@@ -719,6 +840,8 @@ async function startApp(): Promise<void> {
 
   app.projects = await api.listProjects();
   app.providers = await api.listModels().catch(() => []);
+  app.chat.setProjects(app.projects);
+  api.defaultQueueMode().then((mode) => app.chat?.setDefaultQueueMode(mode));
   loadPartTypes();
   const remembered = (() => {
     try {

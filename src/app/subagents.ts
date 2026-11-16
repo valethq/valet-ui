@@ -11,6 +11,8 @@ export interface SubInfo {
 /** The open session's neighbours in the subagent tree. */
 export interface SessionLinks {
   parent?: Session;
+  /** The session this one was forked from, while it still exists. */
+  forkedFrom?: Session;
   subs: SubInfo[];
 }
 

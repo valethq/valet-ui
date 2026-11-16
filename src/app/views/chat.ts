@@ -4,7 +4,7 @@ import { logoFor, logoMark } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { familyOf, groupModels, type ModelFamily, type ModelVariant } from "../models";
-import type { SessionView } from "../state";
+import { queueModeOf, type SessionView } from "../state";
 import {
   bindSubs,
   isSubagentCall,
@@ -14,7 +14,16 @@ import {
   type SubRow,
   type ToolData,
 } from "../subagents";
-import type { ChatMessage, Part, PartData, PartInput, PartType, ProviderModels } from "../types";
+import type {
+  ChatMessage,
+  Part,
+  PartData,
+  PartInput,
+  PartType,
+  Project,
+  ProviderModels,
+  QueueMode,
+} from "../types";
 import { createAttachments, filePart } from "./attachments";
 import { galleryItems, openLightbox } from "./lightbox";
 import { copyImage, type FileData, imageDeck, imageFigures, isImage, saveBlob } from "./media";
@@ -27,6 +36,11 @@ export interface ChatCallbacks {
   onModel(provider: string, model: string): void;
   onRename(): void;
   onDelete(): void;
+  /** Fork the open session; `messageId` forks from that message, otherwise from the latest. */
+  onFork(messageId?: string): void;
+  onMove(projectId: string): void;
+  onCompact(): void;
+  onQueueMode(mode: QueueMode): void;
   onToggleNav(): void;
   /** A subagent card or the parent breadcrumb was clicked. */
   onOpenSession(id: string): void;
@@ -50,6 +64,10 @@ export interface ChatHandle {
   setSendError(message: string | null): void;
   /** Core's part type registry; custom parts look their kind up here. */
   setPartTypes(types: PartType[]): void;
+  /** Projects a session can move to. */
+  setProjects(projects: Project[]): void;
+  /** The agent's default queue mode, for sessions that don't set their own. */
+  setDefaultQueueMode(mode: QueueMode): void;
 }
 
 const LANDING = ["How are you?", "Ready when you are.", "What should we work on?", "What's on your mind?"];
@@ -527,12 +545,18 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
     if (shown !== undefined) meta.push(shown.model);
     if (cm.message.status !== "complete") meta.push(cm.message.status);
     const copyable = cm.message.status === "complete" && copyText(cm) !== "";
-    if (meta.length > 0 || copyable) {
+    const forkable = cm.message.status === "complete" && (cm.message.role === "user" || assistant);
+    if (meta.length > 0 || copyable || forkable) {
       const line = el("div", { class: "meta" });
       if (copyable) {
         const btn = iconButton("copy", "Copy", "copy-btn");
         btn.dataset.copyId = cm.message.id;
         line.append(btn);
+      }
+      if (forkable) {
+        const fork = iconButton("branch", "Fork from here", "fork-btn");
+        fork.setAttribute("data-fork-id", cm.message.id);
+        line.append(fork);
       }
       const logo = shown === undefined ? undefined : logoFor(shown.model, shown.provider);
       if (logo !== undefined) line.append(logoMark(logo));
@@ -609,10 +633,24 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   crumb.addEventListener("click", () => {
     if (parentId !== null) cb.onOpenSession(parentId);
   });
+  const forkCrumbText = el("span", { class: "crumb-text" });
+  const forkCrumb = el(
+    "button",
+    { class: "crumb", "aria-label": "Open the session this was forked from" },
+    icon("branch"),
+    forkCrumbText,
+  );
+  forkCrumb.style.display = "none";
+  let forkSourceId: string | null = null;
+  forkCrumb.addEventListener("click", () => {
+    if (forkSourceId !== null) cb.onOpenSession(forkSourceId);
+  });
   const modelChip = chipButton("model", icon("sparkles"), "Model");
   const effortChip = chipButton("effort", icon("gauge"), "Effort");
   const ring = el("span", { class: "ring" });
   const tip = el("span", { class: "tip", role: "tooltip" });
+  const queuedBadge = el("span", { class: "queued-badge", role: "status" });
+  queuedBadge.style.display = "none";
   const contextBar = el("div", { class: "context-bar", tabindex: "0", role: "img" }, ring, tip);
   const messages = el("div", { class: "messages" });
   const connLine = el("div", { class: "hint conn", text: "Reconnecting…" });
@@ -770,6 +808,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       return;
     }
     if (mediaClick(ev.target as Element | null)) return;
+    const forkId = (ev.target as Element | null)?.closest<HTMLElement>(".fork-btn")?.dataset.forkId;
+    if (forkId !== undefined) {
+      cb.onFork(forkId);
+      return;
+    }
     const btn = (ev.target as Element | null)?.closest<HTMLButtonElement>(".copy-btn");
     const id = btn?.dataset.copyId;
     if (btn === null || btn === undefined || id === undefined) return;
@@ -807,16 +850,46 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
   });
 
+  let projects: Project[] = [];
+  let defaultMode: QueueMode = "queue";
   const sessionMenu = popover(
     iconButton("more", "Session actions", "session-menu"),
-    () => [
-      {
-        items: [
-          { label: "Rename", lead: icon("pencil"), onSelect: () => cb.onRename() },
-          { label: "Delete", lead: icon("trash"), onSelect: () => cb.onDelete() },
-        ],
-      },
-    ],
+    () => {
+      const session = current?.session;
+      const mode = session === undefined ? defaultMode : queueModeOf(session, defaultMode);
+      const targets = projects.filter((p) => p.id !== session?.projectId);
+      const sections: MenuSection[] = [
+        {
+          items: [
+            { label: "Rename", lead: icon("pencil"), onSelect: () => cb.onRename() },
+            { label: "Fork", lead: icon("branch"), onSelect: () => cb.onFork() },
+            { label: "Compact", lead: icon("compact"), onSelect: () => cb.onCompact() },
+          ],
+        },
+        {
+          title: "New messages while running",
+          items: [
+            { label: "Queue", selected: mode === "queue", onSelect: () => cb.onQueueMode("queue") },
+            {
+              label: "Interrupt",
+              selected: mode === "interrupt",
+              onSelect: () => cb.onQueueMode("interrupt"),
+            },
+          ],
+        },
+      ];
+      if (targets.length > 0)
+        sections.push({
+          title: "Move to project",
+          items: targets.map((p) => ({
+            label: p.name,
+            lead: icon("folder"),
+            onSelect: () => cb.onMove(p.id),
+          })),
+        });
+      sections.push({ items: [{ label: "Delete", lead: icon("trash"), onSelect: () => cb.onDelete() }] });
+      return sections;
+    },
     "session-actions",
   );
   sessionMenu.style.display = "none";
@@ -828,7 +901,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       "div",
       { class: "chat-header" },
       navToggle,
-      el("div", { class: "title-group" }, crumb, el("div", { class: "title-line" }, title, titleNum, subTag)),
+      el(
+        "div",
+        { class: "title-group" },
+        crumb,
+        forkCrumb,
+        el("div", { class: "title-line" }, title, titleNum, subTag),
+      ),
       sessionMenu,
     ),
     messages,
@@ -846,7 +925,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
           "div",
           { class: "composer-bar" },
           el("div", { class: "controls" }, attachMenu, modelMenu, effortMenu),
-          el("div", { class: "actions" }, contextBar, stop, send),
+          el("div", { class: "actions" }, queuedBadge, contextBar, stop, send),
         ),
         imageInput,
         fileInput,
@@ -1037,6 +1116,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         titleNum.style.display = "none";
         subTag.style.display = "none";
         crumb.style.display = "none";
+        forkCrumb.style.display = "none";
+        queuedBadge.style.display = "none";
         sessionMenu.style.display = "none";
         rebuildModels(draftPick(draft, providers), providers);
         if (messages.querySelector(".landing") === null) {
@@ -1060,6 +1141,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       subTag.style.display = view.session.parentSessionId === null ? "none" : "";
       crumb.style.display = links?.parent === undefined ? "none" : "";
       crumbText.textContent = links?.parent?.title ?? "Untitled";
+      forkSourceId = links?.forkedFrom?.id ?? null;
+      forkCrumb.style.display = forkSourceId === null ? "none" : "";
+      forkCrumbText.textContent = `Forked from ${links?.forkedFrom?.title ?? "Untitled"}`;
+      queuedBadge.style.display = view.queued > 0 ? "" : "none";
+      queuedBadge.textContent = `${view.queued} queued`;
       if (titleSuffix !== undefined) {
         titleNum.textContent = `#${titleSuffix}`;
         titleNum.style.display = "";
@@ -1079,6 +1165,12 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       if (open) setSendError(null);
     },
     setSendError,
+    setProjects(list) {
+      projects = list;
+    },
+    setDefaultQueueMode(mode) {
+      defaultMode = mode;
+    },
     setPartTypes(types) {
       partTypes.clear();
       for (const t of types) partTypes.set(t.id, t);

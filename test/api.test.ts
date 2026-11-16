@@ -3,11 +3,16 @@ import {
   ApiError,
   authStatus,
   blobUrl,
+  compactSession,
+  defaultQueueMode,
   deleteSession,
+  forkSession,
+  getSessionState,
   isCommandHandled,
   listProjects,
   listPartTypes,
   listSettings,
+  moveSession,
   saveSettings,
   sendMessage,
   updateSession,
@@ -260,5 +265,91 @@ describe("authStatus", () => {
     expect((await authStatus()).needsSetup).toBe(true);
     stubFetch(() => new Response('{"setupRequired":false}', { status: 200 }));
     expect((await authStatus()).needsSetup).toBe(false);
+  });
+});
+
+describe("valet-agent session actions", () => {
+  const record = (res: () => Response): { calls: { url: string; method?: string; body?: unknown }[] } => {
+    const rec: { calls: { url: string; method?: string; body?: unknown }[] } = { calls: [] };
+    g.fetch = ((url: string, init: RequestInit) => {
+      rec.calls.push({ url, method: init.method, body: init.body });
+      return Promise.resolve(res());
+    }) as unknown as typeof fetch;
+    return rec;
+  };
+
+  test("fork posts the message id when given, an empty body otherwise", async () => {
+    const rec = record(() => new Response('{"id":"ses_2"}', { status: 201 }));
+    await forkSession("ses_1", "msg_7");
+    await forkSession("ses_1");
+    expect(rec.calls).toEqual([
+      {
+        url: "/plugins/valet-agent/sessions/ses_1/fork",
+        method: "POST",
+        body: JSON.stringify({ messageId: "msg_7" }),
+      },
+      { url: "/plugins/valet-agent/sessions/ses_1/fork", method: "POST", body: "{}" },
+    ]);
+  });
+
+  test("move posts the target project and returns the session with its new id", async () => {
+    const rec = record(() => new Response('{"id":"ses_9"}', { status: 200 }));
+    const moved = await moveSession("ses_1", "prj_2");
+    expect(moved.id).toBe("ses_9");
+    expect(rec.calls[0]).toEqual({
+      url: "/plugins/valet-agent/sessions/ses_1/move",
+      method: "POST",
+      body: JSON.stringify({ projectId: "prj_2" }),
+    });
+  });
+
+  test("a refused move reports the agent's message", async () => {
+    record(
+      () =>
+        new Response(
+          '{"error":{"code":"bad_request","message":"a turn is running; move once it finishes"}}',
+          {
+            status: 400,
+          },
+        ),
+    );
+    const err = await moveSession("ses_1", "prj_2").catch((e: unknown) => e);
+    expect((err as ApiError).message).toBe("a turn is running; move once it finishes");
+  });
+
+  test("state is read from the agent's state route", async () => {
+    const rec = record(
+      () => new Response('{"queued":2,"model":{"provider":"p","model":"m"}}', { status: 200 }),
+    );
+    expect((await getSessionState("ses_1")).queued).toBe(2);
+    expect(rec.calls[0]?.url).toBe("/plugins/valet-agent/sessions/ses_1/state");
+  });
+
+  test("compact sends /compact, with instructions appended, and treats the command answer as success", async () => {
+    const rec = record(
+      () => new Response('{"error":{"code":"cancelled","reason":"command /compact"}}', { status: 409 }),
+    );
+    await compactSession("ses_1", "");
+    await compactSession("ses_1", "keep the schema");
+    const texts = rec.calls.map(
+      (c) => (JSON.parse(c.body as string) as { parts: { text: string }[] }).parts[0]?.text,
+    );
+    expect(texts).toEqual(["/compact", "/compact keep the schema"]);
+  });
+
+  test("compact still fails on a real error", async () => {
+    record(() => new Response('{"error":"nope"}', { status: 500 }));
+    expect(await compactSession("ses_1", "").catch((e: unknown) => e)).toBeInstanceOf(ApiError);
+  });
+
+  test("the default queue mode comes from the agent panel and falls back to queue", async () => {
+    record(
+      () => new Response('{"key":"valet-agent","values":{"defaultQueueMode":"interrupt"}}', { status: 200 }),
+    );
+    expect(await defaultQueueMode()).toBe("interrupt");
+    record(() => new Response('{"key":"valet-agent","values":{"defaultQueueMode":""}}', { status: 200 }));
+    expect(await defaultQueueMode()).toBe("queue");
+    record(() => new Response("{}", { status: 403 }));
+    expect(await defaultQueueMode()).toBe("queue");
   });
 });

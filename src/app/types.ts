@@ -30,6 +30,16 @@ export interface SessionSettings {
   [key: string]: unknown;
 }
 
+/** GET /plugins/valet-agent/sessions/:id/state. */
+export interface SessionState {
+  activeRunId?: string;
+  queued: number;
+  model: { provider: string; model: string };
+  usage?: Record<string, number>;
+}
+
+export type QueueMode = "queue" | "interrupt";
+
 export interface Run {
   id: string;
   sessionId: string;

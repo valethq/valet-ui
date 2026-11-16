@@ -1,8 +1,14 @@
 import { el, leave } from "../dom";
 import { type IconName, icon, iconButton } from "../icons";
+import type { Project } from "../types";
 
 export interface SessionMenuActions {
+  projects: Project[];
+  /** The project the listed sessions are in; it is not offered as a move target. */
+  projectId: string | null;
   onRename(id: string): void;
+  onFork(id: string): void;
+  onMove(id: string, projectId: string): void;
   onDelete(id: string): void;
 }
 
@@ -47,8 +53,10 @@ function show(id: string, trigger: HTMLElement, actions: SessionMenuActions): vo
   const menu = el(
     "div",
     { class: "menu session-menu", role: "menu" },
-    menuItem("Rename", "pencil", () => pick("rename")),
-    menuItem("Delete", "trash", () => pick("delete"), "danger"),
+    menuItem("Rename", "pencil", () => pick((a) => a.onRename(id))),
+    menuItem("Fork", "branch", () => pick((a) => a.onFork(id))),
+    ...moveItems(id, actions),
+    menuItem("Delete", "trash", () => pick((a) => a.onDelete(id)), "danger"),
   );
   document.body.append(menu);
   open = { id, trigger, menu, actions };
@@ -61,12 +69,19 @@ function show(id: string, trigger: HTMLElement, actions: SessionMenuActions): vo
   menu.querySelector<HTMLElement>(".menu-item")?.focus({ preventScroll: true });
 }
 
-function pick(action: "rename" | "delete"): void {
+function moveItems(id: string, actions: SessionMenuActions): HTMLElement[] {
+  const targets = actions.projects.filter((p) => p.id !== actions.projectId);
+  if (targets.length === 0) return [];
+  return [
+    el("div", { class: "menu-title", text: "Move to project" }),
+    ...targets.map((p) => menuItem(p.name, "folder", () => pick((a) => a.onMove(id, p.id)))),
+  ];
+}
+
+function pick(run: (actions: SessionMenuActions) => void): void {
   const current = open;
   close();
-  if (current === null) return;
-  if (action === "rename") current.actions.onRename(current.id);
-  else current.actions.onDelete(current.id);
+  if (current !== null) run(current.actions);
 }
 
 function place(): void {

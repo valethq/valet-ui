@@ -475,10 +475,11 @@ button.chip:active:not(:disabled) { transform: none; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); margin: 5px 4px 0; }
 .msg .meta .logo { width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
 .msg.user .meta { justify-content: flex-end; }
-.msg .meta .copy-btn { width: 26px; height: 26px; color: var(--faint); margin: -4px 0 -4px -6px; }
-.msg.user .meta .copy-btn { margin-left: 0; margin-right: -6px; }
-.msg .meta .copy-btn .icon { width: 14px; height: 14px; }
-.msg .meta .copy-btn:hover { color: var(--text); }
+.msg .meta .copy-btn, .msg .meta .fork-btn { width: 26px; height: 26px; color: var(--faint); margin: -4px 0 -4px -6px; }
+.msg.user .meta .copy-btn, .msg.user .meta .fork-btn { margin-left: 0; margin-right: -6px; }
+.msg .meta .copy-btn .icon, .msg .meta .fork-btn .icon { width: 14px; height: 14px; }
+.msg .meta .copy-btn:hover, .msg .meta .fork-btn:hover { color: var(--text); }
+.queued-badge { align-self: center; font-size: 11.5px; color: var(--faint); white-space: nowrap; padding: 0 4px; }
 
 .part-row {
   width: fit-content;

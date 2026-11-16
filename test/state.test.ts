@@ -7,8 +7,11 @@ import {
   applyRunInfo,
   applyRunStart,
   applyRunUpdate,
+  applySessionState,
   EventBuffer,
+  forkSource,
   newSessionView,
+  queueModeOf,
   replaceMessages,
   needsUser,
   sessionIndicator,
@@ -16,6 +19,7 @@ import {
   timeAgo,
   titleSuffixes,
   upsertSession,
+  withQueueMode,
 } from "../src/app/state";
 import type { ChatMessage, Message, MessageDelta, Part, PartData, Run, Session } from "../src/app/types";
 
@@ -490,5 +494,73 @@ describe("timeAgo", () => {
     expect(timeAgo(now - 3 * 3_600_000 - 1, now)).toBe("3h");
     expect(timeAgo(now - 2 * 86_400_000, now)).toBe("2d");
     expect(timeAgo(now + 5000, now)).toBe("now");
+  });
+});
+
+describe("session state", () => {
+  const state = { queued: 3, model: { provider: "p", model: "m" } };
+
+  test("sets the queue depth and seeds the context meter", () => {
+    const view = newSessionView(session(), []);
+    applySessionState(view, { ...state, usage: { contextTokens: 900, contextWindow: 2000 } });
+    expect([view.queued, view.contextTokens, view.contextWindow]).toEqual([3, 900, 2000]);
+  });
+
+  test("keeps usage a run already reported and does not revive a run that ended", () => {
+    const view = newSessionView(session(), []);
+    view.contextTokens = 5;
+    applySessionState(view, { ...state, usage: { contextTokens: 900 } });
+    expect(view.contextTokens).toBe(5);
+    expect(view.activeRunId).toBeNull();
+  });
+
+  test("adopts the active run when the view has none, but never replaces one it has", () => {
+    const view = newSessionView(session(), []);
+    applySessionState(view, { ...state, activeRunId: "run_1" });
+    expect(view.activeRunId).toBe("run_1");
+    applySessionState(view, { ...state, activeRunId: "run_2" });
+    expect(view.activeRunId).toBe("run_1");
+    applySessionState(view, { ...state, queued: 0 });
+    expect(view.queued).toBe(0);
+    expect(view.activeRunId).toBe("run_1");
+  });
+});
+
+describe("queue mode", () => {
+  test("the session's own mode wins over the default", () => {
+    expect(queueModeOf(session({ settings: { agent: { queueMode: "interrupt" } } }), "queue")).toBe(
+      "interrupt",
+    );
+    expect(queueModeOf(session(), "interrupt")).toBe("interrupt");
+    expect(queueModeOf(session({ settings: { agent: { queueMode: "bogus" } } }), "queue")).toBe("queue");
+  });
+
+  test("setting it keeps every other setting", () => {
+    const settings = {
+      model: { provider: "p", model: "m" },
+      agent: { parentRunId: "run_1", forkedFrom: { sessionId: "ses_0" } },
+    };
+    expect(withQueueMode(settings, "interrupt")).toEqual({
+      model: { provider: "p", model: "m" },
+      agent: { parentRunId: "run_1", forkedFrom: { sessionId: "ses_0" }, queueMode: "interrupt" },
+    });
+    expect(withQueueMode({}, "queue")).toEqual({ agent: { queueMode: "queue" } });
+  });
+});
+
+describe("forkSource", () => {
+  const source = session({ id: "ses_src", title: "Original" });
+  const fork = session({
+    id: "ses_fork",
+    settings: { agent: { forkedFrom: { sessionId: "ses_src", messageId: "m" } } },
+  });
+
+  test("finds the session a fork came from", () => {
+    expect(forkSource([source, fork], fork)).toBe(source);
+  });
+
+  test("is undefined once the source is gone, or for a session that was never forked", () => {
+    expect(forkSource([fork], fork)).toBeUndefined();
+    expect(forkSource([source], source)).toBeUndefined();
   });
 });
