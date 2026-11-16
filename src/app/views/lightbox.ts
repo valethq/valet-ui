@@ -182,7 +182,21 @@ export function openLightbox(
     "wheel",
     (ev) => {
       ev.preventDefault();
-      zoomAt(zoom.s * Math.exp(-ev.deltaY * 0.0022), ev.clientX, ev.clientY, false);
+      if (ev.ctrlKey || zoom.s === 1) {
+        zoomAt(zoom.s * Math.exp(-ev.deltaY * 0.0022), ev.clientX, ev.clientY, false);
+        return;
+      }
+      const unit =
+        ev.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : ev.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? stage.clientHeight
+            : 1;
+      const swap = ev.shiftKey && ev.deltaX === 0;
+      zoom.x -= (swap ? ev.deltaY : ev.deltaX) * unit;
+      zoom.y -= (swap ? 0 : ev.deltaY) * unit;
+      clampPan();
+      applyZoom(false);
     },
     { passive: false },
   );
