@@ -479,10 +479,6 @@ button.chip:active:not(:disabled) { transform: none; }
 .msg.user .meta .copy-btn { margin-left: 0; margin-right: -6px; }
 .msg .meta .copy-btn .icon { width: 14px; height: 14px; }
 .msg .meta .copy-btn:hover { color: var(--text); }
-@media (hover: hover) {
-  .msg .meta .copy-btn { opacity: 0; transition: opacity .15s, background .15s, color .15s; }
-  .msg:hover .meta .copy-btn, .msg .meta .copy-btn:focus-visible { opacity: 1; }
-}
 
 .part-row {
   width: fit-content;
