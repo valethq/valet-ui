@@ -635,7 +635,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   let typesRev = 0;
   const cache = new Map<string, { sig: string; nodes: HTMLElement[]; anim: string; born: number }>();
   let primed = false;
-  let leadKey: string | undefined;
+  let leadKey = "sparkles"; // matches the chip's initial icon
   let stickToBottom = true;
   let connOpen = false;
   let draftId: string | null = null;
@@ -978,10 +978,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   function setModels(f: ModelFamily | null, v: ModelVariant | null): void {
     activeFamily = f;
     activeVariant = v;
-    const key = f === null ? "" : `${f.provider}|${f.key}|${f.label}`;
+    // Key on the rendered icon, not the model: the lead animates on insert,
+    // so only swap (and replay) when the icon itself changes.
+    const logo = f === null ? undefined : logoFor(`${f.label} ${f.key}`, f.provider);
+    const key = logo === undefined ? "sparkles" : `logo:${logo}`;
     if (key !== leadKey) {
       leadKey = key;
-      modelChip.lead.replaceChildren(f === null ? icon("sparkles") : familyLogo(f));
+      modelChip.lead.replaceChildren(logo === undefined ? icon("sparkles") : logoMark(logo));
     }
     modelChip.text.textContent = f?.label ?? "No model";
     modelChip.button.disabled = families.length === 0;
