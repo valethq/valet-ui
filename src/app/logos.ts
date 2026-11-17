@@ -80,18 +80,19 @@ export function logosFor(model: string, provider = "", icon?: string): LogoId[] 
   return own === undefined ? [harness] : [harness, own];
 }
 
-/** One mark, or a pair wrapped in `.logo-pair`; undefined when there are none. */
+/** One mark, or for [harness, model] a `.logo-stack`: the model mark in front,
+ * the harness mark behind it, peeking out at the lower left. Undefined when there are none. */
 export function logoMarks(ids: LogoId[]): HTMLSpanElement | undefined {
   const [first, second] = ids;
   if (first === undefined) return undefined;
   if (second === undefined) return logoMark(first);
-  return el("span", { class: "logo-pair" }, logoMark(first), logoMark(second));
+  return el("span", { class: "logo-stack" }, logoMark(first, "harness"), logoMark(second));
 }
 
-export function logoMark(id: LogoId): HTMLSpanElement {
+export function logoMark(id: LogoId, extra = ""): HTMLSpanElement {
   const { svg, mono } = LOGOS[id];
   return el("span", {
-    class: `logo${mono ? " mono" : ""}`,
+    class: `logo${mono ? " mono" : ""}${extra === "" ? "" : ` ${extra}`}`,
     "data-logo": id,
     "aria-hidden": "true",
     style: `--logo: url("data:image/svg+xml,${encodeURIComponent(svg)}")`,

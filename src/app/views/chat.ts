@@ -694,6 +694,12 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     if (forkSourceId !== null) cb.onOpenSession(forkSourceId);
   });
   const modelChip = chipButton("model", icon("sparkles"), "Model");
+  /** "on <harness>" under the model name, shown with the harness mark. */
+  const modelSub = el("span", { class: "chip-sub" });
+  modelSub.style.display = "none";
+  const modelText = el("span", { class: "chip-text" });
+  modelChip.text.replaceWith(modelText);
+  modelText.append(modelChip.text, modelSub);
   const effortChip = chipButton("effort", icon("gauge"), "Effort");
   const ring = el("span", { class: "ring" });
   const tip = el("span", { class: "tip", role: "tooltip" });
@@ -1220,6 +1226,9 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       modelChip.lead.replaceChildren(logoMarks(logos) ?? icon("sparkles"));
     }
     modelChip.text.textContent = f?.label ?? "No model";
+    const on = f !== null && logos.length > 1 ? `on ${f.providerLabel}` : "";
+    modelSub.textContent = on;
+    modelSub.style.display = on === "" ? "none" : "";
     modelChip.button.disabled = families.length === 0;
     effortMenu.style.display = f === null || f.variants.length <= 1 ? "none" : "";
     effortChip.text.textContent = v === null ? "" : cap(v.effort);

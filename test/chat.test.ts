@@ -1521,7 +1521,7 @@ describe("model chip logos", () => {
     ...(n.attrs.has("data-logo") ? [n.attrs.get("data-logo") as string] : []),
     ...n.children.flatMap((c) => (c instanceof FakeEl ? logos(c) : [])),
   ];
-  const leadFor = (provider: string, model: string): string[] => {
+  const chipFor = (provider: string, model: string) => {
     const g = globalThis as Record<string, unknown>;
     const savedDocument = g.document;
     g.document = { createElement: (tag: string) => new FakeEl(tag) };
@@ -1544,17 +1544,38 @@ describe("model chip logos", () => {
       });
       const view = viewWith([]);
       chat.update({ ...view, session: { ...session, settings: { model: { provider, model } } } }, providers);
-      return logos(findByClass(findByClass(root, "model") as FakeEl, "lead") as FakeEl);
+      const chip = findByClass(root, "model") as FakeEl;
+      const lead = findByClass(chip, "lead") as FakeEl;
+      const sub = findByClass(chip, "chip-sub") as FakeEl;
+      return {
+        logos: logos(lead),
+        stack: findByClass(lead, "logo-stack") !== undefined,
+        behind: findByClass(lead, "harness")?.attrs.get("data-logo"),
+        name: findByClass(chip, "chip-label")?.textContent,
+        sub: sub.style.display === "none" ? undefined : sub.textContent,
+      };
     } finally {
       g.document = savedDocument;
     }
   };
 
-  test("a harness running another lab's model shows both marks", () => {
-    expect(leadFor("cursor", "claude-sonnet-5-high")).toEqual(["cursor", "claude"]);
+  test("a harness running another lab's model stacks its mark behind the model's, with an 'on' line", () => {
+    expect(chipFor("cursor", "claude-sonnet-5-high")).toEqual({
+      logos: ["cursor", "claude"],
+      stack: true,
+      behind: "cursor",
+      name: "Claude Sonnet 5",
+      sub: "on Cursor",
+    });
   });
 
-  test("a harness whose logo matches the model shows one", () => {
-    expect(leadFor("claude-code", "opus-high")).toEqual(["claude"]);
+  test("a harness whose logo matches the model shows the model mark and name alone", () => {
+    expect(chipFor("claude-code", "opus-high")).toEqual({
+      logos: ["claude"],
+      stack: false,
+      behind: undefined,
+      name: "Claude Opus 5.5",
+      sub: undefined,
+    });
   });
 });

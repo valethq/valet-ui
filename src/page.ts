@@ -139,6 +139,8 @@ button.chip {
 button.chip:hover:not(:disabled), button.chip[aria-expanded=true] { background: var(--tint); color: var(--text); }
 button.chip:active:not(:disabled) { transform: none; }
 .chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-text { display: inline-flex; flex-direction: column; min-width: 0; line-height: 1.15; text-align: left; }
+.chip-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 400; color: var(--faint); }
 
 .pop { position: relative; display: inline-flex; min-width: 0; }
 .menu {
@@ -264,9 +266,11 @@ button.chip:active:not(:disabled) { transform: none; }
 .menu-item:active:not(:disabled) { transform: none; }
 .menu-lead { display: inline-flex; flex: none; }
 .menu-lead .logo, .menu-lead .icon { width: 16px; height: 16px; }
-.logo-pair { display: inline-flex; align-items: center; gap: 3px; }
-.chip .lead > .logo-pair { width: auto; }
-.chip .lead > .logo-pair > .logo { width: 15px; height: 15px; }
+.menu-lead .logo-stack { width: 16px; height: 16px; }
+/* Harness mark behind the model mark, peeking out at the lower left. */
+.logo-stack { position: relative; display: inline-flex; flex: none; }
+.logo-stack > .logo { position: relative; z-index: 1; width: 100%; height: 100%; }
+.logo-stack > .logo.harness { position: absolute; z-index: 0; left: -38%; top: 38%; width: 85%; height: 85%; }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-check { display: inline-flex; flex: none; color: var(--muted); visibility: hidden; }
 .menu-check .icon { width: 15px; height: 15px; }
