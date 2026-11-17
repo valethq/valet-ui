@@ -28,37 +28,95 @@ export interface MenuSection {
   items: MenuItem[];
 }
 
-let dragging: number | null = null;
-
-/** Makes `row` draggable onto its siblings in the same section, and Alt+Arrow on `button` move it one step. */
+/** Makes `row` movable by pointer (a mouse drags at once; touch and pen press and hold, so scrolling still works)
+ * and, with Alt+Arrow on `button`, one step at a time. `index` is the row's place among its section's rows. */
 function dragRow(
   row: HTMLElement,
   button: HTMLElement,
   index: number,
   move: (from: number, to: number) => void,
 ): void {
-  row.draggable = true;
-  row.addEventListener("dragstart", (ev) => {
-    dragging = index;
-    ev.dataTransfer?.setData("text/plain", String(index));
-    row.classList.add("dragging");
-  });
-  row.addEventListener("dragend", () => {
-    dragging = null;
+  const rows = (): HTMLElement[] => [
+    ...(row.parentElement?.querySelectorAll<HTMLElement>(".menu-row") ?? []),
+  ];
+  let pointer = -1;
+  let startY = 0;
+  let target = index;
+  let active = false;
+  let hold: ReturnType<typeof setTimeout> | undefined;
+  let swallow = false;
+
+  const mark = (): void => {
+    rows().forEach((r, i) => {
+      r.classList.toggle("drop-before", i === target && target < index);
+      r.classList.toggle("drop-after", i === target && target > index);
+    });
+  };
+  const reset = (): void => {
+    clearTimeout(hold);
+    if (active && row.hasPointerCapture(pointer)) row.releasePointerCapture(pointer);
+    active = false;
+    pointer = -1;
+    target = index;
     row.classList.remove("dragging");
+    mark();
+  };
+  const begin = (): void => {
+    active = true;
+    row.setPointerCapture(pointer);
+    row.classList.add("dragging");
+  };
+
+  row.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0 || pointer !== -1 || (ev.target as Element).closest(".menu-aside") !== null) return;
+    pointer = ev.pointerId;
+    startY = ev.clientY;
+    if (ev.pointerType !== "mouse") hold = setTimeout(begin, 300);
   });
-  row.addEventListener("dragover", (ev) => {
-    if (dragging === null) return;
-    ev.preventDefault();
-    row.classList.add("drop-target");
+  row.addEventListener("pointermove", (ev) => {
+    if (ev.pointerId !== pointer) return;
+    if (!active) {
+      const far = Math.abs(ev.clientY - startY);
+      if (ev.pointerType === "mouse" ? far > 4 : far > 8) {
+        if (ev.pointerType === "mouse") begin();
+        else reset();
+      }
+      return;
+    }
+    const all = rows();
+    target = Math.max(
+      0,
+      all.findIndex((r) => ev.clientY < r.getBoundingClientRect().bottom),
+    );
+    if (ev.clientY >= (all.at(-1)?.getBoundingClientRect().bottom ?? 0)) target = all.length - 1;
+    mark();
   });
-  row.addEventListener("dragleave", () => row.classList.remove("drop-target"));
-  row.addEventListener("drop", (ev) => {
-    ev.preventDefault();
-    row.classList.remove("drop-target");
-    if (dragging !== null && dragging !== index) move(dragging, index);
-    dragging = null;
+  row.addEventListener("pointerup", (ev) => {
+    if (ev.pointerId !== pointer) return;
+    const to = target;
+    const moved = active;
+    reset();
+    if (!moved) return;
+    swallow = true;
+    setTimeout(() => {
+      swallow = false;
+    }, 0);
+    if (to !== index) move(index, to);
   });
+  row.addEventListener("pointercancel", (ev) => {
+    if (ev.pointerId === pointer) reset();
+  });
+  row.addEventListener("touchmove", (ev) => active && ev.preventDefault(), { passive: false });
+  row.addEventListener("contextmenu", (ev) => (active || hold !== undefined) && ev.preventDefault());
+  row.addEventListener(
+    "click",
+    (ev) => {
+      if (!swallow) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+    },
+    true,
+  );
   button.addEventListener("keydown", (ev) => {
     if (!ev.altKey || (ev.key !== "ArrowUp" && ev.key !== "ArrowDown")) return;
     ev.preventDefault();

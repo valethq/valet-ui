@@ -231,8 +231,9 @@ button.chip:active:not(:disabled) { transform: none; }
 .leaving { pointer-events: none; }
 .menu-row { display: flex; align-items: center; gap: 2px; border-radius: 12px; }
 .menu-row:hover, .menu-row:focus-within { background: var(--tint); }
-.menu-row.dragging { opacity: 0.4; }
-.menu-row.drop-target { box-shadow: 0 -2px 0 var(--accent, currentColor); }
+.menu-row.dragging { opacity: 0.6; cursor: grabbing; user-select: none; }
+.menu-row.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.menu-row.drop-after { box-shadow: 0 2px 0 var(--accent); }
 .menu-row .menu-item { flex: 1; min-width: 0; }
 .menu-row .menu-item:hover, .menu-row .menu-item:focus-visible { background: transparent; }
 .menu-aside {
