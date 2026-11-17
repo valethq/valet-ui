@@ -1234,6 +1234,8 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   .app .nav-toggle, .app.collapsed .nav-toggle { width: 40px; margin: 0 0 0 -8px; opacity: 1; transform: none; visibility: visible; transition: none; }
   .chat-header { gap: 8px; justify-content: space-between; padding: max(8px, env(safe-area-inset-top)) max(16px, calc((100% - 812px) / 2)) 24px; }
   .chat-header .session-title { display: block; white-space: nowrap; text-overflow: ellipsis; }
+  .chat-header .title-group { flex: 1 1 0; align-items: center; text-align: center; }
+  .chat-header .title-line { justify-content: center; }
   .messages { padding: calc(2 * 1.35em + 40px + env(safe-area-inset-top)) max(16px, calc((100% - 812px) / 2)) 16px; }
   .msg.user { max-width: 90%; }
   .lb-stage { padding: 8px 12px; }
