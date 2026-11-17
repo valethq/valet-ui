@@ -388,7 +388,7 @@ button.chip:active:not(:disabled) { transform: none; }
 .sidebar .project-picker button.chip { justify-content: flex-start; padding: 0 10px; }
 .sidebar .project-picker .chip .chevron { margin-left: auto; }
 .project-pop .menu { left: 0; right: 0; min-width: 0; max-width: none; width: 100%; }
-.menu.panel { padding: 8px; }
+.menu.panel { padding: 8px; max-height: min(540px, 85vh); }
 .menu > .swap-in { --fx-from: translateY(4px); --fx-blur: 4px; animation: focus-in var(--dur-focus-sm) var(--ease-focus); }
 .sidebar .sessions { flex: 1; overflow-y: auto; padding: 2px var(--sb-pad-r) 2px var(--sb-pad-l); display: flex; flex-direction: column; gap: 4px; }
 .sidebar .sessions {

@@ -42,7 +42,9 @@ export function resize(m: HTMLElement, change: () => void): void {
     easing,
   });
   sizing.set(m, a);
-  a.onfinish = a.oncancel = () => m.style.removeProperty("overflow");
+  a.onfinish = a.oncancel = () => {
+    if (sizing.get(m) === a) m.style.removeProperty("overflow");
+  };
 }
 
 /** `resize`, with the new children focused in. */
