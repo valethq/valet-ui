@@ -24,22 +24,33 @@ export interface MenuSection {
   items: MenuItem[];
 }
 
+const sizing = new WeakMap<HTMLElement, Animation>();
+
 /** Runs `change`, then eases the menu's height from the old content to the new,
- * the way the settings modal resizes, and focuses the new children in. */
-function swap(m: HTMLElement, change: () => void): void {
-  const from = m.offsetHeight;
+ * the way the settings modal resizes. Picks up from the current height mid-flight. */
+export function resize(m: HTMLElement, change: () => void): void {
+  const from = m.getBoundingClientRect().height;
+  sizing.get(m)?.cancel();
   change();
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  for (const c of m.children) c.classList.add("swap-in");
   const to = m.offsetHeight;
-  if (from === to) return;
+  if (Math.abs(from - to) < 1) return;
   const easing = getComputedStyle(m).getPropertyValue("--ease-focus").trim() || "ease";
   m.style.overflow = "hidden";
   const a = m.animate([{ height: `${from}px` }, { height: `${to}px` }], {
     duration: focusDuration(),
     easing,
   });
+  sizing.set(m, a);
   a.onfinish = a.oncancel = () => m.style.removeProperty("overflow");
+}
+
+/** `resize`, with the new children focused in. */
+function swap(m: HTMLElement, change: () => void): void {
+  resize(m, () => {
+    change();
+    for (const c of m.children) c.classList.add("swap-in");
+  });
 }
 
 /** A click-to-open menu anchored above `trigger`. Sections are rebuilt on

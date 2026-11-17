@@ -1,6 +1,7 @@
 import { type DirListing, listDirs, makeDir } from "../api";
 import { el } from "../dom";
 import { icon } from "../icons";
+import { resize } from "../menu";
 
 export interface FolderBrowserOptions {
   /** Where to start; the server's home directory when omitted. */
@@ -56,45 +57,50 @@ export function folderBrowser(o: FolderBrowserOptions): HTMLElement {
     try {
       const l = await listDirs(path);
       current = l;
-      typed.value = l.path;
-      pick.disabled = false;
-      pick.textContent = o.confirmLabel;
-      trail.replaceChildren(
-        ...crumbs(l.path, l.home).map((c) => {
-          const b = el("button", { class: "fb-crumb", text: c.name, title: c.path });
-          b.addEventListener("click", () => void go(c.path));
-          return b;
-        }),
-      );
-      const rows = l.dirs.map((d) => {
-        const b = el(
-          "button",
-          { class: "fb-dir", title: d.path },
-          icon("folder"),
-          el("span", { text: d.name }),
+      const menu = root.closest<HTMLElement>(".menu");
+      const paint = (): void => {
+        typed.value = l.path;
+        pick.disabled = false;
+        pick.textContent = o.confirmLabel;
+        trail.replaceChildren(
+          ...crumbs(l.path, l.home).map((c) => {
+            const b = el("button", { class: "fb-crumb", text: c.name, title: c.path });
+            b.addEventListener("click", () => void go(c.path));
+            return b;
+          }),
         );
-        b.addEventListener("click", () => void go(d.path));
-        return b;
-      });
-      list.replaceChildren(
-        ...(l.parent === null
-          ? []
-          : [
-              (() => {
-                const up = el(
-                  "button",
-                  { class: "fb-dir up" },
-                  icon("arrowLeft"),
-                  el("span", { text: ".." }),
-                );
-                up.addEventListener("click", () => void go(l.parent as string));
-                return up;
-              })(),
-            ]),
-        ...rows,
-        ...(rows.length === 0 ? [el("div", { class: "fb-empty", text: "No subfolders" })] : []),
-      );
-      trail.scrollLeft = trail.scrollWidth;
+        const rows = l.dirs.map((d) => {
+          const b = el(
+            "button",
+            { class: "fb-dir", title: d.path },
+            icon("folder"),
+            el("span", { text: d.name }),
+          );
+          b.addEventListener("click", () => void go(d.path));
+          return b;
+        });
+        list.replaceChildren(
+          ...(l.parent === null
+            ? []
+            : [
+                (() => {
+                  const up = el(
+                    "button",
+                    { class: "fb-dir up" },
+                    icon("arrowLeft"),
+                    el("span", { text: ".." }),
+                  );
+                  up.addEventListener("click", () => void go(l.parent as string));
+                  return up;
+                })(),
+              ]),
+          ...rows,
+          ...(rows.length === 0 ? [el("div", { class: "fb-empty", text: "No subfolders" })] : []),
+        );
+        trail.scrollLeft = trail.scrollWidth;
+      };
+      if (menu === null) paint();
+      else resize(menu, paint);
     } catch (e) {
       fail(e);
     }
