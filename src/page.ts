@@ -966,6 +966,7 @@ button.primary { display: inline-flex; align-items: center; gap: 7px; }
 
 .theme-pane-slot { min-width: 0; min-height: 0; overflow-y: auto; }
 .theme-pane { display: flex; flex-direction: column; gap: 18px; padding: 14px 24px 24px; }
+.theme-pane > * { flex-shrink: 0; }
 .pane-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; }
 .pane-title { display: flex; flex-direction: column; min-width: 0; }
 .pane-title h3 { margin: 0; font-family: var(--font-head); font-size: 17px; font-weight: 650; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
