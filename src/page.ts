@@ -1177,6 +1177,11 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   --fx-blur: var(--blur-md);
   animation: focus-in .6s var(--ease-focus);
 }
+.loading { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; animation: fade-in .3s .2s backwards; }
+.loading span { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); animation: loading-dot 1.1s ease-in-out infinite; }
+.loading span:nth-child(2) { animation-delay: .15s; }
+.loading span:nth-child(3) { animation-delay: .3s; }
+@keyframes loading-dot { 0%, 70%, 100% { opacity: .3; transform: scale(.75); } 35% { opacity: 1; transform: scale(1); } }
 .empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--faint); }
 .hint { font-size: 12px; color: var(--faint); padding: 4px 10px; }
 .hint.conn, .hint.send-error { --fx-from: translateY(4px); --fx-blur: 3px; }

@@ -938,6 +938,14 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   setModels(null, null);
 
   let subs: SubInfo[] = [];
+  // One node for the chat's lifetime so re-renders don't restart its animation.
+  const loader = el(
+    "div",
+    { class: "loading", role: "status", "aria-label": "Loading messages" },
+    el("span"),
+    el("span"),
+    el("span"),
+  );
 
   function renderMessages(view: SessionView): void {
     const scrollTops = new Map<string, number>();
@@ -996,7 +1004,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     }
     primed = true;
     for (const id of cache.keys()) if (!live.has(id)) cache.delete(id);
-    if (view.messages.length === 0) nodes.push(el("div", { class: "empty", text: "No messages yet" }));
+    if (view.loading) nodes.push(loader);
+    else if (view.messages.length === 0) nodes.push(el("div", { class: "empty", text: "No messages yet" }));
     reconcile(messages, nodes);
     for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
       const pid = row.dataset.partId;

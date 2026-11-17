@@ -334,7 +334,7 @@ function refetchMessagesSoon(): void {
   refetchTimer = setTimeout(() => {
     refetchTimer = undefined;
     const view = app.view;
-    if (view === null) return;
+    if (view === null || view.loading) return;
     api
       .listMessages(view.session.id)
       .then((messages) => {
@@ -412,17 +412,20 @@ async function openSession(id: string): Promise<void> {
   if (session === undefined) return;
   const seq = ++openSeq;
   opening.begin(id);
-  const messages = await api.listMessages(id).catch(() => []);
-  if (seq !== openSeq) return;
-  app.view = newSessionView(session, messages);
-  for (const ev of opening.end(id)) onEvent(`session:${id}`, ev.name, ev.data);
-  noteSeen(id, Math.max(session.lastMessageAt ?? 0, ...messages.map((cm) => cm.message.createdAt)));
+  // Move to the target chat right away; re-opening the chat already shown keeps its messages.
+  if (app.view?.session.id !== id) app.view = newSessionView(session, [], true);
   try {
     localStorage.setItem(sessionKey(session.projectId), id);
   } catch {
     // private mode; selection simply isn't remembered
   }
   history.replaceState(null, "", `#s=${encodeURIComponent(id)}`);
+  scheduleRender();
+  const messages = await api.listMessages(id).catch(() => []);
+  if (seq !== openSeq || !app.sessions.some((s) => s.id === id)) return;
+  app.view = newSessionView(app.sessions.find((s) => s.id === id) ?? session, messages);
+  for (const ev of opening.end(id)) onEvent(`session:${id}`, ev.name, ev.data);
+  noteSeen(id, Math.max(session.lastMessageAt ?? 0, ...messages.map((cm) => cm.message.createdAt)));
   scheduleRender();
   refreshStateSoon();
 
@@ -735,6 +738,10 @@ async function startApp(): Promise<void> {
       if (app.view === null && !(await createSessionForDraft())) return false;
       const view = app.view;
       if (view === null) return false;
+      if (view.loading) {
+        app.chat?.setSendError("Still loading this chat");
+        return false;
+      }
       try {
         const cm = await api.sendMessage(view.session.id, parts, clientMessageId);
         if (app.view?.session.id === view.session.id) {

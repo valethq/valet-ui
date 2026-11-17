@@ -23,9 +23,11 @@ export interface SessionView {
   runErrors: Map<string, string>;
   /** Messages waiting behind the active run, from the agent's session state. */
   queued: number;
+  /** Placeholder shown while the session's messages are still being fetched. */
+  loading: boolean;
 }
 
-export function newSessionView(session: Session, messages: ChatMessage[]): SessionView {
+export function newSessionView(session: Session, messages: ChatMessage[], loading = false): SessionView {
   // A reopened session has no REST route to the live run; recover it from a
   // still-streaming assistant message's runId (spec-gap).
   let activeRunId: string | null = null;
@@ -43,6 +45,7 @@ export function newSessionView(session: Session, messages: ChatMessage[]): Sessi
     contextWindow: null,
     runErrors: new Map(),
     queued: 0,
+    loading,
   };
 }
 

@@ -497,6 +497,13 @@ describe("timeAgo", () => {
   });
 });
 
+describe("newSessionView", () => {
+  test("is a settled view by default and a loading placeholder on request", () => {
+    expect(newSessionView(session(), []).loading).toBe(false);
+    expect(newSessionView(session(), [], true).loading).toBe(true);
+  });
+});
+
 describe("session state", () => {
   const state = { queued: 3, model: { provider: "p", model: "m" } };
 

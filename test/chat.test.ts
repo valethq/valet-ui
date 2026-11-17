@@ -373,6 +373,7 @@ const viewWith = (parts: Part[]): SessionView => ({
   contextTokens: null,
   contextWindow: null,
   runErrors: new Map(),
+  loading: false,
   queued: 0,
 });
 
@@ -408,6 +409,42 @@ describe("tool output rendering", () => {
       const pre = body.children.find((c): c is FakeEl => c instanceof FakeEl && c.tag === "pre");
       expect(pre?.children.join("")).toBe("$ ls\n[... 120 lines omitted ...]\nok");
       expect(part.data.type === "tool-call" && part.data.output).toContain("\x1b[0m");
+    } finally {
+      g.document = savedDocument;
+    }
+  });
+});
+
+describe("loading placeholder", () => {
+  test("shows the loader instead of the empty notice until messages arrive, with the title already set", () => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
+        onToggleNav() {},
+        onOpenSession() {},
+      });
+      const loading = { ...viewWith([]), messages: [], loading: true };
+      chat.update(loading, []);
+      const loader = findByClass(root, "loading");
+      expect(loader).toBeDefined();
+      expect(findByClass(root, "empty")).toBeUndefined();
+      expect(findByClass(root, "session-title")?.textContent).toBe(session.title ?? "Untitled");
+      chat.update({ ...loading, loading: false }, []);
+      expect(findByClass(root, "loading")).toBeUndefined();
+      expect(findByClass(root, "empty")).toBeDefined();
     } finally {
       g.document = savedDocument;
     }
