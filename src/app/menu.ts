@@ -23,7 +23,48 @@ export interface MenuItem {
 
 export interface MenuSection {
   title?: string;
+  /** Rows can be dragged (or moved with Alt+Arrow) to a new index within the section. */
+  reorder?(from: number, to: number): void;
   items: MenuItem[];
+}
+
+let dragging: number | null = null;
+
+/** Makes `row` draggable onto its siblings in the same section, and Alt+Arrow on `button` move it one step. */
+function dragRow(
+  row: HTMLElement,
+  button: HTMLElement,
+  index: number,
+  move: (from: number, to: number) => void,
+): void {
+  row.draggable = true;
+  row.addEventListener("dragstart", (ev) => {
+    dragging = index;
+    ev.dataTransfer?.setData("text/plain", String(index));
+    row.classList.add("dragging");
+  });
+  row.addEventListener("dragend", () => {
+    dragging = null;
+    row.classList.remove("dragging");
+  });
+  row.addEventListener("dragover", (ev) => {
+    if (dragging === null) return;
+    ev.preventDefault();
+    row.classList.add("drop-target");
+  });
+  row.addEventListener("dragleave", () => row.classList.remove("drop-target"));
+  row.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    row.classList.remove("drop-target");
+    if (dragging !== null && dragging !== index) move(dragging, index);
+    dragging = null;
+  });
+  button.addEventListener("keydown", (ev) => {
+    if (!ev.altKey || (ev.key !== "ArrowUp" && ev.key !== "ArrowDown")) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    move(index, index + (ev.key === "ArrowDown" ? 1 : -1));
+  });
 }
 
 const sizing = new WeakMap<HTMLElement, Animation>();
@@ -132,9 +173,21 @@ export function popover(
     const groups: { title: string; group: HTMLElement }[] = [];
     for (const s of sections()) {
       const group = el("div", { class: "menu-section" });
-      groups.push({ title: s.title ?? "", group });
+      const si = groups.push({ title: s.title ?? "", group }) - 1;
+      const reorder = s.reorder;
+      const move =
+        reorder === undefined
+          ? undefined
+          : (from: number, to: number): void => {
+              if (to < 0 || to >= s.items.length) return;
+              reorder(from, to);
+              fill(m);
+              m.querySelectorAll(".menu-section")
+                [si]?.querySelectorAll<HTMLElement>(".menu-item")
+                [to]?.focus();
+            };
       if (s.title !== undefined) group.append(el("div", { class: "menu-title", text: s.title }));
-      for (const it of s.items) {
+      for (const [index, it] of s.items.entries()) {
         const b = el("button", {
           class: `menu-item${it.selected === true ? " selected" : ""}`,
           role: "menuitemradio",
@@ -161,7 +214,9 @@ export function popover(
         const side = el("button", { class: "menu-aside", "aria-label": aside.label, title: aside.label });
         side.append(icon(aside.icon));
         side.addEventListener("click", () => show(aside.panel(api)));
-        group.append(el("div", { class: "menu-row" }, b, side));
+        const row = el("div", { class: "menu-row" }, b, side);
+        if (move !== undefined) dragRow(row, b, index, move);
+        group.append(row);
       }
       m.append(group);
     }

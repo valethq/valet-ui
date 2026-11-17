@@ -2,6 +2,7 @@ import { ApiError, createProject, deleteProject, updateProject } from "../api";
 import { el } from "../dom";
 import { chipButton, icon } from "../icons";
 import { type MenuSection, type PanelApi, popover } from "../menu";
+import { applyOrder, loadOrder, moveItem, saveOrder } from "../project-order";
 import type { Project } from "../types";
 import { folderBrowser } from "./folder-browser";
 
@@ -134,9 +135,12 @@ export function createProjectPicker(initial: ProjectPickerProps): ProjectPicker 
     return body;
   };
 
+  const ordered = (): Project[] => applyOrder(props.projects, loadOrder());
+
   const sections = (): MenuSection[] => [
     {
-      items: props.projects.map((p) => ({
+      reorder: (from, to) => saveOrder(moveItem(ordered(), from, to).map((p) => p.id)),
+      items: ordered().map((p) => ({
         label: p.name,
         lead: icon("folder"),
         selected: p.id === props.projectId,
