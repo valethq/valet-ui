@@ -1,5 +1,6 @@
 import { el, leave } from "./dom";
 import { icon, type IconName } from "./icons";
+import { focusDuration } from "./motion";
 
 /** Handed to a panel: swap back to the menu's list, or close the whole menu. */
 export interface PanelApi {
@@ -21,6 +22,24 @@ export interface MenuItem {
 export interface MenuSection {
   title?: string;
   items: MenuItem[];
+}
+
+/** Runs `change`, then eases the menu's height from the old content to the new,
+ * the way the settings modal resizes, and focuses the new children in. */
+function swap(m: HTMLElement, change: () => void): void {
+  const from = m.offsetHeight;
+  change();
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (const c of m.children) c.classList.add("swap-in");
+  const to = m.offsetHeight;
+  if (from === to) return;
+  const easing = getComputedStyle(m).getPropertyValue("--ease-focus").trim() || "ease";
+  m.style.overflow = "hidden";
+  const a = m.animate([{ height: `${from}px` }, { height: `${to}px` }], {
+    duration: focusDuration(),
+    easing,
+  });
+  a.onfinish = a.oncancel = () => m.style.removeProperty("overflow");
 }
 
 /** A click-to-open menu anchored above `trigger`. Sections are rebuilt on
@@ -65,11 +84,12 @@ export function popover(
 
   function fill(m: HTMLElement): void {
     m.replaceChildren();
-    const api: PanelApi = { back: () => fill(m), close };
-    const show = (panel: HTMLElement): void => {
-      m.replaceChildren(panel);
-      m.classList.add("panel");
-    };
+    const api: PanelApi = { back: () => swap(m, () => fill(m)), close };
+    const show = (panel: HTMLElement): void =>
+      swap(m, () => {
+        m.replaceChildren(panel);
+        m.classList.add("panel");
+      });
     m.classList.remove("panel");
     const search = searchable
       ? el("input", { class: "menu-search", type: "search", placeholder: "Search", "aria-label": "Search" })
