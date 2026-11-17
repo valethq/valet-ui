@@ -176,6 +176,49 @@ button.chip:active:not(:disabled) { transform: none; }
   font-size: 13px;
 }
 .menu-search:focus { outline: none; border-color: var(--strong); }
+.pp, .pp-main { display: flex; flex-direction: column; gap: 8px; }
+.pp-head, .fb-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pp-title { font-size: 13px; font-weight: 500; }
+.fb-back {
+  display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border: none; border-radius: 8px; background: transparent; color: var(--muted);
+}
+.fb-back:hover { background: var(--tint); color: var(--text); }
+.fb-back .icon { width: 14px; height: 14px; }
+.fb { display: flex; flex-direction: column; gap: 6px; }
+.fb-trail { display: flex; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.fb-crumb {
+  flex: none; padding: 3px 6px; border: none; border-radius: 6px; background: transparent;
+  color: var(--muted); font-size: 12.5px;
+}
+.fb-crumb:hover { background: var(--tint); color: var(--text); }
+.fb-crumb + .fb-crumb::before { content: "/"; margin-right: 6px; color: var(--faint); }
+.fb-list { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; }
+.fb-dir {
+  display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 8px; border: none; border-radius: 10px;
+  background: transparent; color: var(--text); font-size: 13px; text-align: left;
+}
+.fb-dir:hover, .fb-dir:focus-visible { background: var(--tint); outline: none; }
+.fb-dir .icon { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.fb-dir span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-new { padding-top: 4px; border-top: 1px solid var(--border); display: flex; gap: 4px; align-items: center; }
+.fb-new-input, .fb-path, .pp-name {
+  flex: 1; min-width: 0; width: 100%; padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--raised); font-size: 12.5px;
+}
+.fb-new-input:focus, .fb-path:focus, .pp-name:focus { outline: none; border-color: var(--strong); }
+.fb-new-ok { display: inline-flex; flex: none; padding: 6px; border: none; border-radius: 8px; background: var(--tint); color: var(--text); }
+.fb-new-ok .icon { width: 14px; height: 14px; }
+.fb-empty { padding: 8px; font-size: 12.5px; color: var(--faint); }
+.fb-error { min-height: 0; font-size: 12px; color: var(--danger, #e5484d); overflow-wrap: anywhere; }
+.fb-error:empty { display: none; }
+.fb-pick, .pp-btn {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--tint);
+  color: var(--text); font-size: 13px;
+}
+.fb-pick:hover:not(:disabled), .pp-btn:hover { border-color: var(--strong); }
+.pp-btn.danger { color: var(--danger, #e5484d); background: transparent; }
+.pp-dir { padding: 0 2px; font-size: 12px; color: var(--faint); overflow-wrap: anywhere; }
 .menu-empty { padding: 8px 10px; font-size: 12.5px; color: var(--faint); }
 .menu.leaving { animation: focus-out .2s var(--ease-focus) forwards; }
 /* The shared entrance and exit. Each user sets --fx-from (where it travels
@@ -183,6 +226,19 @@ button.chip:active:not(:disabled) { transform: none; }
 @keyframes focus-in { from { opacity: 0; filter: blur(var(--fx-blur, var(--blur-md))); transform: var(--fx-from, none); } }
 @keyframes focus-out { to { opacity: 0; filter: blur(var(--fx-blur, var(--blur-md))); transform: var(--fx-from, none); } }
 .leaving { pointer-events: none; }
+.menu-row { display: flex; align-items: center; gap: 2px; border-radius: 12px; }
+.menu-row:hover, .menu-row:focus-within { background: var(--tint); }
+.menu-row .menu-item { flex: 1; min-width: 0; }
+.menu-row .menu-item:hover, .menu-row .menu-item:focus-visible { background: transparent; }
+.menu-aside {
+  display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: 28px; height: 28px; margin-right: 4px; border: none; border-radius: 8px;
+  background: transparent; color: var(--faint); opacity: 0; transition: opacity .15s, color .15s;
+}
+.menu-row:hover .menu-aside, .menu-row:focus-within .menu-aside, .menu-aside:focus-visible { opacity: 1; }
+.menu-aside:hover { color: var(--text); }
+.menu-aside .icon { width: 14px; height: 14px; }
+@media (hover: none) { .menu-aside { opacity: 1; } }
 .menu-section + .menu-section { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
 .menu-title { padding: 6px 10px 4px; font-size: 11.5px; color: var(--faint); }
 .menu-item {
@@ -327,7 +383,12 @@ button.chip:active:not(:disabled) { transform: none; }
 .sidebar .project-picker { padding: 2px var(--sb-pad-r) 4px var(--sb-pad-l); }
 .sidebar .project-picker .chip { display: flex; width: 100%; height: 32px; background: none; color: var(--muted); border-radius: var(--r-md); }
 .sidebar .project-picker .chip:hover { background: var(--tint); color: var(--text); }
-.sidebar .project-picker select { width: 100%; font-size: 13.5px; border-radius: var(--r-md); }
+.sidebar .project-picker .pop { display: flex; width: 100%; }
+.sidebar .project-picker .chip-label { flex: 1; text-align: left; font-size: 13.5px; }
+.sidebar .project-picker button.chip { justify-content: flex-start; padding: 0 10px; }
+.sidebar .project-picker .chip .chevron { margin-left: auto; }
+.project-pop .menu { left: 0; right: 0; min-width: 0; max-width: none; width: 100%; }
+.menu.panel { padding: 8px; }
 .sidebar .sessions { flex: 1; overflow-y: auto; padding: 2px var(--sb-pad-r) 2px var(--sb-pad-l); display: flex; flex-direction: column; gap: 4px; }
 .sidebar .sessions {
   -webkit-mask: linear-gradient(to bottom, transparent, #000 22px, #000 calc(100% - 22px), transparent);

@@ -99,6 +99,30 @@ export const logout = (): Promise<unknown> => req("POST", "/plugins/valet-auth/l
 
 export const listProjects = (): Promise<Project[]> => get("/api/core/projects");
 
+export interface DirListing {
+  path: string;
+  parent: string | null;
+  home: string;
+  dirs: { name: string; path: string }[];
+}
+
+export const listDirs = (path?: string): Promise<DirListing> =>
+  get(`/api/core/fs/list${path === undefined ? "" : `?path=${encodeURIComponent(path)}`}`);
+
+export const makeDir = (parent: string, name: string): Promise<{ path: string }> =>
+  req("POST", "/api/core/fs/mkdir", { parent, name });
+
+export const createProject = (workspaceDir: string, name?: string): Promise<Project> =>
+  req("POST", "/api/core/projects", { workspaceDir, ...(name === undefined ? {} : { name }) });
+
+export const updateProject = (
+  projectId: string,
+  patch: { name?: string; workspaceDir?: string },
+): Promise<Project> => req("PATCH", `/api/core/projects/${encodeURIComponent(projectId)}`, patch);
+
+export const deleteProject = (projectId: string): Promise<Project> =>
+  req("DELETE", `/api/core/projects/${encodeURIComponent(projectId)}`);
+
 export const listSessions = (projectId: string): Promise<Session[]> =>
   get(`/api/core/sessions?projectId=${encodeURIComponent(projectId)}`);
 

@@ -1,8 +1,9 @@
 import { el } from "../dom";
-import { icon, iconButton, selectChip } from "../icons";
+import { icon, iconButton } from "../icons";
 import { childrenOf, type Indicator, rootOf, timeAgo, titleSuffixes, topLevel } from "../state";
 import { subCount } from "../subagents";
 import type { Project, Session } from "../types";
+import { createProjectPicker, type ProjectPicker } from "./project-picker";
 import { sessionMenuButton, syncSessionMenu } from "./session-menu";
 
 export interface SidebarProps {
@@ -13,6 +14,7 @@ export interface SidebarProps {
   unread: ReadonlySet<string>;
   indicators: ReadonlyMap<string, Indicator>;
   onProject(id: string): void;
+  onProjectsChanged(select: string | null): void;
   onSession(id: string): void;
   onRename(id: string): void;
   onFork(id: string): void;
@@ -25,10 +27,8 @@ export interface SidebarProps {
 }
 
 interface Frame {
-  picker: HTMLSelectElement;
+  picker: ProjectPicker;
   add: HTMLButtonElement;
-  /** The projects the picker currently lists, so unchanged options are left alone. */
-  options: string;
 }
 
 const props = new WeakMap<HTMLElement, SidebarProps>();
@@ -40,8 +40,11 @@ function frameFor(node: HTMLElement): Frame {
   const known = frames.get(node);
   if (known !== undefined) return known;
   const live = (): SidebarProps => props.get(node) as SidebarProps;
-  const picker = el("select", { "aria-label": "Project" });
-  picker.addEventListener("change", () => live().onProject(picker.value));
+  const picker = createProjectPicker({
+    ...live(),
+    onProject: (id) => live().onProject(id),
+    onChanged: (select) => live().onProjectsChanged(select),
+  });
   const act = (name: Parameters<typeof iconButton>[0], label: string, cls: string, run: () => void) => {
     const button = iconButton(name, label, cls);
     button.addEventListener("click", run);
@@ -60,11 +63,7 @@ function frameFor(node: HTMLElement): Frame {
         act("sidebar", "Collapse sidebar", "collapse-btn", () => live().onCollapse()),
       ),
     ),
-    el(
-      "div",
-      { class: "project-picker" },
-      selectChip(picker, "project", el("span", { class: "lead" }, icon("folder"))),
-    ),
+    el("div", { class: "project-picker" }, picker.root),
     el("div", { class: "sessions" }),
     el(
       "div",
@@ -73,7 +72,7 @@ function frameFor(node: HTMLElement): Frame {
       act("logout", "Log out", "logout", () => live().onLogout()),
     ),
   );
-  const frame = { picker, add, options: "" };
+  const frame = { picker, add };
   frames.set(node, frame);
   return frame;
 }
@@ -87,14 +86,12 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   props.set(node, p);
   const frame = frameFor(node);
   const { picker } = frame;
-  const options = JSON.stringify(p.projects.map((project) => [project.id, project.name]));
-  if (options !== frame.options) {
-    frame.options = options;
-    picker.replaceChildren(
-      ...p.projects.map((project) => el("option", { value: project.id, text: project.name })),
-    );
-  }
-  if (p.projectId !== null && picker.value !== p.projectId) picker.value = p.projectId;
+  picker.update({
+    projects: p.projects,
+    projectId: p.projectId,
+    onProject: (id) => p.onProject(id),
+    onChanged: (select) => p.onProjectsChanged(select),
+  });
   frame.add.disabled = p.projectId === null;
 
   // Rows are rebuilt each render; compare with the previous list so only real

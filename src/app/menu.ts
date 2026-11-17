@@ -1,11 +1,21 @@
 import { el, leave } from "./dom";
-import { icon } from "./icons";
+import { icon, type IconName } from "./icons";
+
+/** Handed to a panel: swap back to the menu's list, or close the whole menu. */
+export interface PanelApi {
+  back(): void;
+  close(): void;
+}
 
 export interface MenuItem {
   label: string;
   lead?: HTMLElement;
   selected?: boolean;
   onSelect(): void;
+  /** Instead of closing, selecting the row swaps the menu's content for this element. */
+  panel?(api: PanelApi): HTMLElement;
+  /** A small button beside the row that opens its own panel. */
+  aside?: { icon: IconName; label: string; panel(api: PanelApi): HTMLElement };
 }
 
 export interface MenuSection {
@@ -53,8 +63,14 @@ export function popover(
     document.removeEventListener("keydown", onKey);
   }
 
-  function open(): void {
-    const m = el("div", { class: "menu", role: "menu" });
+  function fill(m: HTMLElement): void {
+    m.replaceChildren();
+    const api: PanelApi = { back: () => fill(m), close };
+    const show = (panel: HTMLElement): void => {
+      m.replaceChildren(panel);
+      m.classList.add("panel");
+    };
+    m.classList.remove("panel");
     const search = searchable
       ? el("input", { class: "menu-search", type: "search", placeholder: "Search", "aria-label": "Search" })
       : null;
@@ -78,10 +94,22 @@ export function popover(
           el("span", { class: "menu-check" }, icon("check")),
         );
         b.addEventListener("click", () => {
+          if (it.panel !== undefined) {
+            show(it.panel(api));
+            return;
+          }
           close();
           it.onSelect();
         });
-        group.append(b);
+        if (it.aside === undefined) {
+          group.append(b);
+          continue;
+        }
+        const aside = it.aside;
+        const side = el("button", { class: "menu-aside", "aria-label": aside.label, title: aside.label });
+        side.append(icon(aside.icon));
+        side.addEventListener("click", () => show(aside.panel(api)));
+        group.append(el("div", { class: "menu-row" }, b, side));
       }
       m.append(group);
     }
@@ -94,7 +122,8 @@ export function popover(
         let any = false;
         for (const b of group.querySelectorAll<HTMLElement>(".menu-item")) {
           const hit = q === "" || inTitle || (b.textContent ?? "").toLowerCase().includes(q);
-          b.style.display = hit ? "" : "none";
+          const row = b.closest<HTMLElement>(".menu-row") ?? b;
+          row.style.display = hit ? "" : "none";
           any ||= hit;
         }
         group.style.display = any ? "" : "none";
@@ -108,8 +137,17 @@ export function popover(
       ev.preventDefault();
       items()[0]?.click();
     });
+    if (search !== null) search.focus({ preventScroll: true });
+    const first = m.querySelector<HTMLElement>(".selected") ?? items()[0];
+    if (search === null) first?.focus({ preventScroll: true });
+    first?.scrollIntoView({ block: "nearest" });
+  }
+
+  function open(): void {
+    const m = el("div", { class: "menu", role: "menu" });
     menu = m;
     root.append(m);
+    fill(m);
     // Layout sizes, not the menu's rect: its entrance transform would skew that.
     const at = root.getBoundingClientRect();
     if (at.left + m.offsetWidth > window.innerWidth - 8) m.classList.add("end");
@@ -117,10 +155,6 @@ export function popover(
     trigger.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", onDoc, true);
     document.addEventListener("keydown", onKey);
-    if (search !== null) search.focus({ preventScroll: true });
-    const first = m.querySelector<HTMLElement>(".selected") ?? items()[0];
-    if (search === null) first?.focus({ preventScroll: true });
-    first?.scrollIntoView({ block: "nearest" });
   }
 
   trigger.addEventListener("click", () => (menu === null ? open() : close()));

@@ -296,7 +296,7 @@ function sidebarSig(
 ): string {
   return JSON.stringify([
     app.projectId,
-    app.projects.map((p) => [p.id, p.name]),
+    app.projects.map((p) => [p.id, p.name, p.workspaceDir]),
     open?.id,
     [...unread],
     [...indicators],
@@ -320,6 +320,7 @@ function sidebarProps(
       closeNav();
       void switchProject(id);
     },
+    onProjectsChanged: (select) => void refreshProjects(select),
     onSession: (id) => {
       closeNav();
       void openSession(id);
@@ -645,6 +646,22 @@ async function openSession(id: string): Promise<void> {
       })
       .catch(() => {});
   }
+}
+
+/** Reloads the project list after an add, edit, relocate or remove, then shows `select` (or a fallback). */
+async function refreshProjects(select: string | null): Promise<void> {
+  app.projects = await api.listProjects().catch(() => app.projects);
+  app.chat?.setProjects(app.projects);
+  const wanted =
+    select ??
+    (app.projects.some((p) => p.id === app.projectId) ? app.projectId : (app.projects[0]?.id ?? null));
+  if (wanted === null) {
+    app.projectId = null;
+    app.sessions = [];
+    app.view = null;
+    scheduleRender();
+  } else if (wanted !== app.projectId) await switchProject(wanted);
+  else scheduleRender();
 }
 
 async function switchProject(id: string): Promise<void> {
