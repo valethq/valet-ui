@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionView } from "../src/app/state";
-import type { ChatMessage, Message, Part, PartData, PartType, Session } from "../src/app/types";
+import type {
+  ChatMessage,
+  Message,
+  Part,
+  PartData,
+  PartType,
+  ProviderModels,
+  Session,
+} from "../src/app/types";
 import {
   copyText,
   createChat,
@@ -1491,5 +1499,62 @@ describe("galleryItems", () => {
     const items = galleryItems({ querySelectorAll: () => nodes } as unknown as Element);
     expect(items.map((i) => i.file.blobId)).toEqual(["blb_a", "blb_b"]);
     expect(items[1]?.thumb).toBe(nodes[1] as unknown as HTMLElement);
+  });
+});
+
+describe("model chip logos", () => {
+  const providers: ProviderModels[] = [
+    {
+      provider: "cursor",
+      label: "Cursor",
+      icon: "cursor",
+      models: [{ id: "claude-sonnet-5-high", name: "Claude Sonnet 5 High" }],
+    },
+    {
+      provider: "claude-code",
+      label: "Claude Code",
+      icon: "claude",
+      models: [{ id: "opus-high", name: "Claude Opus 5.5 High" }],
+    },
+  ];
+  const logos = (n: FakeEl): string[] => [
+    ...(n.attrs.has("data-logo") ? [n.attrs.get("data-logo") as string] : []),
+    ...n.children.flatMap((c) => (c instanceof FakeEl ? logos(c) : [])),
+  ];
+  const leadFor = (provider: string, model: string): string[] => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
+        onToggleNav() {},
+        onOpenSession() {},
+        onLoadOlder() {},
+      });
+      const view = viewWith([]);
+      chat.update({ ...view, session: { ...session, settings: { model: { provider, model } } } }, providers);
+      return logos(findByClass(findByClass(root, "model") as FakeEl, "lead") as FakeEl);
+    } finally {
+      g.document = savedDocument;
+    }
+  };
+
+  test("a harness running another lab's model shows both marks", () => {
+    expect(leadFor("cursor", "claude-sonnet-5-high")).toEqual(["cursor", "claude"]);
+  });
+
+  test("a harness whose logo matches the model shows one", () => {
+    expect(leadFor("claude-code", "opus-high")).toEqual(["claude"]);
   });
 });

@@ -9,6 +9,7 @@ import {
   forkSession,
   getSessionState,
   isCommandHandled,
+  listModels,
   listProjects,
   listPartTypes,
   listSettings,
@@ -377,5 +378,19 @@ describe("valet-agent session actions", () => {
     expect(await defaultQueueMode()).toBe("queue");
     record(() => new Response("{}", { status: 403 }));
     expect(await defaultQueueMode()).toBe("queue");
+  });
+});
+
+describe("listModels", () => {
+  test("keeps a provider's label and string icon, and drops anything else", async () => {
+    const providers = [
+      { provider: "cursor", label: "Cursor", icon: "cursor", models: [{ id: "m", name: "M" }] },
+      { provider: "x", icon: 7, models: [] },
+    ];
+    stubFetch(() => Response.json({ providers }));
+    expect(await listModels()).toEqual([
+      { provider: "cursor", label: "Cursor", icon: "cursor", models: [{ id: "m", name: "M" }] },
+      { provider: "x", label: "x", models: [] },
+    ]);
   });
 });

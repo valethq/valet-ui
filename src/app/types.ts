@@ -123,6 +123,8 @@ export interface ModelInfo {
 export interface ProviderModels {
   provider: string;
   label: string;
+  /** The provider's logo key (ProviderBase.icon), when its plugin names one. */
+  icon?: string;
   models: ModelInfo[];
 }
 

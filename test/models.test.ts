@@ -95,3 +95,19 @@ describe("groupModels", () => {
     expect(fs[1]?.provider).toBe("b");
   });
 });
+
+describe("provider icons", () => {
+  test("each family carries its provider's logo key, when there is one", () => {
+    const fams = groupModels([
+      {
+        provider: "cursor",
+        label: "Cursor",
+        icon: "cursor",
+        models: [{ id: "claude-sonnet-5-high", name: "x" }],
+      },
+      ...providers,
+    ]);
+    expect(fams[0]?.providerIcon).toBe("cursor");
+    expect(fams.find((f) => f.provider === "openai")?.providerIcon).toBeUndefined();
+  });
+});

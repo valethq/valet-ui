@@ -363,6 +363,7 @@ export async function listModels(): Promise<ProviderModels[]> {
     out.push({
       provider,
       label: String(e.label ?? e.name ?? provider),
+      ...(typeof e.icon === "string" && e.icon !== "" ? { icon: e.icon } : {}),
       models: models.map((m) => ({
         id: String(m.id ?? m.model ?? m.name ?? ""),
         name: String(m.name ?? m.label ?? m.id ?? m.model ?? ""),

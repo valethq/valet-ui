@@ -264,6 +264,9 @@ button.chip:active:not(:disabled) { transform: none; }
 .menu-item:active:not(:disabled) { transform: none; }
 .menu-lead { display: inline-flex; flex: none; }
 .menu-lead .logo, .menu-lead .icon { width: 16px; height: 16px; }
+.logo-pair { display: inline-flex; align-items: center; gap: 3px; }
+.chip .lead > .logo-pair { width: auto; }
+.chip .lead > .logo-pair > .logo { width: 15px; height: 15px; }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-check { display: inline-flex; flex: none; color: var(--muted); visibility: hidden; }
 .menu-check .icon { width: 15px; height: 15px; }

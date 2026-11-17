@@ -1,6 +1,6 @@
 import { clear, el, morph, reconcile, sameChildren } from "../dom";
 import { chipButton, icon, iconButton } from "../icons";
-import { logoFor, logoMark } from "../logos";
+import { logoFor, logoMark, logoMarks, logosFor } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { focusDuration } from "../motion";
@@ -610,6 +610,11 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
   return out;
 }
 
+function iconOf(providers: ProviderModels[], provider: string): { providerIcon?: string } {
+  const icon = providers.find((p) => p.provider === provider)?.icon;
+  return icon === undefined ? {} : { providerIcon: icon };
+}
+
 function pickVariant(f: ModelFamily): ModelVariant {
   return (
     f.variants.find((v) => v.effort === "high") ??
@@ -729,10 +734,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   /** Blobs of the chat just left, freed once the open chat has rendered. */
   let released: string[] = [];
 
-  const familyLogo = (f: ModelFamily): HTMLElement => {
-    const logo = logoFor(`${f.label} ${f.key}`, f.provider);
-    return logo === undefined ? icon("sparkles") : logoMark(logo);
-  };
+  const familyLogos = (f: ModelFamily) => logosFor(`${f.label} ${f.key}`, f.provider, f.providerIcon);
+  const familyLogo = (f: ModelFamily): HTMLElement => logoMarks(familyLogos(f)) ?? icon("sparkles");
   const modelMenu = popover(
     modelChip.button,
     () => {
@@ -1192,6 +1195,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         key: familyOf(selected.model).family,
         provider: selected.provider,
         providerLabel: selected.provider,
+        ...iconOf(providers, selected.provider),
         label: `${selected.model} (${selected.provider})`,
         more: false,
         variants: [{ id: selected.model, name: selected.model, effort: "default" }],
@@ -1209,11 +1213,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     activeVariant = v;
     // Key on the rendered icon, not the model: the lead animates on insert,
     // so only swap (and replay) when the icon itself changes.
-    const logo = f === null ? undefined : logoFor(`${f.label} ${f.key}`, f.provider);
-    const key = logo === undefined ? "sparkles" : `logo:${logo}`;
+    const logos = f === null ? [] : familyLogos(f);
+    const key = logos.length === 0 ? "sparkles" : `logo:${logos.join("+")}`;
     if (key !== leadKey) {
       leadKey = key;
-      modelChip.lead.replaceChildren(logo === undefined ? icon("sparkles") : logoMark(logo));
+      modelChip.lead.replaceChildren(logoMarks(logos) ?? icon("sparkles"));
     }
     modelChip.text.textContent = f?.label ?? "No model";
     modelChip.button.disabled = families.length === 0;

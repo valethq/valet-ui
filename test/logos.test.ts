@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { logoFor } from "../src/app/logos";
+import { logoFor, logosFor } from "../src/app/logos";
 
 describe("logoFor", () => {
   const cases: [string, string | undefined][] = [
@@ -37,6 +37,8 @@ describe("logoFor", () => {
     ["GLM-4.6", "zai"],
     ["z-ai/glm-4.5-air", "zai"],
     ["Z.ai GLM 5", "zai"],
+    ["Composer 2.5", "cursor"],
+    ["cursor/composer-2", "cursor"],
     ["Polo 2", undefined],
     ["Sweetwater 7B", undefined],
   ];
@@ -50,5 +52,25 @@ describe("logoFor", () => {
     expect(logoFor("mystery", "openrouter")).toBeUndefined();
     expect(logoFor("large-2", "zai")).toBe("zai");
     expect(logoFor("high", "devin")).toBe("devin");
+  });
+});
+
+describe("logosFor", () => {
+  test("a harness logo shows only when it is known and differs from the model's", () => {
+    expect(logosFor("Claude Sonnet 5", "cursor", "cursor")).toEqual(["cursor", "claude"]);
+    expect(logosFor("GPT-6", "cursor", "cursor")).toEqual(["cursor", "openai"]);
+    expect(logosFor("Claude Opus 5.5", "claude-code", "claude")).toEqual(["claude"]);
+    expect(logosFor("gpt-6-codex", "codex", "openai")).toEqual(["openai"]);
+    expect(logosFor("Composer 2.5", "cursor", "cursor")).toEqual(["cursor"]);
+  });
+
+  test("without a harness logo only the model's shows, as before", () => {
+    expect(logosFor("Claude Sonnet 5", "anthropic")).toEqual(["claude"]);
+    expect(logosFor("Claude Sonnet 5", "x", "no-such-logo")).toEqual(["claude"]);
+    expect(logosFor("mystery", "openrouter")).toEqual([]);
+  });
+
+  test("an opaque model falls back to the harness logo alone", () => {
+    expect(logosFor("Auto", "acme", "cursor")).toEqual(["cursor"]);
   });
 });

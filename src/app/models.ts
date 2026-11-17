@@ -19,6 +19,8 @@ export interface ModelFamily {
   key: string;
   provider: string;
   providerLabel: string;
+  /** The provider's logo key, when it names one. */
+  providerIcon?: string;
   /** Display label: first variant's name minus the effort word. */
   label: string;
   /** Goes into the trailing "More variants" optgroup. */
@@ -53,6 +55,7 @@ export function groupModels(providers: ProviderModels[]): ModelFamily[] {
           key: family,
           provider: p.provider,
           providerLabel: p.label,
+          ...(p.icon === undefined ? {} : { providerIcon: p.icon }),
           label: "",
           more: EXTRA_FAMILY.test(family),
           variants: [],
