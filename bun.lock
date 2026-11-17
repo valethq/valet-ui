@@ -5,7 +5,7 @@
     "": {
       "name": "valet-ui",
       "dependencies": {
-        "@valethq/sdk": "0.1.0",
+        "@valethq/sdk": "0.2.0",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.6.7",
@@ -81,7 +81,7 @@
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
-    "@valethq/sdk": ["@valethq/sdk@0.1.0", "", {}, "sha512-Ik40cr4ORyiTSygWukrIOr5ab3xvz0QwnPf2znb2sV8/Aw9sqUc/4cBy985aKDdG6KLUeys7N1Rogk3fKns6Jg=="],
+    "@valethq/sdk": ["@valethq/sdk@0.2.0", "", {}, "sha512-Mohm7Xz5U3yx+EKxXoEOTWJfJRJ5D9Kuv6u8T4bzdcMoj8B5UmEEflFRmqL4gzEoP3NsojP1WM731Pta1l0Vpg=="],
 
     "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
