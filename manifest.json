@@ -17,6 +17,18 @@
       },
       "coreUrl": {
         "type": "string"
+      },
+      "chunkMessages": {
+        "type": "integer",
+        "minimum": 5,
+        "maximum": 100,
+        "description": "Messages per page when a chat loads in pages (Experimental)."
+      },
+      "partChars": {
+        "type": "integer",
+        "minimum": 500,
+        "maximum": 200000,
+        "description": "Most characters of one part's text or tool output sent at once; longer ones arrive in pieces."
       }
     },
     "additionalProperties": false

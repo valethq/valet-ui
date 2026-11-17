@@ -3,6 +3,7 @@ import {
   applyDelta,
   applyMessageComplete,
   applyMessageCreate,
+  applyPieces,
   applyRunEnd,
   applyRunInfo,
   applyRunStart,
@@ -10,6 +11,7 @@ import {
   applySessionState,
   EventBuffer,
   forkSource,
+  hasPartial,
   newSessionView,
   queueModeOf,
   replaceMessages,
@@ -569,5 +571,82 @@ describe("forkSource", () => {
   test("is undefined once the source is gone, or for a session that was never forked", () => {
     expect(forkSource([fork], fork)).toBeUndefined();
     expect(forkSource([source], source)).toBeUndefined();
+  });
+});
+
+describe("partial parts", () => {
+  const partial = (id: string, text: string, total: number): Part =>
+    ({
+      id,
+      messageId: "m1",
+      idx: 0,
+      status: "complete",
+      type: "text",
+      data: { type: "text", text },
+      partial: total,
+      createdAt: 1,
+      updatedAt: 1,
+    }) as Part;
+  const viewOf = (...parts: Part[]) => viewWith([{ message: { id: "m1", seq: 1 } as Message, parts }]);
+  const textOf = (v: ReturnType<typeof viewOf>, i = 0): string =>
+    (((v.messages[0] as ChatMessage).parts[i] as Part).data as { text: string }).text;
+
+  test("pieces extend the part they continue and clear its marker on the last one", () => {
+    const view = viewOf(partial("p", "abc", 9));
+    applyPieces(view, [{ id: "p", at: 3, text: "def" }]);
+    expect(textOf(view)).toBe("abcdef");
+    expect(view.messages[0]?.parts[0]?.partial).toBe(9);
+    applyPieces(view, [{ id: "p", at: 6, text: "ghi" }]);
+    expect(textOf(view)).toBe("abcdefghi");
+    expect(view.messages[0]?.parts[0]?.partial).toBeUndefined();
+    expect(hasPartial(view.messages)).toBe(false);
+  });
+
+  test("a piece that is not next in line, or for an unknown part, changes nothing", () => {
+    const view = viewOf(partial("p", "abc", 9));
+    applyPieces(view, [
+      { id: "p", at: 1, text: "bcd" },
+      { id: "p", at: 5, text: "zzz" },
+      { id: "nope", at: 0, text: "x" },
+    ]);
+    expect(textOf(view)).toBe("abc");
+    expect(hasPartial(view.messages)).toBe(true);
+  });
+
+  test("tool output grows the same way", () => {
+    const tool = {
+      id: "t",
+      messageId: "m1",
+      idx: 0,
+      status: "complete",
+      type: "tool-call",
+      data: { type: "tool-call", callId: "c", name: "exec", input: {}, output: "ab", status: "done" },
+      partial: 4,
+      createdAt: 1,
+      updatedAt: 1,
+    } as Part;
+    const view = viewOf(tool);
+    applyPieces(view, [{ id: "t", at: 2, text: "cd" }]);
+    const filled = (view.messages[0] as ChatMessage).parts[0] as Part;
+    expect((filled.data as { output: string }).output).toBe("abcd");
+    expect(filled.partial).toBeUndefined();
+  });
+
+  test("a refetched snapshot does not undo what has already arrived", () => {
+    const view = viewOf(partial("p", "abcdef", 9));
+    replaceMessages(view, [{ message: { id: "m1", seq: 1 } as Message, parts: [partial("p", "abc", 9)] }]);
+    expect(textOf(view)).toBe("abcdef");
+    expect(view.messages[0]?.parts[0]?.partial).toBe(9);
+    const done = viewOf(partial("p", "abcdefghi", 9));
+    delete done.messages[0]?.parts[0]?.partial;
+    replaceMessages(done, [{ message: { id: "m1", seq: 1 } as Message, parts: [partial("p", "abc", 9)] }]);
+    expect(textOf(done)).toBe("abcdefghi");
+    expect(hasPartial(done.messages)).toBe(false);
+  });
+
+  test("a snapshot with different text wins over what was local", () => {
+    const view = viewOf(partial("p", "abcdef", 9));
+    replaceMessages(view, [{ message: { id: "m1", seq: 1 } as Message, parts: [partial("p", "xyz", 9)] }]);
+    expect(textOf(view)).toBe("xyz");
   });
 });

@@ -10,6 +10,7 @@ import {
   applyMessageComplete,
   applyPartUpdate,
   applyMessageCreate,
+  applyPieces,
   applyRunEnd,
   applyRunInfo,
   applyRunStart,
@@ -18,6 +19,7 @@ import {
   applySessionState,
   EventBuffer,
   forkSource,
+  hasPartial,
   newSessionView,
   orphanChildren,
   pagingFor,
@@ -495,6 +497,38 @@ function mergeTail(shown: SessionView | undefined, fresh: Loaded, session: Sessi
   return pagedView(session, fresh);
 }
 
+/** The page whose fill is running, by chat and page; a newer fill of the same page replaces it. */
+const filling = new Map<string, object>();
+
+/** Pulls the pieces of long text and tool output a page was sent without, one round at a time, and stores the
+ * page whole once it is complete. A 409 means the page changed under it, so the chat refetches instead. */
+function fillPartial(view: SessionView, loaded: Loaded, tail: boolean): void {
+  if (!hasPartial(loaded.messages)) return;
+  const id = view.session.id;
+  const key = `${id}:${loaded.page}`;
+  const mine = {};
+  filling.set(key, mine);
+  const current = (): boolean => filling.get(key) === mine && app.view === view;
+  void (async () => {
+    try {
+      for (let round = 1; current(); round++) {
+        const res = await api.getMessageRound(id, loaded.page, round, loaded.etag);
+        if (!current()) return;
+        applyPieces(view, res.pieces);
+        scheduleRender();
+        if (res.done) {
+          await pages.save(id, loaded, tail);
+          return;
+        }
+      }
+    } catch (e) {
+      if (e instanceof api.ApiError && e.status === 409 && current()) refetchMessagesSoon();
+    } finally {
+      if (filling.get(key) === mine) filling.delete(key);
+    }
+  })();
+}
+
 /** Loads the next older page (cached copy first) once the reader gets near the top of what is loaded. */
 async function loadOlder(): Promise<void> {
   const view = app.view;
@@ -514,7 +548,9 @@ async function loadOlder(): Promise<void> {
     scheduleRender();
   };
   try {
-    apply(await pages.load(view.session.id, page, apply));
+    const loaded = await pages.load(view.session.id, page, apply);
+    apply(loaded);
+    if (app.view === view) fillPartial(view, loaded, false);
   } catch {
     if (!applied) {
       paging.loading = false;
@@ -543,6 +579,7 @@ async function refreshTail(view: SessionView): Promise<void> {
   }
   replaceMessages(view, fresh.messages);
   scheduleRender();
+  fillPartial(view, fresh, true);
 }
 
 let openSeq = 0;
@@ -567,6 +604,7 @@ async function openSession(id: string): Promise<void> {
   const shownView = (): SessionView | undefined =>
     app.view?.session.id === id && !app.view.loading ? app.view : undefined;
   let view: SessionView | undefined;
+  let tail: Loaded | undefined;
   if (experimentalEnabled()) {
     const fresh = await pages
       .load(id, "tail", (cached) => {
@@ -580,6 +618,7 @@ async function openSession(id: string): Promise<void> {
     // Paging failed: keep a cached paint, otherwise fall back to the whole-window fetch below.
     view =
       fresh === undefined ? (shown?.paging == null ? undefined : shown) : mergeTail(shown, fresh, session);
+    tail = fresh;
   }
   if (view === undefined) {
     const whole = await api.listMessages(id).catch(() => []);
@@ -588,6 +627,7 @@ async function openSession(id: string): Promise<void> {
   }
   const messages = view.messages;
   app.view = view;
+  if (tail !== undefined) fillPartial(view, tail, true);
   for (const ev of opening.end(id)) onEvent(`session:${id}`, ev.name, ev.data);
   noteSeen(id, Math.max(session.lastMessageAt ?? 0, ...messages.map((cm) => cm.message.createdAt)));
   scheduleRender();

@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { asset, experimentalOn, serveAsset } from "./compress";
+import { type ChunkConfig, chunkConfig } from "./paging";
 import { indexHtml, bootScript } from "./page";
 import { isPagePath, pageResponse } from "./pages";
 import { isProxied, openUpstream, proxyRequest, sameOrigin, type WsData, wsHandlers } from "./proxy";
 
-export interface UiConfig {
+export interface UiConfig extends Partial<ChunkConfig> {
   host?: string;
   port?: number;
   coreUrl?: string;
@@ -45,6 +46,7 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
   const host = opts.host ?? DEFAULT_HOST;
   const port = opts.port ?? DEFAULT_PORT;
   const coreUrl = (opts.coreUrl ?? DEFAULT_CORE_URL).replace(/\/+$/, "");
+  const chunk = chunkConfig(opts);
   const entrypoint = opts.entrypoint ?? join(import.meta.dir, "app", "main.ts");
 
   const build = await Bun.build({
@@ -79,7 +81,7 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
       if (req.method !== "GET") return new Response("not found", { status: 404 });
       if (isPagePath(path)) {
         if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
-        return pageResponse(req, coreUrl);
+        return pageResponse(req, coreUrl, chunk);
       }
       if (path === "/" && experimentalOn(req)) return serveAsset(req, htmlAsset, headers);
       if (path === "/app.js" && experimentalOn(req)) return serveAsset(req, bundleAsset, headers);

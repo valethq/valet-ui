@@ -1,3 +1,4 @@
+import { contentOf, type Piece, withContent } from "../chunking";
 import type {
   ChatMessage,
   Message,
@@ -138,6 +139,34 @@ function stubPart(d: MessageDelta, idx: number): Part {
   };
 }
 
+/** Whether any part of these messages is still waiting for the rest of its text or output. */
+export const hasPartial = (messages: ChatMessage[]): boolean =>
+  messages.some((cm) => cm.parts.some((p) => p.partial !== undefined));
+
+/** Appends fill-round pieces to the parts they extend. A piece that is not exactly next in line is skipped:
+ * either it was already applied, or a refetch moved the part and the next round will line up again. */
+export function applyPieces(view: SessionView, pieces: Piece[]): void {
+  const waiting = new Map<string, Part>();
+  for (const cm of view.messages) for (const p of cm.parts) if (p.partial !== undefined) waiting.set(p.id, p);
+  for (const piece of pieces) {
+    const p = waiting.get(piece.id);
+    const text = p === undefined ? null : contentOf(p);
+    if (p === undefined || text === null || piece.at !== text.length) continue;
+    const next = text + piece.text;
+    p.data = withContent(p, next).data as PartData;
+    if (next.length >= (p.partial as number)) delete p.partial;
+  }
+}
+
+/** A refetched snapshot carries the first piece of a long part; keep what has arrived since. */
+function keepFuller(snap: Part, local: Part): void {
+  const a = contentOf(snap);
+  const b = contentOf(local);
+  if (a === null || b === null || b.length <= a.length || !b.startsWith(a)) return;
+  snap.data = local.data;
+  if (local.partial === undefined) delete snap.partial;
+}
+
 /** Returns true when the delta had a gap or referenced something unknown
  * (caller refetches). */
 export function applyDelta(view: SessionView, d: MessageDelta): boolean {
@@ -208,6 +237,7 @@ export function replaceMessages(view: SessionView, messages: ChatMessage[]): voi
     const snapPartIds = new Set(cm.parts.map((p) => p.id));
     for (const p of cm.parts) {
       const lp = l.parts.find((x) => x.id === p.id);
+      if (lp !== undefined && p.partial !== undefined) keepFuller(p, lp);
       if (lp === undefined || lp.status !== "streaming") continue;
       if (
         (p.data.type === "text" || p.data.type === "reasoning") &&

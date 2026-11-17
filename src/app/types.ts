@@ -101,6 +101,8 @@ export interface Part {
   status: "streaming" | "complete" | "error" | "interrupted";
   type: PartData["type"];
   data: PartData;
+  /** Set while the part's text or tool output is still arriving in pieces: its full length. */
+  partial?: number;
   createdAt: number;
   updatedAt: number;
 }

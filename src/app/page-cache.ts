@@ -18,10 +18,14 @@ export interface PageStore {
 
 export function memoryStore(): PageStore {
   const map = new Map<string, CachedPage>();
+  // Copies in and out, so a view that fills its pages in never edits what the cache holds.
   return {
-    get: async (key) => map.get(key),
+    get: async (key) => {
+      const hit = map.get(key);
+      return hit === undefined ? undefined : structuredClone(hit);
+    },
     put: async (key, page) => {
-      map.set(key, page);
+      map.set(key, structuredClone(page));
     },
     drop: async (sessionId) => {
       for (const key of [...map.keys()]) if (key.startsWith(`${sessionId}:`)) map.delete(key);

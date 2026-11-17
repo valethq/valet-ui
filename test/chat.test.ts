@@ -726,6 +726,18 @@ describe("load animation reach", () => {
     });
   });
 
+  test("a message still receiving pieces of a long part is marked while it fills", () => {
+    withChat(({ note, show }) => {
+      const filling = note("m1");
+      (filling.parts[0] as Part).partial = 9000;
+      const during = show(false, filling, note("m2"));
+      expect(during.m1).toContain("partial");
+      expect(during.m2).not.toContain("partial");
+      delete (filling.parts[0] as Part).partial;
+      expect(show(false, filling, note("m2")).m1).not.toContain("partial");
+    });
+  });
+
   test("the loading placeholder does not use up the load animation", () => {
     withChat(({ note, show }) => {
       show(true);

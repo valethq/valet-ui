@@ -108,38 +108,68 @@ export const createSession = (projectId: string): Promise<Session> =>
 export const listMessages = (sessionId: string, limit = 200): Promise<ChatMessage[]> =>
   get(`/api/core/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}`);
 
+export interface RoundResult {
+  pieces: { id: string; at: number; text: string }[];
+  done: boolean;
+}
+
 export type PageResult =
   | { status: 304 }
   | { status: 200; page: number; messages: ChatMessage[]; etag: string };
 
 /** One fixed page of a chat, or the newest with `"tail"`. Sends `If-None-Match` when the caller has a copy, and
  * bypasses the browser cache: the page cache in IndexedDB is the only copy kept. */
+async function uiGet(
+  path: string,
+  headers: Record<string, string> = {},
+): Promise<{ res: Response; text: string }> {
+  try {
+    const res = await fetch(path, {
+      credentials: "include",
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+      headers,
+    });
+    return { res, text: await res.text() };
+  } catch {
+    throw new ApiError(0, "Network unreachable, try again");
+  }
+}
+
+function checked(res: Response): void {
+  if (res.ok || res.status === 304) return;
+  if (res.status === 401) hooks.onUnauthorized();
+  throw new ApiError(res.status, `HTTP ${res.status}`);
+}
+
 export async function getMessagePage(
   sessionId: string,
   which: number | "tail",
   etag?: string,
 ): Promise<PageResult> {
   const query = which === "tail" ? "" : `?page=${which}`;
-  let res: Response;
-  let text: string;
-  try {
-    res = await fetch(`/ui/messages/${encodeURIComponent(sessionId)}${query}`, {
-      credentials: "include",
-      cache: "no-store",
-      signal: AbortSignal.timeout(30_000),
-      headers: etag === undefined ? {} : { "if-none-match": etag },
-    });
-    text = await res.text();
-  } catch {
-    throw new ApiError(0, "Network unreachable, try again");
-  }
+  const { res, text } = await uiGet(
+    `/ui/messages/${encodeURIComponent(sessionId)}${query}`,
+    etag === undefined ? {} : { "if-none-match": etag },
+  );
+  checked(res);
   if (res.status === 304) return { status: 304 };
-  if (!res.ok) {
-    if (res.status === 401) hooks.onUnauthorized();
-    throw new ApiError(res.status, `HTTP ${res.status}`);
-  }
   const body = JSON.parse(text) as { page: number; messages: ChatMessage[] };
   return { status: 200, page: body.page, messages: body.messages, etag: res.headers.get("etag") ?? "" };
+}
+
+/** Round `round` of the pieces still owed on a page; `etag` is the page's, so a changed page answers 409. */
+export async function getMessageRound(
+  sessionId: string,
+  page: number,
+  round: number,
+  etag: string,
+): Promise<RoundResult> {
+  const { res, text } = await uiGet(
+    `/ui/messages/${encodeURIComponent(sessionId)}?page=${page}&round=${round}&v=${encodeURIComponent(etag)}`,
+  );
+  checked(res);
+  return JSON.parse(text) as RoundResult;
 }
 
 export const sendMessage = (

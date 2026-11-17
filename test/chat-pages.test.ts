@@ -71,6 +71,28 @@ describe("page loader", () => {
     expect(painted).toEqual([2]);
   });
 
+  test("the loader hands back the etag, and save stores a finished page without moving the tail", async () => {
+    const t = setup();
+    const got = await t.loader.load("s", "tail");
+    expect(got.etag).toBe('"a"');
+    const filled = { ...got, messages: msgs(51, 52, 53) };
+    await t.loader.save("s", filled, true);
+    expect((await t.store.get("s:2"))?.messages).toHaveLength(3);
+    expect((await t.store.get("s:tail"))?.messages).toHaveLength(3);
+    t.reply({ status: 200, page: 3, messages: msgs(76), etag: '"c"' });
+    await t.loader.load("s", "tail");
+    await t.loader.save("s", { ...filled, messages: msgs(51, 52, 53, 54) }, true);
+    expect((await t.store.get("s:2"))?.messages).toHaveLength(4);
+    expect((await t.store.get("s:tail"))?.page).toBe(3);
+  });
+
+  test("a cached copy is not the same object the view edits", async () => {
+    const t = setup();
+    const got = await t.loader.load("s", 2);
+    got.messages.length = 0;
+    expect((await t.store.get("s:2"))?.messages).toHaveLength(2);
+  });
+
   test("drop removes one chat's pages and leaves the others", async () => {
     const t = setup();
     await t.loader.load("s", "tail");

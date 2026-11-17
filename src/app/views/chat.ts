@@ -489,7 +489,7 @@ function messageSig(
                 : d.type === "custom"
                   ? `${d.kind}${d.title}${d.text.length}`
                   : 0;
-    return `${p.id}:${p.status}:${d.type}:${size}`;
+    return `${p.id}:${p.status}:${d.type}:${size}:${p.partial ?? ""}`;
   });
   const err = cm.message.runId === null ? "" : (view.runErrors.get(cm.message.runId) ?? "");
   const types = cm.parts.some((p) => p.data.type === "custom") ? typesRev : "";
@@ -505,6 +505,7 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
   const out: HTMLElement[] = [];
   const msgs: HTMLElement[] = [];
   const fx = anim === "" ? "" : ` ${anim}`;
+  const filling = cm.parts.some((p) => p.partial !== undefined) ? " partial" : "";
   const bare = cm.message.role === "system" && isCustomOnly(cm) ? " bare" : "";
   // A user's images become one deck above their text; a run of presented
   // images becomes one group of figures.
@@ -515,7 +516,12 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
   const currentBubble = (): HTMLElement => {
     if (bubble === null) {
       bubble = el("div", { class: "bubble" });
-      const msg = el("div", { class: `msg ${cm.message.role}${bare}${fx}` }, ...(deck ? [deck] : []), bubble);
+      const msg = el(
+        "div",
+        { class: `msg ${cm.message.role}${bare}${filling}${fx}` },
+        ...(deck ? [deck] : []),
+        bubble,
+      );
       deck = null;
       msgs.push(msg);
       out.push(msg);
@@ -555,7 +561,7 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
   }
   flushRun();
   if (deck !== null) {
-    const msg = el("div", { class: `msg ${cm.message.role}${fx}` }, deck);
+    const msg = el("div", { class: `msg ${cm.message.role}${filling}${fx}` }, deck);
     msgs.push(msg);
     out.push(msg);
   }
