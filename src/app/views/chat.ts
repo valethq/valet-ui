@@ -44,6 +44,8 @@ export interface ChatCallbacks {
   onToggleNav(): void;
   /** A subagent card or the parent breadcrumb was clicked. */
   onOpenSession(id: string): void;
+  /** The reader is nearing the top of what is loaded and the chat has older pages. */
+  onLoadOlder(): void;
 }
 
 export interface ModelSel {
@@ -73,6 +75,9 @@ export interface ChatHandle {
 const LANDING = ["How are you?", "Ready when you are.", "What should we work on?", "What's on your mind?"];
 const MAX_OUTPUT_LINES = 400;
 const STICK_PX = 80;
+/** Older pages are requested while less than this many screens of messages sit above the viewport. */
+const LOAD_AHEAD_SCREENS = 1.5;
+const RETRY_OLDER_MS = 5_000;
 /** Covers the longest message entrance animation in page.ts. */
 const ENTER_MS = 320;
 
@@ -848,6 +853,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   }
   messages.addEventListener("scroll", () => {
     stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
+    askOlder();
   });
 
   let projects: Project[] = [];
@@ -938,14 +944,30 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   setModels(null, null);
 
   let subs: SubInfo[] = [];
-  // One node for the chat's lifetime so re-renders don't restart its animation.
-  const loader = el(
-    "div",
-    { class: "loading", role: "status", "aria-label": "Loading messages" },
-    el("span"),
-    el("span"),
-    el("span"),
-  );
+  // Each loader is one node for the chat's lifetime so re-renders don't restart its animation.
+  const dots = (cls: string, label: string): HTMLElement =>
+    el("div", { class: cls, role: "status", "aria-label": label }, el("span"), el("span"), el("span"));
+  const loader = dots("loading", "Loading messages");
+  const olderLoader = dots("loading older", "Loading earlier messages");
+
+  /** Asks for the next older page while the reader is within reach of the top. */
+  const askOlder = (): void => {
+    const paging = current?.paging;
+    if (paging == null || paging.older === null || paging.loading) return;
+    if (Date.now() - paging.failedAt < RETRY_OLDER_MS) return;
+    if (messages.scrollTop < messages.clientHeight * LOAD_AHEAD_SCREENS) cb.onLoadOlder();
+  };
+
+  /** The first message in view and where it sits, so a render that adds content above can put it back. */
+  const viewAnchor = (): { node: HTMLElement; top: number } | null => {
+    const edge = messages.getBoundingClientRect().top;
+    for (const child of Array.from(messages.children) as HTMLElement[]) {
+      if (child === olderLoader) continue;
+      const r = child.getBoundingClientRect();
+      if (r.bottom > edge) return { node: child, top: r.top };
+    }
+    return null;
+  };
 
   function renderMessages(view: SessionView): void {
     const scrollTops = new Map<string, number>();
@@ -1004,8 +1026,10 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     }
     primed = true;
     for (const id of cache.keys()) if (!live.has(id)) cache.delete(id);
+    if (view.paging?.older != null) nodes.unshift(olderLoader);
     if (view.loading) nodes.push(loader);
     else if (view.messages.length === 0) nodes.push(el("div", { class: "empty", text: "No messages yet" }));
+    const anchor = view.paging !== null && !stickToBottom ? viewAnchor() : null;
     reconcile(messages, nodes);
     for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
       const pid = row.dataset.partId;
@@ -1019,6 +1043,10 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       }
     }
     if (stickToBottom) messages.scrollTop = messages.scrollHeight;
+    else if (anchor?.node.isConnected) {
+      messages.scrollTop += anchor.node.getBoundingClientRect().top - anchor.top;
+    }
+    askOlder();
     syncTick(runningTools.size > 0 || liveReasoning);
   }
 

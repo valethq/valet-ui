@@ -297,6 +297,7 @@ describe("send error line", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const errNode = findByClass(root, "send-error") as FakeEl;
       const connNode = findByClass(root, "conn") as FakeEl;
@@ -374,6 +375,7 @@ const viewWith = (parts: Part[]): SessionView => ({
   contextWindow: null,
   runErrors: new Map(),
   loading: false,
+  paging: null,
   queued: 0,
 });
 
@@ -397,6 +399,7 @@ describe("tool output rendering", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const part = toolPart({
         input: { command: "ls" },
@@ -435,6 +438,7 @@ describe("loading placeholder", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const loading = { ...viewWith([]), messages: [], loading: true };
       chat.update(loading, []);
@@ -474,6 +478,7 @@ describe("message entrance", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const note = (id: string, text: string): ChatMessage => ({
         message: { ...message, id },
@@ -531,6 +536,7 @@ describe("streaming updates", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const reasoning = (text: string): Part => ({
         id: "prt_r",
@@ -590,6 +596,7 @@ describe("composer attachments", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       const row = findByClass(root, "attach-row") as FakeEl;
@@ -637,6 +644,7 @@ describe("composer attachments", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       const file = new File(["x"], "x.bin");
@@ -666,6 +674,7 @@ describe("composer attachments", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       textarea.dispatch("paste", {
@@ -699,6 +708,7 @@ describe("composer attachments", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       const big = { name: "big.bin", size: 21 * 1024 * 1024, type: "" } as unknown as File;
       (findTag(root, "textarea") as FakeEl).dispatch("paste", {
@@ -727,6 +737,7 @@ describe("composer attachments", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       let prevented = false;
       (findTag(root, "textarea") as FakeEl).dispatch("paste", {
@@ -846,6 +857,7 @@ describe("message images", () => {
       onQueueMode() {},
       onToggleNav() {},
       onOpenSession() {},
+      onLoadOlder() {},
     });
     chat.update({ ...viewWith(parts), messages: [{ message: { ...message, role }, parts }] }, []);
     return findByClass(root, "messages") as FakeEl;
@@ -922,6 +934,7 @@ describe("subagent sessions", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession: (id) => opened.push(id),
+        onLoadOlder() {},
       });
       fn(root, chat, opened);
     } finally {
@@ -1058,6 +1071,7 @@ describe("session actions", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       fn(root, chat, forks);
     } finally {
@@ -1143,6 +1157,7 @@ describe("custom parts", () => {
         onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
+        onLoadOlder() {},
       });
       fn(root, chat);
     } finally {

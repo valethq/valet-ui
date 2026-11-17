@@ -108,6 +108,40 @@ export const createSession = (projectId: string): Promise<Session> =>
 export const listMessages = (sessionId: string, limit = 200): Promise<ChatMessage[]> =>
   get(`/api/core/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}`);
 
+export type PageResult =
+  | { status: 304 }
+  | { status: 200; page: number; messages: ChatMessage[]; etag: string };
+
+/** One fixed page of a chat, or the newest with `"tail"`. Sends `If-None-Match` when the caller has a copy, and
+ * bypasses the browser cache: the page cache in IndexedDB is the only copy kept. */
+export async function getMessagePage(
+  sessionId: string,
+  which: number | "tail",
+  etag?: string,
+): Promise<PageResult> {
+  const query = which === "tail" ? "" : `?page=${which}`;
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`/ui/messages/${encodeURIComponent(sessionId)}${query}`, {
+      credentials: "include",
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+      headers: etag === undefined ? {} : { "if-none-match": etag },
+    });
+    text = await res.text();
+  } catch {
+    throw new ApiError(0, "Network unreachable, try again");
+  }
+  if (res.status === 304) return { status: 304 };
+  if (!res.ok) {
+    if (res.status === 401) hooks.onUnauthorized();
+    throw new ApiError(res.status, `HTTP ${res.status}`);
+  }
+  const body = JSON.parse(text) as { page: number; messages: ChatMessage[] };
+  return { status: 200, page: body.page, messages: body.messages, etag: res.headers.get("etag") ?? "" };
+}
+
 export const sendMessage = (
   sessionId: string,
   parts: PartInput[],

@@ -12,7 +12,12 @@ Settings has an **Experimental** tab, per browser. It sets the `valet-ui-experim
 
 - The page, the bundle and relayed API responses are brotli or gzip compressed when the client accepts it. Only finite text bodies of 1 KB or more are compressed; ranges, event streams and binaries pass through. The page and bundle carry a content-hash ETag and revalidate with a 304.
 
-With it off, nothing is compressed and no cache headers are added.
+- Chats open in pages instead of one 200-message fetch. The browser asks the plugin for `/ui/messages/:id` (the newest page) and `/ui/messages/:id?page=n`; the plugin reads core over loopback and cuts history into fixed pages of 25 messages by seq. A page's ETag is a hash of its own bytes, so a sealed page keeps its ETag as the chat grows and revalidates to a 304. Core and its API are unchanged.
+- The page cache lives in IndexedDB (about 300 pages, least recently written evicted first; cleared on logout and per chat on delete). Opening a chat paints the cached newest page at once, then confirms it with a conditional request.
+- Older pages load while less than 1.5 screens of messages sit above the viewport, so a chat always has at least two screens loaded. The check measures the real layout, so zoom, font size and width are accounted for. The scroll position is kept in place as older pages are added above.
+- If the paged route fails, a cached paint stays on screen; with nothing cached the chat falls back to the whole-window fetch.
+
+With it off, nothing is compressed, no cache headers are added, and chats load the way they always did.
 
 ## Settings panels
 

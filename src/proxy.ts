@@ -29,7 +29,7 @@ export function sameOrigin(req: Request): boolean {
   return origin === null || new URL(origin).host === req.headers.get("host");
 }
 
-function upstreamHeaders(req: Request): Headers {
+export function upstreamHeaders(req: Request): Headers {
   const headers = new Headers(req.headers);
   for (const name of DROP_REQUEST) headers.delete(name);
   return headers;

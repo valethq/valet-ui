@@ -1182,6 +1182,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .loading span:nth-child(2) { animation-delay: .15s; }
 .loading span:nth-child(3) { animation-delay: .3s; }
 @keyframes loading-dot { 0%, 70%, 100% { opacity: .3; transform: scale(.75); } 35% { opacity: 1; transform: scale(1); } }
+.loading.older { flex: none; min-height: 28px; animation-delay: 0s; }
 .empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--faint); }
 .hint { font-size: 12px; color: var(--faint); padding: 4px 10px; }
 .hint.conn, .hint.send-error { --fx-from: translateY(4px); --fx-blur: 3px; }

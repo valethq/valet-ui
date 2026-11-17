@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { asset, experimentalOn, serveAsset } from "./compress";
 import { indexHtml, bootScript } from "./page";
+import { isPagePath, pageResponse } from "./pages";
 import { isProxied, openUpstream, proxyRequest, sameOrigin, type WsData, wsHandlers } from "./proxy";
 
 export interface UiConfig {
@@ -76,6 +77,10 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
         return upgraded ? undefined : Response.json({ error: "websocket upgrade required" }, { status: 400 });
       }
       if (req.method !== "GET") return new Response("not found", { status: 404 });
+      if (isPagePath(path)) {
+        if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
+        return pageResponse(req, coreUrl);
+      }
       if (path === "/" && experimentalOn(req)) return serveAsset(req, htmlAsset, headers);
       if (path === "/app.js" && experimentalOn(req)) return serveAsset(req, bundleAsset, headers);
       if (path === "/") {

@@ -10,6 +10,23 @@ import type {
   SessionState,
 } from "./types";
 
+/** Where a chat that loads in pages stands: `older` is the next page to fetch going back, `null` at the start. */
+export interface Paging {
+  /** Newest page loaded. */
+  tail: number;
+  older: number | null;
+  loading: boolean;
+  /** When the last older-page fetch failed; retries wait a few seconds. */
+  failedAt: number;
+}
+
+export const pagingFor = (tail: number): Paging => ({
+  tail,
+  older: tail > 0 ? tail - 1 : null,
+  loading: false,
+  failedAt: 0,
+});
+
 export interface SessionView {
   session: Session;
   messages: ChatMessage[];
@@ -25,6 +42,8 @@ export interface SessionView {
   queued: number;
   /** Placeholder shown while the session's messages are still being fetched. */
   loading: boolean;
+  /** Set when the chat loads in pages (experimental); `null` when `messages` is the whole window. */
+  paging: Paging | null;
 }
 
 export function newSessionView(session: Session, messages: ChatMessage[], loading = false): SessionView {
@@ -46,6 +65,7 @@ export function newSessionView(session: Session, messages: ChatMessage[], loadin
     runErrors: new Map(),
     queued: 0,
     loading,
+    paging: null,
   };
 }
 

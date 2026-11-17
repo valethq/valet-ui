@@ -1,6 +1,9 @@
 /// <reference lib="dom" />
 import * as api from "./api";
+import { createPageLoader, type Loaded } from "./chat-pages";
 import { el, leave } from "./dom";
+import { experimentalEnabled } from "./experimental";
+import { defaultStore } from "./page-cache";
 import {
   applyDelta,
   applyMessageComplete,
@@ -16,6 +19,7 @@ import {
   forkSource,
   newSessionView,
   orphanChildren,
+  pagingFor,
   childrenOf,
   replaceMessages,
   type Indicator,
@@ -335,6 +339,10 @@ function refetchMessagesSoon(): void {
     refetchTimer = undefined;
     const view = app.view;
     if (view === null || view.loading) return;
+    if (view.paging !== null) {
+      refreshTail(view).catch(() => {});
+      return;
+    }
     api
       .listMessages(view.session.id)
       .then((messages) => {
@@ -403,6 +411,76 @@ function pickSession(preferHash: boolean): Session | undefined {
   return topLevel(app.sessions)[0];
 }
 
+const pages = createPageLoader(defaultStore(), api.getMessagePage);
+/** A refetch that finds the chat this many pages ahead reloads from the newest page instead of filling the gap. */
+const MAX_PAGE_GAP = 3;
+
+function pagedView(session: Session, loaded: Loaded): SessionView {
+  const view = newSessionView(session, loaded.messages);
+  view.paging = pagingFor(loaded.page);
+  return view;
+}
+
+/** The newest page, confirmed by the server, folded into what is already on screen when it is the same page. */
+function mergeTail(shown: SessionView | undefined, fresh: Loaded, session: Session): SessionView {
+  if (shown?.paging != null && shown.paging.tail === fresh.page) {
+    replaceMessages(shown, fresh.messages);
+    shown.session = session;
+    return shown;
+  }
+  return pagedView(session, fresh);
+}
+
+/** Loads the next older page (cached copy first) once the reader gets near the top of what is loaded. */
+async function loadOlder(): Promise<void> {
+  const view = app.view;
+  const paging = view?.paging;
+  if (view == null || paging == null || paging.older === null || paging.loading) return;
+  const page = paging.older;
+  paging.loading = true;
+  let applied = false;
+  const apply = (loaded: Loaded): void => {
+    if (app.view !== view || view.paging !== paging) return;
+    replaceMessages(view, loaded.messages);
+    if (!applied) {
+      applied = true;
+      paging.older = page > 0 ? page - 1 : null;
+      paging.loading = false;
+    }
+    scheduleRender();
+  };
+  try {
+    apply(await pages.load(view.session.id, page, apply));
+  } catch {
+    if (!applied) {
+      paging.loading = false;
+      paging.failedAt = Date.now();
+      scheduleRender();
+    }
+  }
+}
+
+/** Re-reads the newest page (a 304 when nothing changed) and any pages the chat grew past since it loaded. */
+async function refreshTail(view: SessionView): Promise<void> {
+  const id = view.session.id;
+  const fresh = await pages.load(id, "tail");
+  const paging = view.paging;
+  if (app.view !== view || paging === null) return;
+  if (fresh.page - paging.tail > MAX_PAGE_GAP) {
+    view.messages = [];
+    view.paging = pagingFor(fresh.page);
+  } else {
+    for (let p = paging.tail; p < fresh.page; p++) {
+      const loaded = await pages.load(id, p);
+      if (app.view !== view) return;
+      replaceMessages(view, loaded.messages);
+    }
+    paging.tail = Math.max(paging.tail, fresh.page);
+  }
+  replaceMessages(view, fresh.messages);
+  scheduleRender();
+}
+
 let openSeq = 0;
 // Events for a session being opened arrive before its REST snapshot lands;
 // they buffer here and replay through onEvent once the view exists.
@@ -421,9 +499,31 @@ async function openSession(id: string): Promise<void> {
   }
   history.replaceState(null, "", `#s=${encodeURIComponent(id)}`);
   scheduleRender();
-  const messages = await api.listMessages(id).catch(() => []);
-  if (seq !== openSeq || !app.sessions.some((s) => s.id === id)) return;
-  app.view = newSessionView(app.sessions.find((s) => s.id === id) ?? session, messages);
+  const stillOpening = (): boolean => seq === openSeq && app.sessions.some((s) => s.id === id);
+  const shownView = (): SessionView | undefined =>
+    app.view?.session.id === id && !app.view.loading ? app.view : undefined;
+  let view: SessionView | undefined;
+  if (experimentalEnabled()) {
+    const fresh = await pages
+      .load(id, "tail", (cached) => {
+        if (!stillOpening() || app.view?.session.id !== id || !app.view.loading) return;
+        app.view = pagedView(session, cached);
+        scheduleRender();
+      })
+      .catch(() => undefined);
+    if (!stillOpening()) return;
+    const shown = shownView();
+    // Paging failed: keep a cached paint, otherwise fall back to the whole-window fetch below.
+    view =
+      fresh === undefined ? (shown?.paging == null ? undefined : shown) : mergeTail(shown, fresh, session);
+  }
+  if (view === undefined) {
+    const whole = await api.listMessages(id).catch(() => []);
+    if (!stillOpening()) return;
+    view = newSessionView(app.sessions.find((s) => s.id === id) ?? session, whole);
+  }
+  const messages = view.messages;
+  app.view = view;
   for (const ev of opening.end(id)) onEvent(`session:${id}`, ev.name, ev.data);
   noteSeen(id, Math.max(session.lastMessageAt ?? 0, ...messages.map((cm) => cm.message.createdAt)));
   scheduleRender();
@@ -582,6 +682,7 @@ async function deleteSession(id: string): Promise<void> {
     },
   );
   if (!deleted) return;
+  void pages.drop(id);
   app.sessions = orphanChildren(
     app.sessions.filter((s) => s.id !== id),
     id,
@@ -613,6 +714,7 @@ function onEvent(topic: string, name: string, data: unknown): void {
       if (name === "session.create") syncTopics();
       if (app.view?.session.id === payload.session.id) app.view.session = payload.session;
     } else if (name === "session.delete") {
+      void pages.drop(payload.session.id);
       app.sessions = orphanChildren(
         app.sessions.filter((s) => s.id !== payload.session.id),
         payload.session.id,
@@ -710,6 +812,7 @@ function loadPartTypes(): void {
 
 function showLogin(): void {
   app.socket.close();
+  void pages.clear();
   renderAuth(root, { needsSetup: false, authenticated: false }, async ({ password }) => {
     await api.login(password);
     await startApp();
@@ -812,6 +915,7 @@ async function startApp(): Promise<void> {
     },
     onToggleNav: toggleNav,
     onOpenSession: (id) => void openSession(id),
+    onLoadOlder: () => void loadOlder(),
   });
 
   const backdrop = el("div", { class: "nav-backdrop" });
