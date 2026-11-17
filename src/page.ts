@@ -208,6 +208,8 @@ button.chip:active:not(:disabled) { transform: none; }
   background: var(--raised); font-size: 12.5px;
 }
 .fb-new-input:focus, .fb-path:focus, .pp-name:focus { outline: none; border-color: var(--strong); }
+.fb > .fb-path { flex: none; }
+.fb > :not(.fb-list) { flex-shrink: 0; }
 .fb-new-ok { display: inline-flex; flex: none; padding: 6px; border: none; border-radius: 8px; background: var(--tint); color: var(--text); }
 .fb-new-ok .icon { width: 14px; height: 14px; }
 .fb-empty { padding: 8px; font-size: 12.5px; color: var(--faint); }
