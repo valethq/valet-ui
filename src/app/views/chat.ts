@@ -78,6 +78,8 @@ const STICK_PX = 80;
 /** Older pages are requested while less than this many screens of messages sit above the viewport. */
 const LOAD_AHEAD_SCREENS = 1.5;
 const RETRY_OLDER_MS = 5_000;
+/** On a chat's first render only messages within this many screens of the bottom edge play the load animation. */
+const ENTRANCE_SCREENS = 2;
 /** Covers the longest message entrance animation in page.ts. */
 const ENTER_MS = 320;
 
@@ -678,6 +680,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   let typesRev = 0;
   const cache = new Map<string, { sig: string; nodes: HTMLElement[]; anim: string; born: number }>();
   let primed = false;
+  /** First message of the previous render; anything sorted before it is history being added above. */
+  let firstId: string | null = null;
   let leadKey = "sparkles"; // matches the chip's initial icon
   let stickToBottom = true;
   let connOpen = false;
@@ -958,6 +962,25 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     if (messages.scrollTop < messages.clientHeight * LOAD_AHEAD_SCREENS) cb.onLoadOlder();
   };
 
+  /** Drops the load animation from messages that rendered too far above the viewport to be seen. It runs after
+   * layout and before paint, so the animation never starts for them. */
+  const trimEntrances = (ids: string[]): void => {
+    const cutoff = messages.getBoundingClientRect().bottom - messages.clientHeight * ENTRANCE_SCREENS;
+    const far = ids.filter((id) => {
+      const last = cache.get(id)?.nodes.at(-1);
+      return last !== undefined && last.getBoundingClientRect().bottom < cutoff;
+    });
+    for (const id of far) {
+      const hit = cache.get(id);
+      if (hit === undefined) continue;
+      for (const n of hit.nodes) {
+        n.classList.remove("fade");
+        n.style.animationDelay = "";
+      }
+      hit.anim = "";
+    }
+  };
+
   /** The first message in view and where it sits, so a render that adds content above can put it back. */
   const viewAnchor = (): { node: HTMLElement; top: number } | null => {
     const edge = messages.getBoundingClientRect().top;
@@ -1000,14 +1023,19 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     const now = Date.now();
     const live = new Set<string>();
     const nodes: HTMLElement[] = [];
+    const fading: string[] = [];
+    let reachedFirst = firstId === null;
     for (const cm of view.messages) {
       const id = cm.message.id;
+      if (id === firstId) reachedFirst = true;
       const sig = messageSig(cm, view, showAll, bound, typesRev);
       let hit = cache.get(id);
       if (hit === undefined || hit.sig !== sig) {
-        // New messages animate in once; a re-render mid-entrance resumes it.
+        // New messages animate in once; a re-render mid-entrance resumes it. History added above the
+        // old first message never animates: it is off screen, and scrolling would only replay it.
         const born = hit?.born ?? now;
-        const anim = hit === undefined ? (primed ? "enter" : "fade") : now - born < ENTER_MS ? hit.anim : "";
+        const entry = !reachedFirst ? "" : primed ? "enter" : "fade";
+        const anim = hit === undefined ? entry : now - born < ENTER_MS ? hit.anim : "";
         const fresh = renderMessage(cm, ui, view, anim);
         if (hit !== undefined && hit.nodes.length === fresh.length) {
           // Same shape: patch the live nodes so hover, focus and scroll survive.
@@ -1018,13 +1046,16 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         } else {
           if (anim !== "" && born < now) for (const n of fresh) n.style.animationDelay = `${born - now}ms`;
           hit = { sig, anim, born, nodes: fresh };
+          if (anim === "fade") fading.push(id);
         }
         cache.set(id, hit);
       }
       live.add(id);
       nodes.push(...hit.nodes);
     }
-    primed = true;
+    firstId = view.messages[0]?.message.id ?? null;
+    // The loading placeholder is not the chat's first render: its messages still get the load animation.
+    if (!view.loading) primed = true;
     for (const id of cache.keys()) if (!live.has(id)) cache.delete(id);
     if (view.paging?.older != null) nodes.unshift(olderLoader);
     if (view.loading) nodes.push(loader);
@@ -1046,6 +1077,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     else if (anchor?.node.isConnected) {
       messages.scrollTop += anchor.node.getBoundingClientRect().top - anchor.top;
     }
+    if (fading.length > 0) trimEntrances(fading);
     askOlder();
     syncTick(runningTools.size > 0 || liveReasoning);
   }
@@ -1143,6 +1175,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         bodyStick.clear();
         cache.clear();
         primed = false;
+        firstId = null;
         stickToBottom = true;
       }
 

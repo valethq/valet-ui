@@ -154,6 +154,9 @@ describe("toolStatusClass", () => {
 });
 
 class FakeEl {
+  /** Stand-in for layout: tests say where each node sits and how tall the viewport is. */
+  static layout: (n: FakeEl) => { top: number; bottom: number } = () => ({ top: 0, bottom: 0 });
+  static viewport = 0;
   readonly attrs = new Map<string, string>();
   readonly children: unknown[] = [];
   readonly style: Record<string, string> = {};
@@ -164,6 +167,18 @@ class FakeEl {
   setAttribute(k: string, v: string): void {
     this.attrs.set(k, v);
   }
+  get clientHeight(): number {
+    return FakeEl.viewport;
+  }
+  getBoundingClientRect(): { top: number; bottom: number } {
+    return FakeEl.layout(this);
+  }
+  readonly classList = {
+    remove: (...names: string[]): void => {
+      const left = (this.attrs.get("class") ?? "").split(" ").filter((c) => !names.includes(c));
+      this.attrs.set("class", left.join(" "));
+    },
+  };
   append(...kids: unknown[]): void {
     for (const k of kids) if (k instanceof FakeEl) k.#parent = this;
     this.children.push(...kids);
@@ -513,6 +528,116 @@ describe("message entrance", () => {
       g.document = savedDocument;
       Date.now = realNow;
     }
+  });
+});
+
+describe("load animation reach", () => {
+  const withChat = (fn: (h: ReturnType<typeof harness>) => void): void => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    const realNow = Date.now;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    try {
+      fn(harness());
+    } finally {
+      g.document = savedDocument;
+      Date.now = realNow;
+      FakeEl.layout = () => ({ top: 0, bottom: 0 });
+      FakeEl.viewport = 0;
+    }
+  };
+  const textOf = (n: unknown): string =>
+    n instanceof FakeEl ? n.textContent + n.children.map(textOf).join("") : String(n);
+  function harness() {
+    const root = new FakeEl("div");
+    const chat = createChat(root as unknown as HTMLElement, {
+      onSend: () => Promise.resolve(true),
+      onUpload: () => Promise.resolve("blb_1"),
+      onStop() {},
+      onModel() {},
+      onRename() {},
+      onDelete() {},
+      onFork() {},
+      onMove() {},
+      onCompact() {},
+      onQueueMode() {},
+      onToggleNav() {},
+      onOpenSession() {},
+      onLoadOlder() {},
+    });
+    const note = (id: string): ChatMessage => ({
+      message: { ...message, id },
+      parts: [
+        toolPart(
+          {},
+          {
+            id: `p_${id}`,
+            messageId: id,
+            type: "notice",
+            data: { type: "notice", level: "error", text: id },
+          },
+        ),
+      ],
+    });
+    const show = (loading: boolean, ...msgs: ChatMessage[]): Record<string, string> => {
+      chat.update({ ...viewWith([]), messages: msgs, loading }, []);
+      const kids = (findByClass(root, "messages") as FakeEl).children as FakeEl[];
+      return Object.fromEntries(kids.map((n) => [textOf(n), n.attrs.get("class") ?? ""]));
+    };
+    return { note, show };
+  }
+
+  test("on first render only messages within two screens of the bottom play the load animation", () => {
+    withChat(({ note, show }) => {
+      FakeEl.viewport = 800;
+      // the container ends at y=800; two screens up is y=-800
+      FakeEl.layout = (n) => {
+        const t = textOf(n);
+        if (n.attrs.get("class") === "messages") return { top: 0, bottom: 800 };
+        if (t === "far") return { top: -5100, bottom: -5000 };
+        if (t === "edge") return { top: -900, bottom: -700 };
+        return { top: 600, bottom: 700 };
+      };
+      const classes = show(false, note("far"), note("edge"), note("near"));
+      expect(classes.far).toBe("msg assistant");
+      expect(classes.edge).toBe("msg assistant fade");
+      expect(classes.near).toBe("msg assistant fade");
+    });
+  });
+
+  test("a trimmed message does not pick the animation back up on the next render", () => {
+    withChat(({ note, show }) => {
+      FakeEl.viewport = 800;
+      FakeEl.layout = (n) =>
+        n.attrs.get("class") === "messages"
+          ? { top: 0, bottom: 800 }
+          : textOf(n) === "far"
+            ? { top: -5100, bottom: -5000 }
+            : { top: 600, bottom: 700 };
+      show(false, note("far"), note("near"));
+      const again = show(false, note("far"), note("near"), note("fresh"));
+      expect(again.far).toBe("msg assistant");
+      expect(again.fresh).toBe("msg assistant enter");
+    });
+  });
+
+  test("history added above the first message never animates, while a new last message still does", () => {
+    withChat(({ note, show }) => {
+      show(false, note("m2"), note("m3"));
+      const grown = show(false, note("m0"), note("m1"), note("m2"), note("m3"), note("m4"));
+      expect(grown.m0).toBe("msg assistant");
+      expect(grown.m1).toBe("msg assistant");
+      expect(grown.m4).toBe("msg assistant enter");
+    });
+  });
+
+  test("the loading placeholder does not use up the load animation", () => {
+    withChat(({ note, show }) => {
+      show(true);
+      const loaded = show(false, note("m1"), note("m2"));
+      expect(loaded.m1).toBe("msg assistant fade");
+      expect(loaded.m2).toBe("msg assistant fade");
+    });
   });
 });
 
