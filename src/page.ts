@@ -213,7 +213,8 @@ button.chip:active:not(:disabled) { transform: none; }
   mask: var(--logo) center / contain no-repeat;
 }
 
-.app { position: relative; height: 100vh; height: 100dvh; }
+/* Clips the chat column while it slides into place after the sidebar pins or unpins. */
+.app { position: relative; height: 100vh; height: 100dvh; overflow-x: clip; }
 .chat-root { display: contents; }
 .nav-toggle {
   width: 0;
@@ -269,12 +270,14 @@ button.chip:active:not(:disabled) { transform: none; }
   border: 1px solid var(--border);
   border-radius: 30px;
   box-shadow: 0 24px 64px -28px var(--shadow);
-  transition: transform var(--dur-focus) var(--ease-focus), filter var(--dur-focus) var(--ease-focus), opacity var(--dur-focus) var(--ease-focus);
+  transition: transform var(--dur-focus) var(--ease-focus), filter var(--dur-focus) var(--ease-focus), opacity var(--dur-focus) var(--ease-focus), visibility var(--dur-focus) var(--ease-focus);
 }
+/* Hidden once slid out, so the blurred, transparent sidebar and its pulsing dots stop costing paint. */
 .app.collapsed .sidebar {
   transform: translateX(calc(-100% - var(--sb-vinset) - 24px));
   filter: blur(var(--blur-lg));
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   transition-duration: var(--dur-focus);
   transition-delay: 0s;
@@ -285,6 +288,7 @@ button.chip:active:not(:disabled) { transform: none; }
   transform: none;
   filter: blur(0);
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
   transition-duration: var(--dur-focus);
   transition-delay: 0s;
@@ -316,7 +320,7 @@ button.chip:active:not(:disabled) { transform: none; }
 .sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after, .app.resizing .sidebar-resizer::after { opacity: .5; }
 .app.collapsed .sidebar-resizer { display: none; }
 .app.resizing { user-select: none; }
-.app.resizing .sidebar, .app.resizing .main { transition: none; }
+.app.resizing .sidebar { transition: none; }
 .sidebar-head .actions { display: flex; align-items: center; }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 12px var(--sb-pad-r) 2px calc(var(--sb-pad-l) + 10px); }
 .sidebar .brand { font-family: var(--font-head); font-weight: 650; font-size: 16px; letter-spacing: -0.02em; }
@@ -389,7 +393,6 @@ button.chip:active:not(:disabled) { transform: none; }
   min-width: 0;
   min-height: 0;
   margin-left: calc(var(--sb-vinset) + var(--sb-w) + var(--sb-inset));
-  transition: margin-left var(--dur-focus) var(--ease-focus);
 }
 .app.collapsed .main { margin-left: 0; }
 .main { position: relative; }
@@ -433,7 +436,7 @@ button.chip:active:not(:disabled) { transform: none; }
 }
 .main[data-landing] { justify-content: center; }
 .main[data-landing] .messages { flex: none; overflow: visible; padding-block: 0 20px; }
-.msg { max-width: 100%; }
+.msg { max-width: 100%; contain: layout style; }
 .messages > .enter { --fx-from: translateY(10px); --fx-blur: var(--blur-sm); animation: focus-in var(--dur-focus) var(--ease-focus); }
 .messages > .msg.user.enter { --fx-from: translate(8px, 6px); }
 .messages > .fade { --fx-blur: var(--blur-sm); animation: focus-in .3s var(--ease-focus); }
@@ -613,6 +616,7 @@ button.sub-row:hover .icon { color: var(--accent); transform: translateX(3px); }
   line-height: 1.5;
 }
 .composer textarea::placeholder { color: var(--faint); }
+@supports (field-sizing: content) { .composer textarea { field-sizing: content; width: 100%; } }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 8px; }
 .composer-bar .controls { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1 1 auto; }
 .composer-bar .actions { display: flex; align-items: center; gap: 6px; flex: none; }
@@ -1120,7 +1124,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .meter-display { font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
 .meter-caption { font-size: 12px; color: var(--faint); }
 .meter-bar { position: relative; height: 14px; margin-top: 6px; border-radius: 7px; overflow: hidden; background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--tone) 22%, transparent) 0 1px, transparent 1px 5px); }
-.meter-fill { height: 100%; border-radius: 7px; background: color-mix(in srgb, var(--tone) 45%, var(--raised)); transition: width .4s var(--ease-focus); }
+.meter-fill { height: 100%; border-radius: 7px; background: color-mix(in srgb, var(--tone) 45%, var(--raised)); }
 .meter-marker { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text); }
 .blk-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .blk-table th { text-align: left; font-weight: 600; font-size: 12px; color: var(--faint); }
@@ -1204,14 +1208,16 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
     transform: translateX(calc(-100% - 24px));
     filter: blur(var(--blur-lg));
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: transform .6s var(--ease-focus), filter .6s var(--ease-focus), opacity .8s ease-in-out;
+    transition: transform .6s var(--ease-focus), filter .6s var(--ease-focus), opacity .8s ease-in-out, visibility .8s linear;
     transition-delay: 0s;
   }
   .app.nav-open .sidebar, .app.nav-open.collapsed .sidebar {
     transform: none;
     filter: blur(0);
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
     transition-timing-function: var(--ease-focus);
   }

@@ -190,6 +190,16 @@ export function blobUrl(blobId: string): Promise<string> {
   return url;
 }
 
+/** Frees a blob's object URL. The next `blobUrl` for it fetches the blob again. */
+export function releaseBlobUrl(blobId: string): void {
+  const url = blobUrls.get(blobId);
+  blobUrls.delete(blobId);
+  url?.then(
+    (u) => URL.revokeObjectURL(u),
+    () => {},
+  );
+}
+
 export const getRun = (runId: string): Promise<Run> => get(`/api/core/runs/${encodeURIComponent(runId)}`);
 
 // settings are replaced wholesale by PATCH, so merge client-side.

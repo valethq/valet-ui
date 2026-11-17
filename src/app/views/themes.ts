@@ -173,6 +173,11 @@ function fontField(
   );
 }
 
+const PERSIST_MS = 250;
+/** The pane with an edit not yet saved, so closing the tab inside the delay does not lose it. */
+let unsaved: (() => void) | undefined;
+let flushOnExit = false;
+
 interface PaneHooks {
   /** The theme changed in a way the library tile should show. */
   changed(): void;
@@ -184,13 +189,27 @@ interface PaneHooks {
  * Built-in themes are shown read-only. */
 function pane(t: Theme, hooks: PaneHooks): HTMLElement {
   const editable = t.custom === true;
-  let frame = 0;
+  // The preview repaints on every input; the stylesheet and storage are rewritten once the edit settles
+  // (the picker's release, a pause in typing), not on each frame of a colour drag.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let dirty = false;
+  const flush = (): void => {
+    clearTimeout(timer);
+    if (!dirty) return;
+    dirty = false;
+    if (unsaved === flush) unsaved = undefined;
+    saveCustom(customThemes());
+    hooks.changed();
+  };
   const persist = (): void => {
-    cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      saveCustom(customThemes());
-      hooks.changed();
-    });
+    dirty = true;
+    unsaved = flush;
+    if (!flushOnExit) {
+      flushOnExit = true;
+      window.addEventListener("pagehide", () => unsaved?.());
+    }
+    clearTimeout(timer);
+    timer = setTimeout(flush, PERSIST_MS);
   };
 
   const view = preview();
@@ -259,6 +278,7 @@ function pane(t: Theme, hooks: PaneHooks): HTMLElement {
     hex.removeAttribute("aria-invalid");
     set(picker.value);
   });
+  picker.addEventListener("change", flush);
   hex.addEventListener("input", () => {
     const v = hex.value.trim();
     if (!COLOR_RE.test(v)) {

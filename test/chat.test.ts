@@ -531,6 +531,101 @@ describe("message entrance", () => {
   });
 });
 
+describe("render cost", () => {
+  const withChat = (
+    fn: (chat: ReturnType<typeof createChat>, root: FakeEl, tick: (ms: number) => void) => void,
+  ): void => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    const realNow = Date.now;
+    let t = 1_000_000;
+    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    Date.now = () => t;
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onQueueMode() {},
+        onToggleNav() {},
+        onOpenSession() {},
+        onLoadOlder() {},
+      });
+      fn(chat, root, (ms) => {
+        t += ms;
+      });
+    } finally {
+      g.document = savedDocument;
+      Date.now = realNow;
+    }
+  };
+
+  test("a running step is tagged for the tick, and the passing of time alone does not re-render it", () => {
+    withChat((chat, root, tick) => {
+      const since = 1_000_000 - 5_000;
+      const view = viewWith([
+        toolPart(
+          { status: "running" },
+          { id: "p_run", status: "streaming", createdAt: since, updatedAt: since },
+        ),
+      ]);
+      chat.update(view, []);
+      const status = findByClass(root, "status") as FakeEl;
+      expect(status.attrs.get("data-live")).toBe("running");
+      expect(status.attrs.get("data-since")).toBe(String(since));
+      expect(status.textContent).toBe("running 0:05");
+      const row = findByClass(root, "part-row");
+      tick(3_000);
+      chat.update(view, []);
+      expect(findByClass(root, "part-row")).toBe(row);
+      expect(status.textContent).toBe("running 0:05");
+    });
+  });
+
+  test("a finished step carries no live tag", () => {
+    withChat((chat, root) => {
+      chat.update(viewWith([toolPart()]), []);
+      expect((findByClass(root, "status") as FakeEl).attrs.has("data-live")).toBe(false);
+    });
+  });
+
+  test("an entrance lasts as long as its animation: a re-render 400ms in still resumes it", () => {
+    withChat((chat, root, tick) => {
+      const note = (text: string): ChatMessage => ({
+        message: { ...message, id: "m1" },
+        parts: [
+          toolPart(
+            {},
+            { id: "p_m1", messageId: "m1", type: "notice", data: { type: "notice", level: "error", text } },
+          ),
+        ],
+      });
+      const list = (): FakeEl[] => (findByClass(root, "messages") as FakeEl).children as FakeEl[];
+      chat.update({ ...viewWith([]), messages: [note("a")] }, []);
+      tick(1_000);
+      chat.update(
+        { ...viewWith([]), messages: [note("a"), { ...note("b"), message: { ...message, id: "m2" } }] },
+        [],
+      );
+      const added = list()[1] as FakeEl;
+      expect(added.attrs.get("class")).toBe("msg assistant enter");
+      tick(400);
+      chat.update(
+        { ...viewWith([]), messages: [note("a"), { ...note("bb"), message: { ...message, id: "m2" } }] },
+        [],
+      );
+      expect((list()[1] as FakeEl).attrs.get("class")).toBe("msg assistant enter");
+    });
+  });
+});
+
 describe("load animation reach", () => {
   const withChat = (fn: (h: ReturnType<typeof harness>) => void): void => {
     const g = globalThis as Record<string, unknown>;

@@ -3,6 +3,7 @@ import * as api from "./api";
 import { createPageLoader, type Loaded } from "./chat-pages";
 import { el, leave } from "./dom";
 import { experimentalEnabled } from "./experimental";
+import { focusDuration } from "./motion";
 import { defaultStore } from "./page-cache";
 import {
   applyDelta,
@@ -47,7 +48,7 @@ import { syncCustom } from "./themes";
 import { renderAuth } from "./views/auth";
 import { createChat, type ChatHandle } from "./views/chat";
 import { openSettings } from "./views/settings";
-import { renderSidebar } from "./views/sidebar";
+import { refreshTimes, renderSidebar, type SidebarProps } from "./views/sidebar";
 import { CoreSocket } from "./ws";
 
 const root = document.getElementById("root") as HTMLElement;
@@ -100,6 +101,23 @@ const sidebarCollapsed = (): boolean => {
     return false;
   }
 };
+/** Moves the chat column to its new place when the sidebar pins or unpins. The layout changes at once and the
+ * column slides there with a transform, so the animation costs no relayout of the conversation per frame. */
+function slideColumn(app: HTMLElement, change: () => void): void {
+  const column = app.querySelector<HTMLElement>(".main");
+  const anchor = column?.querySelector<HTMLElement>(".composer");
+  const was = anchor?.getBoundingClientRect().left;
+  change();
+  if (column == null || anchor == null || was === undefined) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const dx = was - anchor.getBoundingClientRect().left;
+  if (Math.abs(dx) < 1) return;
+  column.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], {
+    duration: focusDuration(),
+    easing: getComputedStyle(app).getPropertyValue("--ease-focus").trim() || "ease",
+  });
+}
+
 /** Narrow screens open the drawer; wide ones pin/unpin the floating sidebar.
  * `no-peek` stops an unpin clicked from inside the sidebar re-showing it as a
  * hover peek while it slides out. */
@@ -109,9 +127,10 @@ const toggleNav = (): void => {
     appEl.classList.toggle("nav-open");
     return;
   }
-  const collapsed = appEl.classList.toggle("collapsed");
+  const node = appEl;
+  const collapsed = !node.classList.contains("collapsed");
+  slideColumn(node, () => node.classList.toggle("collapsed", collapsed));
   if (collapsed) {
-    const node = appEl;
     node.classList.add("no-peek");
     setTimeout(() => node.classList.remove("no-peek"), 450);
   }
@@ -192,18 +211,31 @@ function bindSidebarResize(handle: HTMLElement, app: HTMLElement): void {
 // dots survive a reload.
 const seenKey = (sessionId: string): string => `valet-ui.seen.${sessionId}`;
 
+// Read through once per session: every render asks for every session, and localStorage is synchronous I/O.
+const seen = new Map<string, number>();
+window.addEventListener("storage", (ev) => {
+  if (ev.key === null) seen.clear();
+  else if (ev.key.startsWith(seenKey(""))) seen.delete(ev.key.slice(seenKey("").length));
+});
+
 function seenAt(sessionId: string): number {
-  try {
-    return Number(localStorage.getItem(seenKey(sessionId)) ?? 0) || 0;
-  } catch {
-    return 0;
+  let at = seen.get(sessionId);
+  if (at === undefined) {
+    try {
+      at = Number(localStorage.getItem(seenKey(sessionId)) ?? 0) || 0;
+    } catch {
+      at = 0;
+    }
+    seen.set(sessionId, at);
   }
+  return at;
 }
 
 function noteSeen(sessionId: string, at: number): void {
-  if (at <= 0) return;
+  if (at <= 0 || at <= seenAt(sessionId)) return;
+  seen.set(sessionId, at);
   try {
-    if (at > seenAt(sessionId)) localStorage.setItem(seenKey(sessionId), String(at));
+    localStorage.setItem(seenKey(sessionId), String(at));
   } catch {
     // private mode
   }
@@ -235,7 +267,26 @@ function indicatorFor(s: Session): Indicator {
   );
 }
 
+/** What the sidebar and header derive from a session list. `app.sessions` is replaced, never edited in place, so each list is worked out once. */
+const listInfo = (() => {
+  const known = new WeakMap<Session[], { sig: string; suffixes: Map<string, number> }>();
+  return (list: Session[]) => {
+    let info = known.get(list);
+    if (info === undefined) {
+      info = {
+        sig: JSON.stringify(
+          list.map((s) => [s.id, s.title, s.status, s.parentSessionId, s.lastMessageAt, s.updatedAt]),
+        ),
+        suffixes: titleSuffixes(list),
+      };
+      known.set(list, info);
+    }
+    return info;
+  };
+})();
+
 let lastSidebarSig = "";
+let lastMinute = 0;
 function sidebarSig(
   open: Session | undefined,
   unread: Set<string>,
@@ -245,11 +296,58 @@ function sidebarSig(
     app.projectId,
     app.projects.map((p) => [p.id, p.name]),
     open?.id,
-    Math.floor(Date.now() / 60_000),
     [...unread],
     [...indicators],
-    app.sessions.map((s) => [s.id, s.title, s.status, s.parentSessionId, s.lastMessageAt, s.updatedAt]),
+    listInfo(app.sessions).sig,
   ]);
+}
+
+function sidebarProps(
+  open: Session | undefined,
+  unread: Set<string>,
+  indicators: Map<string, Indicator>,
+): SidebarProps {
+  return {
+    projects: app.projects,
+    projectId: app.projectId,
+    sessions: app.sessions,
+    openId: open?.id ?? null,
+    unread,
+    indicators,
+    onProject: (id) => {
+      closeNav();
+      void switchProject(id);
+    },
+    onSession: (id) => {
+      closeNav();
+      void openSession(id);
+    },
+    onRename: (id) => {
+      const session = app.sessions.find((s) => s.id === id);
+      if (session !== undefined) promptRename(session);
+    },
+    onFork: (id) => void forkFrom(id),
+    onMove: (id, projectId) => void moveTo(id, projectId),
+    onDelete: (id) => void deleteSession(id),
+    onNew: () => {
+      closeNav();
+      newSession();
+    },
+    onLogout: () => {
+      closeNav();
+      void logout();
+    },
+    onCollapse: toggleNav,
+    onSettings: () => {
+      closeNav();
+      openSettings({
+        load: api.listSettings,
+        save: api.saveSettings,
+        refresh: api.getSettings,
+        action: api.runSettingsAction,
+      });
+    },
+  };
 }
 
 let renderQueued = false;
@@ -263,51 +361,17 @@ function scheduleRender(): void {
     const unread = unreadSessions();
     const indicators = new Map(app.sessions.map((s) => [s.id, indicatorFor(s)]));
     const sig = sidebarSig(open, unread, indicators);
+    const minute = Math.floor(Date.now() / 60_000);
     if (sig !== lastSidebarSig) {
       lastSidebarSig = sig;
-      renderSidebar(app.sidebar, {
-        projects: app.projects,
-        projectId: app.projectId,
-        sessions: app.sessions,
-        openId: open?.id ?? null,
-        unread,
-        indicators,
-        onProject: (id) => {
-          closeNav();
-          void switchProject(id);
-        },
-        onSession: (id) => {
-          closeNav();
-          void openSession(id);
-        },
-        onRename: (id) => {
-          const session = app.sessions.find((s) => s.id === id);
-          if (session !== undefined) promptRename(session);
-        },
-        onFork: (id) => void forkFrom(id),
-        onMove: (id, projectId) => void moveTo(id, projectId),
-        onDelete: (id) => void deleteSession(id),
-        onNew: () => {
-          closeNav();
-          newSession();
-        },
-        onLogout: () => {
-          closeNav();
-          void logout();
-        },
-        onCollapse: toggleNav,
-        onSettings: () => {
-          closeNav();
-          openSettings({
-            load: api.listSettings,
-            save: api.saveSettings,
-            refresh: api.getSettings,
-            action: api.runSettingsAction,
-          });
-        },
-      });
+      lastMinute = minute;
+      renderSidebar(app.sidebar, sidebarProps(open, unread, indicators));
+    } else if (minute !== lastMinute) {
+      // Only the clock moved on: rewrite the relative times, leave the rows alone.
+      lastMinute = minute;
+      refreshTimes(app.sidebar, sidebarProps(open, unread, indicators));
     }
-    const suffix = open === undefined ? undefined : titleSuffixes(app.sessions).get(open.id);
+    const suffix = open === undefined ? undefined : listInfo(app.sessions).suffixes.get(open.id);
     const forked = open === undefined ? undefined : forkSource(app.sessions, open);
     const links =
       open === undefined

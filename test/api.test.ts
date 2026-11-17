@@ -13,6 +13,7 @@ import {
   listPartTypes,
   listSettings,
   moveSession,
+  releaseBlobUrl,
   saveSettings,
   sendMessage,
   updateSession,
@@ -148,6 +149,31 @@ describe("attachments", () => {
     expect(first).toStartWith("blob:");
     expect(await blobUrl("blb_9")).toBe(first);
     expect(calls).toBe(1);
+  });
+
+  test("releaseBlobUrl revokes the object URL and the next blobUrl fetches again", async () => {
+    let calls = 0;
+    g.fetch = (() => {
+      calls++;
+      return Promise.resolve(new Response(new Uint8Array([1]), { headers: { "content-type": "image/png" } }));
+    }) as unknown as typeof fetch;
+    const revoked: string[] = [];
+    const realRevoke = URL.revokeObjectURL;
+    URL.revokeObjectURL = (u: string) => {
+      revoked.push(u);
+    };
+    try {
+      const first = await blobUrl("blb_rel");
+      releaseBlobUrl("blb_rel");
+      await Promise.resolve();
+      expect(revoked).toEqual([first]);
+      const second = await blobUrl("blb_rel");
+      expect(second).not.toBe(first);
+      expect(calls).toBe(2);
+      releaseBlobUrl("blb_unknown");
+    } finally {
+      URL.revokeObjectURL = realRevoke;
+    }
   });
 });
 

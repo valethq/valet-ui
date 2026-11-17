@@ -1,4 +1,4 @@
-import { blobUrl } from "../api";
+import { blobUrl, releaseBlobUrl } from "../api";
 import { el } from "../dom";
 import { iconButton } from "../icons";
 import type { PartData } from "../types";
@@ -20,6 +20,9 @@ export function blobImage(d: FileData, cls: string): HTMLImageElement {
     class: known === undefined ? cls : `${cls} loaded`,
     alt: d.name,
     draggable: "false",
+    decoding: "async",
+    loading: "lazy",
+    "data-blob": d.blobId,
   });
   if (known !== undefined) {
     img.src = known;
@@ -39,6 +42,14 @@ export function blobImage(d: FileData, cls: string): HTMLImageElement {
     })
     .catch(() => {});
   return img;
+}
+
+/** Frees the object URLs of blobs no chat on screen uses; one shown again is fetched again. */
+export function releaseBlobs(ids: Iterable<string>): void {
+  for (const id of ids) {
+    ready.delete(id);
+    releaseBlobUrl(id);
+  }
 }
 
 const viewAttrs = (d: FileData): Record<string, string> => ({

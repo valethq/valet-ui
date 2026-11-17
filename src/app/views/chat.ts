@@ -1,8 +1,9 @@
-import { clear, el, morph, reconcile } from "../dom";
+import { clear, el, morph, reconcile, sameChildren } from "../dom";
 import { chipButton, icon, iconButton } from "../icons";
 import { logoFor, logoMark } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
+import { focusDuration } from "../motion";
 import { familyOf, groupModels, type ModelFamily, type ModelVariant } from "../models";
 import { queueModeOf, type SessionView } from "../state";
 import {
@@ -26,7 +27,7 @@ import type {
 } from "../types";
 import { createAttachments, filePart } from "./attachments";
 import { galleryItems, openLightbox } from "./lightbox";
-import { copyImage, type FileData, imageDeck, imageFigures, isImage, saveBlob } from "./media";
+import { copyImage, type FileData, imageDeck, imageFigures, isImage, releaseBlobs, saveBlob } from "./media";
 
 export interface ChatCallbacks {
   /** Resolves true when the POST succeeded; the draft is kept on failure. */
@@ -80,8 +81,17 @@ const LOAD_AHEAD_SCREENS = 1.5;
 const RETRY_OLDER_MS = 5_000;
 /** On a chat's first render only messages within this many screens of the bottom edge play the load animation. */
 const ENTRANCE_SCREENS = 2;
-/** Covers the longest message entrance animation in page.ts. */
-const ENTER_MS = 320;
+/** The deck's card-deal animation in page.ts: its length, the delay before the first card and the stagger per card. */
+const CARD_DEAL_MS = 420;
+const CARD_DELAY_MS = 40;
+const CARD_STAGGER_MS = 45;
+
+/** How long a message's entrance animation runs, so a re-render that lands inside it resumes it instead of cutting it short. */
+function entranceMs(cm: ChatMessage): number {
+  const cards = cm.message.role === "user" ? cm.parts.filter((p) => isImage(p.data)).length : 0;
+  const deal = cards === 0 ? 0 : CARD_DEAL_MS + CARD_DELAY_MS + CARD_STAGGER_MS * (cards - 1);
+  return Math.max(focusDuration(), deal);
+}
 
 const fmtTokens = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const cap = (s: string): string => (s === "" ? s : s.charAt(0).toUpperCase() + s.slice(1));
@@ -92,6 +102,19 @@ function fmtDuration(ms: number): string {
 }
 
 const elapsed = (createdAt: number): string => fmtDuration(Date.now() - createdAt);
+
+/** A step only shows its time once it has run for more than a second. */
+const TIMER_MIN_MS = 1000;
+
+/** `running`/`thinking`, plus the elapsed time once the step is over a second old. */
+const liveLabel = (word: string, since: number): string =>
+  Date.now() - since > TIMER_MIN_MS ? `${word} ${elapsed(since)}` : word;
+
+/** Tags a status label so the 1s tick can rewrite its text without re-rendering the message. */
+function markLive(node: Element | null, word: "running" | "thinking", since: number): void {
+  node?.setAttribute("data-live", word);
+  node?.setAttribute("data-since", String(since));
+}
 
 /** Drops ANSI escapes from captured tool output: CSI sequences
  * (`\x1b[...m` etc.), OSC sequences (`\x1b]...` closed by BEL or ST), and any
@@ -106,9 +129,6 @@ const toolExitCode = (d: Extract<Part["data"], { type: "tool-call" }>): number |
   return typeof exit === "number" ? exit : undefined;
 };
 
-/** A step only shows its time once it has run for more than a second. */
-const TIMER_MIN_MS = 1000;
-
 /** Header status for a tool step: `running 0:12` while it runs; a finished
  * step shows `done · exit 0 · 0:12` — the exit code only when the result's
  * meta reports one, the run time from createdAt -> updatedAt. A "done" step
@@ -117,9 +137,7 @@ const TIMER_MIN_MS = 1000;
 export function toolStatus(part: Part): string {
   const d = part.data;
   if (d.type !== "tool-call") return "";
-  if (d.status === "running") {
-    return Date.now() - part.createdAt > TIMER_MIN_MS ? `running ${elapsed(part.createdAt)}` : "running";
-  }
+  if (d.status === "running") return liveLabel("running", part.createdAt);
   if (d.status === "pending") return d.status;
   const exit = toolExitCode(d);
   const failed = d.status === "done" && exit !== undefined && exit !== 0;
@@ -134,9 +152,7 @@ export function toolStatus(part: Part): string {
  * `complete · 0:12` (quietStatus drops the word, leaving just the run time).
  * Steps of a second or less show no time. */
 export function reasoningStatus(part: Part): string {
-  if (part.status === "streaming") {
-    return Date.now() - part.createdAt > TIMER_MIN_MS ? `thinking ${elapsed(part.createdAt)}` : "thinking";
-  }
+  if (part.status === "streaming") return liveLabel("thinking", part.createdAt);
   const ms = part.updatedAt - part.createdAt;
   return ms > TIMER_MIN_MS ? `${part.status} · ${fmtDuration(ms)}` : part.status;
 }
@@ -277,6 +293,9 @@ function customPart(part: Part, d: CustomData, ui: PartUi): HTMLElement {
   return row;
 }
 
+const blobIds = (view: SessionView): string[] =>
+  view.messages.flatMap((cm) => cm.parts.flatMap((p) => (p.data.type === "file" ? [p.data.blobId] : [])));
+
 const isCustomOnly = (cm: ChatMessage): boolean =>
   cm.parts.length > 0 && cm.parts.every((p) => p.data.type === "custom");
 
@@ -296,6 +315,11 @@ function subagentCard(part: Part, d: ToolData, rows: SubRow[]): HTMLElement {
         : "done";
   const tag =
     rows.length > 1 ? `${rows.length} subagents${live ? ` · ${done}/${rows.length} done` : ""}` : "subagent";
+  const status = el("span", {
+    class: "sub-status",
+    text: live ? toolStatus(part) : quietStatus(toolStatus(part)),
+  });
+  if (d.status === "running") markLive(status, "running", part.createdAt);
   const card = el(
     "div",
     { class: `sub-card${failed ? " failed" : ""}`, "data-part-id": part.id },
@@ -304,7 +328,7 @@ function subagentCard(part: Part, d: ToolData, rows: SubRow[]): HTMLElement {
       { class: "sub-top" },
       el("span", { class: `dot ${dot}` }),
       el("span", { class: "sub-tag", text: tag }),
-      el("span", { class: "sub-status", text: live ? toolStatus(part) : quietStatus(toolStatus(part)) }),
+      status,
     ),
   );
   const staged = new Set(rows.map((r) => r.stage)).size > 1;
@@ -346,8 +370,8 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
   switch (d.type) {
     case "text":
       return renderMarkdown(d.text);
-    case "reasoning":
-      return partRow(
+    case "reasoning": {
+      const row = partRow(
         part,
         "Reasoning",
         part.status,
@@ -356,8 +380,11 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
         ui,
         el("pre", { text: d.text }),
       );
-    case "tool-call":
-      return partRow(
+      if (part.status === "streaming") markLive(row.querySelector(".status"), "thinking", part.createdAt);
+      return row;
+    }
+    case "tool-call": {
+      const row = partRow(
         part,
         d.title ?? d.name,
         toolStatusClass(part),
@@ -366,6 +393,9 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
         ui,
         ...toolBody(part, d.input, d.output ?? "", ui),
       );
+      if (d.status === "running") markLive(row.querySelector(".status"), "running", part.createdAt);
+      return row;
+    }
     case "notice":
       return el("div", { class: `part-notice ${d.level}`, text: d.text });
     case "file":
@@ -449,9 +479,9 @@ function messageSig(
       d.type === "text"
         ? d.text.length
         : d.type === "reasoning"
-          ? `${d.text.length}${p.status === "streaming" ? Math.floor(Date.now() / 1000) : ""}`
+          ? d.text.length
           : d.type === "tool-call"
-            ? `${rows ? rows.map((r) => `${r.title}${r.stage}${r.sub?.session.id}${r.sub?.indicator}`).join("|") : ""}${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${d.status === "running" ? Math.floor(Date.now() / 1000) : ""}${p.updatedAt}`
+            ? `${rows ? rows.map((r) => `${r.title}${r.stage}${r.sub?.session.id}${r.sub?.indicator}`).join("|") : ""}${(d.output ?? "").length}${d.status}${showAll.get(p.id) === true}${p.updatedAt}`
             : d.type === "notice"
               ? d.text.length
               : d.type === "compaction"
@@ -690,6 +720,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   let activeFamily: ModelFamily | null = null;
   let activeVariant: ModelVariant | null = null;
   let tick: ReturnType<typeof setInterval> | undefined;
+  /** Blobs of the chat just left, freed once the open chat has rendered. */
+  let released: string[] = [];
 
   const familyLogo = (f: ModelFamily): HTMLElement => {
     const logo = logoFor(`${f.label} ${f.key}`, f.provider);
@@ -779,9 +811,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       doSend();
     }
   });
+  // `field-sizing: content` (page.ts) grows the box without a layout read per keystroke; browsers without it get the script.
+  const growsByCss = typeof CSS !== "undefined" && CSS.supports("field-sizing", "content");
   textarea.addEventListener("input", () => {
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    if (!growsByCss) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    }
     syncSend();
   });
   textarea.addEventListener("paste", (ev) => {
@@ -859,6 +895,14 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     stickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < STICK_PX;
     askOlder();
   });
+  // An image has no size until it loads, so its arrival grows the list under a reader who was at the bottom.
+  messages.addEventListener(
+    "load",
+    () => {
+      if (stickToBottom) messages.scrollTop = messages.scrollHeight;
+    },
+    true,
+  );
 
   let projects: Project[] = [];
   let defaultMode: QueueMode = "queue";
@@ -992,15 +1036,38 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     return null;
   };
 
-  function renderMessages(view: SessionView): void {
-    const scrollTops = new Map<string, number>();
-    for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
-      const body = row.querySelector<HTMLElement>(".body");
-      const pid = row.dataset.partId;
-      if (body !== null && pid !== undefined && body.scrollTop > 0) {
-        scrollTops.set(pid, body.scrollTop);
+  /** Scroll offsets of the part bodies under `nodes`, by part id. Reading them forces layout, so only nodes about to be patched are asked. */
+  const readBodyScroll = (nodes: HTMLElement[], into: Map<string, number>): void => {
+    for (const n of nodes) {
+      for (const row of n.querySelectorAll<HTMLElement>(".part-row")) {
+        const body = row.querySelector<HTMLElement>(".body");
+        const pid = row.dataset.partId;
+        if (body !== null && pid !== undefined && body.scrollTop > 0) into.set(pid, body.scrollTop);
       }
     }
+  };
+
+  /** Puts part bodies under `nodes` back where they were, and keeps a running tool's output pinned to its end. */
+  const writeBodyScroll = (nodes: HTMLElement[], saved: Map<string, number>, running: Set<string>): void => {
+    for (const n of nodes) {
+      for (const row of n.querySelectorAll<HTMLElement>(".part-row")) {
+        const pid = row.dataset.partId;
+        const body = row.querySelector<HTMLElement>(".body");
+        if (pid === undefined || body === null) continue;
+        if (running.has(pid) && (bodyStick.get(pid) ?? true)) {
+          body.scrollTop = body.scrollHeight;
+        } else {
+          const st = saved.get(pid);
+          if (st !== undefined) body.scrollTop = st;
+        }
+      }
+    }
+  };
+
+  function renderMessages(view: SessionView): void {
+    const scrollTops = new Map<string, number>();
+    /** Nodes of the messages rebuilt or patched in this pass; unchanged messages are never read or written. */
+    const touched: HTMLElement[] = [];
     const runningTools = new Set<string>();
     let liveReasoning = false;
     for (const cm of view.messages) {
@@ -1035,18 +1102,24 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         // old first message never animates: it is off screen, and scrolling would only replay it.
         const born = hit?.born ?? now;
         const entry = !reachedFirst ? "" : primed ? "enter" : "fade";
-        const anim = hit === undefined ? entry : now - born < ENTER_MS ? hit.anim : "";
+        const anim = hit === undefined ? entry : now - born < entranceMs(cm) ? hit.anim : "";
         const fresh = renderMessage(cm, ui, view, anim);
+        if (hit !== undefined) readBodyScroll(hit.nodes, scrollTops);
         if (hit !== undefined && hit.nodes.length === fresh.length) {
-          // Same shape: patch the live nodes so hover, focus and scroll survive.
+          // Same shape: patch the live nodes so hover, focus and scroll survive. The running
+          // animation keeps the delay that resumed it; a patch that dropped it would restart it.
           hit.nodes.forEach((n, i) => {
-            morph(n, fresh[i] as HTMLElement);
+            const next = fresh[i] as HTMLElement;
+            if (n.style.animationDelay !== "") next.style.animationDelay = n.style.animationDelay;
+            morph(n, next);
           });
           hit = { ...hit, sig, anim };
+          touched.push(...hit.nodes);
         } else {
           if (anim !== "" && born < now) for (const n of fresh) n.style.animationDelay = `${born - now}ms`;
           hit = { sig, anim, born, nodes: fresh };
           if (anim === "fade") fading.push(id);
+          touched.push(...fresh);
         }
         cache.set(id, hit);
       }
@@ -1060,26 +1133,28 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     if (view.paging?.older != null) nodes.unshift(olderLoader);
     if (view.loading) nodes.push(loader);
     else if (view.messages.length === 0) nodes.push(el("div", { class: "empty", text: "No messages yet" }));
-    const anchor = view.paging !== null && !stickToBottom ? viewAnchor() : null;
+    // A pass that changed nothing on screen (a usage update, the sidebar's minute tick) skips every layout read and write.
+    const changed = touched.length > 0 || !sameChildren(messages, nodes);
+    const anchor = changed && view.paging !== null && !stickToBottom ? viewAnchor() : null;
     reconcile(messages, nodes);
-    for (const row of messages.querySelectorAll<HTMLElement>(".part-row")) {
-      const pid = row.dataset.partId;
-      const body = row.querySelector<HTMLElement>(".body");
-      if (pid === undefined || body === null) continue;
-      if (runningTools.has(pid) && (bodyStick.get(pid) ?? true)) {
-        body.scrollTop = body.scrollHeight;
-      } else {
-        const st = scrollTops.get(pid);
-        if (st !== undefined) body.scrollTop = st;
+    writeBodyScroll(touched, scrollTops, runningTools);
+    if (changed) {
+      if (stickToBottom) messages.scrollTop = messages.scrollHeight;
+      else if (anchor?.node.isConnected) {
+        messages.scrollTop += anchor.node.getBoundingClientRect().top - anchor.top;
       }
-    }
-    if (stickToBottom) messages.scrollTop = messages.scrollHeight;
-    else if (anchor?.node.isConnected) {
-      messages.scrollTop += anchor.node.getBoundingClientRect().top - anchor.top;
     }
     if (fading.length > 0) trimEntrances(fading);
     askOlder();
     syncTick(runningTools.size > 0 || liveReasoning);
+  }
+
+  /** Rewrites the elapsed time on running and thinking steps in place; the messages themselves are not re-rendered. */
+  function refreshTimers(): void {
+    for (const n of messages.querySelectorAll<HTMLElement>("[data-live]")) {
+      const text = liveLabel(n.dataset.live ?? "", Number(n.dataset.since));
+      if (n.textContent !== text) n.textContent = text;
+    }
   }
 
   function syncTick(anyRunning: boolean): void {
@@ -1090,7 +1165,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
           tick = undefined;
           return;
         }
-        if (current !== null) renderMessages(current);
+        refreshTimers();
       }, 1000);
     } else if (!anyRunning && tick !== undefined) {
       clearInterval(tick);
@@ -1164,6 +1239,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
 
   return {
     update(view, providers, titleSuffix, draft, links) {
+      const previous = current;
       current = view;
       subs = links?.subs ?? [];
       parentId = links?.parent?.id ?? null;
@@ -1177,6 +1253,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         primed = false;
         firstId = null;
         stickToBottom = true;
+        released = previous === null ? [] : blobIds(previous);
       }
 
       if (view === null) main.setAttribute("data-landing", "");
@@ -1203,6 +1280,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         setContext(null);
         syncSend();
         syncTick(false);
+        releaseBlobs(released);
+        released = [];
         return;
       }
 
@@ -1228,6 +1307,10 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       setContext(view.contextTokens, contextWindow(view, providers));
       syncSend();
       renderMessages(view);
+      // The previous chat's images left the DOM in that render; the new chat keeps any it shares.
+      const keep = new Set(blobIds(view));
+      releaseBlobs(released.filter((id) => !keep.has(id)));
+      released = [];
     },
     setConnection(open) {
       connOpen = open;
