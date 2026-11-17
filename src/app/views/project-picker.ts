@@ -111,9 +111,13 @@ export function createProjectPicker(initial: ProjectPickerProps): ProjectPicker 
       remove,
       error,
     );
+    const back = (): void => {
+      body.replaceChildren(main);
+      api.fit(false);
+    };
     relocate.addEventListener("click", () => {
       body.replaceChildren(
-        panelHead("Change folder", { ...api, back: () => body.replaceChildren(main) }),
+        panelHead("Change folder", { ...api, back }),
         folderBrowser({
           start: project.workspaceDir,
           confirmLabel: "Use this folder",
@@ -124,6 +128,7 @@ export function createProjectPicker(initial: ProjectPickerProps): ProjectPicker 
           },
         }),
       );
+      api.fit(true);
     });
     body.append(main);
     return body;

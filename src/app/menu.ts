@@ -6,6 +6,8 @@ import { focusDuration } from "./motion";
 export interface PanelApi {
   back(): void;
   close(): void;
+  /** Stretch the open panel down to the menu's bound (or release it); only a folder browser wants this. */
+  fit(on: boolean): void;
 }
 
 export interface MenuItem {
@@ -97,23 +99,30 @@ export function popover(
     document.removeEventListener("keydown", onKey);
   }
 
+  function stretch(m: HTMLElement, on: boolean): void {
+    m.style.removeProperty("height");
+    m.style.removeProperty("max-height");
+    const edge = bound?.()?.getBoundingClientRect().bottom;
+    if (!on || edge === undefined || !m.classList.contains("below")) return;
+    m.style.maxHeight = "none";
+    m.style.height = `${Math.max(0, edge - (root.getBoundingClientRect().bottom + 8))}px`;
+  }
+
   function fill(m: HTMLElement): void {
     m.replaceChildren();
-    const api: PanelApi = { back: () => swap(m, () => fill(m)), close };
+    const api: PanelApi = {
+      back: () => swap(m, () => fill(m)),
+      close,
+      fit: (on) => resize(m, () => stretch(m, on)),
+    };
     const show = (panel: HTMLElement): void =>
       swap(m, () => {
         m.replaceChildren(panel);
         m.classList.add("panel");
-        const edge = bound?.()?.getBoundingClientRect().bottom;
-        if (edge !== undefined && m.classList.contains("below")) {
-          const top = root.getBoundingClientRect().bottom + 8;
-          m.style.maxHeight = "none";
-          m.style.height = `${Math.max(0, edge - top)}px`;
-        }
+        if (panel.querySelector(".fb") !== null) stretch(m, true);
       });
     m.classList.remove("panel");
-    m.style.removeProperty("height");
-    m.style.removeProperty("max-height");
+    stretch(m, false);
     const search = searchable
       ? el("input", { class: "menu-search", type: "search", placeholder: "Search", "aria-label": "Search" })
       : null;
