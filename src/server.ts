@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { asset, experimentalOn, serveAsset } from "./compress";
 import { indexHtml, bootScript } from "./page";
 import { isProxied, openUpstream, proxyRequest, sameOrigin, type WsData, wsHandlers } from "./proxy";
 
@@ -59,6 +60,8 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
   const font = await Bun.file(join(import.meta.dir, "app", "fonts", "public-sans-var.woff2")).arrayBuffer();
   const html = indexHtml();
   const headers = { "content-security-policy": csp() };
+  const htmlAsset = asset("text/html; charset=utf-8", html);
+  const bundleAsset = asset("text/javascript; charset=utf-8", bundle);
 
   const server = Bun.serve<WsData>({
     hostname: host,
@@ -68,11 +71,13 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
       const path = new URL(req.url).pathname;
       if (isProxied(path)) {
         if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
-        if (path !== "/ws") return proxyRequest(req, coreUrl);
+        if (path !== "/ws") return proxyRequest(req, coreUrl, experimentalOn(req));
         const upgraded = srv.upgrade(req, { data: openUpstream(req, coreUrl) });
         return upgraded ? undefined : Response.json({ error: "websocket upgrade required" }, { status: 400 });
       }
       if (req.method !== "GET") return new Response("not found", { status: 404 });
+      if (path === "/" && experimentalOn(req)) return serveAsset(req, htmlAsset, headers);
+      if (path === "/app.js" && experimentalOn(req)) return serveAsset(req, bundleAsset, headers);
       if (path === "/") {
         return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", ...headers } });
       }

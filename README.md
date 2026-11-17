@@ -6,6 +6,14 @@ A [valet](https://github.com/valethq/valet-core) plugin. Imports `@valethq/sdk` 
 
 The browser only ever talks to this plugin's port. The plugin relays `/api/*`, `/plugins/*` and `/ws` to core (`coreUrl`, default `http://127.0.0.1:7417`), so core's port needn't be reachable from the device and the UI's origin needn't be in `server.allowedOrigins`.
 
+## Experimental features
+
+Settings has an **Experimental** tab, per browser. It sets the `valet-ui-experimental` cookie, which the server reads on every request, page loads included. While it is on:
+
+- The page, the bundle and relayed API responses are brotli or gzip compressed when the client accepts it. Only finite text bodies of 1 KB or more are compressed; ranges, event streams and binaries pass through. The page and bundle carry a content-hash ETag and revalidate with a 304.
+
+With it off, nothing is compressed and no cache headers are added.
+
 ## Settings panels
 
 The Settings dialog has one tab per provider on the `settings` scope (`SettingsPanel` in `@valethq/sdk`). A panel can be a form, a read-only view, or both; the view renders above the form.

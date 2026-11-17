@@ -1,3 +1,5 @@
+import { compressResponse } from "./compress";
+
 /** Relays the browser's control-plane traffic to core, so only this plugin's port needs to be reachable. */
 
 const HOP_BY_HOP = [
@@ -33,7 +35,7 @@ function upstreamHeaders(req: Request): Headers {
   return headers;
 }
 
-export async function proxyRequest(req: Request, coreUrl: string): Promise<Response> {
+export async function proxyRequest(req: Request, coreUrl: string, compress = false): Promise<Response> {
   const url = new URL(req.url);
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   try {
@@ -45,7 +47,8 @@ export async function proxyRequest(req: Request, coreUrl: string): Promise<Respo
     });
     const headers = new Headers(upstream.headers);
     for (const name of HOP_BY_HOP) headers.delete(name);
-    return new Response(upstream.body, { status: upstream.status, headers });
+    const res = new Response(upstream.body, { status: upstream.status, headers });
+    return compress ? await compressResponse(req, res) : res;
   } catch {
     return Response.json({ error: "core unreachable" }, { status: 502 });
   }

@@ -1,4 +1,5 @@
 import { el, leave } from "../dom";
+import { EXPERIMENTAL_KEY, experimentalEntry, saveExperimental } from "../experimental";
 import { iconButton } from "../icons";
 import type { SettingsEntry } from "../types";
 import { refreshInterval, renderBlocks } from "./blocks";
@@ -163,13 +164,28 @@ function tabbed(tabs: Tab[]): HTMLElement {
   return el("div", { class: "settings-tabbed" }, bar, body);
 }
 
-/** Opens the settings dialog: a Theme tab, then one tab per plugin panel
- * registered on the `settings` scope. */
-export function openSettings(deps: SettingsDeps): void {
+/** Saves the Experimental panel in this browser; everything else goes to the server. */
+const withLocalPanels = (deps: SettingsDeps): SettingsDeps => ({
+  ...deps,
+  save: (key, values) =>
+    key === EXPERIMENTAL_KEY ? Promise.resolve(saveExperimental(values)) : deps.save(key, values),
+});
+
+/** Opens the settings dialog: Theme and Experimental tabs, then one tab per
+ * plugin panel registered on the `settings` scope. */
+export function openSettings(serverDeps: SettingsDeps): void {
+  const deps = withLocalPanels(serverDeps);
   if (document.querySelector(".modal-backdrop:not(.leaving)") !== null) return;
   const opener = document.activeElement as HTMLElement | null;
   const close = iconButton("close", "Close");
-  const content = el("div", { class: "modal-body" }, tabbed([{ label: "Theme", panel: themeSection() }]));
+  const content = el(
+    "div",
+    { class: "modal-body" },
+    tabbed([
+      { label: "Theme", panel: themeSection() },
+      { label: "Experimental", panel: panelSection(experimentalEntry(), deps) },
+    ]),
+  );
   const dialog = el(
     "div",
     {
@@ -204,6 +220,7 @@ export function openSettings(deps: SettingsDeps): void {
     .then((entries) => {
       const tabs = [
         { label: "Theme", panel: themeSection() },
+        { label: "Experimental", panel: panelSection(experimentalEntry(), deps) },
         ...entries.map((e) => ({ label: e.title, panel: panelSection(e, deps) })),
       ];
       content.replaceChildren(tabbed(tabs));
