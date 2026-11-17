@@ -144,7 +144,9 @@ export function createProjectPicker(initial: ProjectPickerProps): ProjectPicker 
     },
   ];
 
-  const root = popover(chip.button, sections, "project-pop");
+  const root = popover(chip.button, sections, "project-pop", false, () =>
+    document.querySelector(".sidebar .sessions"),
+  );
 
   const update = (p: ProjectPickerProps): void => {
     props = p;

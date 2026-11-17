@@ -62,6 +62,8 @@ export function popover(
   sections: () => MenuSection[],
   cls = "",
   searchable = false,
+  /** Panels in a menu opening below the trigger fill the space down to this element's bottom edge. */
+  bound?: () => Element | null,
 ): HTMLElement {
   const root = el("span", { class: `pop ${cls}`.trim() }, trigger);
   trigger.setAttribute("aria-haspopup", "menu");
@@ -102,8 +104,16 @@ export function popover(
       swap(m, () => {
         m.replaceChildren(panel);
         m.classList.add("panel");
+        const edge = bound?.()?.getBoundingClientRect().bottom;
+        if (edge !== undefined && m.classList.contains("below")) {
+          const top = root.getBoundingClientRect().bottom + 8;
+          m.style.maxHeight = "none";
+          m.style.height = `${Math.max(0, edge - top)}px`;
+        }
       });
     m.classList.remove("panel");
+    m.style.removeProperty("height");
+    m.style.removeProperty("max-height");
     const search = searchable
       ? el("input", { class: "menu-search", type: "search", placeholder: "Search", "aria-label": "Search" })
       : null;
