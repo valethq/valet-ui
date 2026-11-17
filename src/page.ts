@@ -398,6 +398,12 @@ button.chip:active:not(:disabled) { transform: none; }
 .menu.panel > .pp { flex: 1; min-height: 0; }
 .pp > .fb { flex: 1; min-height: 0; }
 .menu > .swap-in { --fx-from: translateY(4px); --fx-blur: 4px; animation: focus-in var(--dur-focus-sm) var(--ease-focus); }
+.session-search { display: flex; align-items: center; gap: 8px; margin: 0 var(--sb-pad-r) 0 var(--sb-pad-l); padding: 0 10px; height: 32px; border-radius: var(--r-md); color: var(--faint); }
+.session-search:hover, .session-search:focus-within { background: var(--tint); color: var(--muted); }
+.session-search .icon { width: 14px; height: 14px; flex: none; }
+.session-search input { flex: 1; min-width: 0; padding: 0; border: none; background: none; font-size: 13px; color: var(--text); }
+.session-search input:focus { outline: none; }
+.session-search input::placeholder { color: var(--faint); }
 .sidebar .sessions { flex: 1; overflow-y: auto; padding: 2px var(--sb-pad-r) 2px var(--sb-pad-l); display: flex; flex-direction: column; gap: 4px; }
 .sidebar .sessions {
   -webkit-mask: linear-gradient(to bottom, transparent, #000 22px, #000 calc(100% - 22px), transparent);

@@ -422,3 +422,17 @@ export class EventBuffer<E> {
     return out;
   }
 }
+
+/** Top-level sessions whose title, or a subagent's title, contains every word of the query (case-insensitive). */
+export function searchSessions(all: Session[], shown: Session[], query: string): Session[] {
+  const words = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w !== "");
+  if (words.length === 0) return shown;
+  const hit = (s: Session) => {
+    const title = (s.title ?? "Untitled").toLowerCase();
+    return words.every((w) => title.includes(w));
+  };
+  return shown.filter((s) => hit(s) || childrenOf(all, s.id).some(hit));
+}
