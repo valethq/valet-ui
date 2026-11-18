@@ -130,7 +130,7 @@ export interface ModelInfo {
   fast?: boolean;
   fastByDefault?: boolean;
   hidden?: boolean;
-  /** Catalog: false → More section (out of the main picker). */
+  /** Catalog: false → omitted from the picker. */
   show?: boolean;
   /** Added by hand in valet-agent's models config. */
   custom?: boolean;

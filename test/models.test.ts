@@ -46,34 +46,24 @@ describe("groupModels", () => {
   const families = groupModels(providers);
 
   test("one family per model id, in provider order, skipping empty ids", () => {
-    expect(families.map((f) => f.key)).toEqual([
-      "claude-opus-5.5",
-      "claude-sonnet-5",
-      "fusion-claude-gpt",
-      "sidekick-1",
-      "gpt-6",
-    ]);
+    expect(families.map((f) => f.key)).toEqual(["claude-opus-5.5", "claude-sonnet-5", "gpt-6"]);
     expect(families[0]?.provider).toBe("anthropic");
     expect(families[0]?.efforts).toEqual(["low", "medium", "high", "max"]);
     expect(families[0]?.defaultEffort).toBe("high");
     expect(families[0]?.fast).toBe(true);
     expect(families[0]?.fastByDefault).toBe(false);
-    expect(families[4]?.provider).toBe("openai");
+    expect(families[2]?.provider).toBe("openai");
   });
 
   test("labels come from the catalog name", () => {
     expect(families[0]?.label).toBe("Claude Opus 5.5");
     expect(families[1]?.label).toBe("Claude Sonnet 5");
-    expect(families[4]?.label).toBe("GPT-6");
-    expect(families[4]?.providerLabel).toBe("OpenAI");
+    expect(families[2]?.label).toBe("GPT-6");
+    expect(families[2]?.providerLabel).toBe("OpenAI");
   });
 
-  test("hidden or show:false models go under More", () => {
-    expect(families[0]?.more).toBe(false);
-    expect(families[1]?.more).toBe(false);
-    expect(families[2]?.more).toBe(true);
-    expect(families[3]?.more).toBe(true);
-    expect(families[4]?.more).toBe(false);
+  test("hidden or show:false models are omitted", () => {
+    expect(families.map((f) => f.key)).toEqual(["claude-opus-5.5", "claude-sonnet-5", "gpt-6"]);
   });
 
   test("same id under different providers stays separate", () => {
@@ -88,6 +78,16 @@ describe("groupModels", () => {
   });
 });
 
+test("show:true keeps a provider-hidden model in the picker", () => {
+  const fams = groupModels([
+    {
+      provider: "anthropic",
+      label: "Anthropic",
+      models: [{ id: "sidekick-1", name: "Sidekick", hidden: true, show: true }],
+    },
+  ]);
+  expect(fams.map((f) => f.key)).toEqual(["sidekick-1"]);
+});
 describe("pickEffort", () => {
   const f = groupModels(providers)[0];
   if (f === undefined) throw new Error("expected opus family");

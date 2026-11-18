@@ -651,7 +651,7 @@ function selOf(f: ModelFamily, prev?: ModelSel): ModelSel {
 /** The landing page's model: the user's pick, else the first provider's first family. */
 function draftPick(draft: ModelSel | undefined, providers: ProviderModels[]): ModelSel | undefined {
   if (draft !== undefined) return draft;
-  const first = groupModels(providers).find((f) => !f.more);
+  const first = groupModels(providers)[0];
   return first === undefined ? undefined : selOf(first);
 }
 
@@ -756,9 +756,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     modelChip.button,
     () => {
       const sections = new Map<string, MenuSection>();
-      const more: MenuSection = { title: "More variants", items: [] };
       for (const f of families) {
-        let s = f.more ? more : sections.get(f.provider);
+        let s = sections.get(f.provider);
         if (s === undefined) {
           s = { title: f.providerLabel, items: [] };
           sections.set(f.provider, s);
@@ -778,7 +777,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
             ),
         });
       }
-      return [...sections.values(), ...(more.items.length > 0 ? [more] : [])];
+      return [...sections.values()];
     },
     "model-pop",
     true,
@@ -1239,7 +1238,6 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         providerLabel: selected.provider,
         ...iconOf(providers, selected.provider),
         label: `${selected.model} (${selected.provider})`,
-        more: false,
         efforts: selected.effort === undefined ? [] : [selected.effort],
         fast: selected.fast === true,
         fastByDefault: false,

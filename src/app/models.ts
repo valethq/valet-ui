@@ -11,8 +11,6 @@ export interface ModelFamily {
   /** The provider's logo key, when it names one. */
   providerIcon?: string;
   label: string;
-  /** Goes into the trailing "More variants" section. */
-  more: boolean;
   efforts: string[];
   defaultEffort?: string;
   fast: boolean;
@@ -26,19 +24,25 @@ export function pickEffort(f: ModelFamily, preferred?: string): string | undefin
   return f.efforts.at(-1);
 }
 
-/** One family per listed model; provider order preserved; empty ids skipped. */
+/** Whether the catalog wants this model in the picker. */
+function inPicker(m: { show?: boolean; hidden?: boolean }): boolean {
+  if (m.show === false) return false;
+  if (m.show === true) return true;
+  return m.hidden !== true;
+}
+
+/** One family per listed model; provider order preserved; empty / disabled skipped. */
 export function groupModels(providers: ProviderModels[]): ModelFamily[] {
   const families: ModelFamily[] = [];
   for (const p of providers) {
     for (const m of p.models) {
-      if (m.id === "") continue;
+      if (m.id === "" || !inPicker(m)) continue;
       families.push({
         key: m.id,
         provider: p.provider,
         providerLabel: p.label,
         ...(p.icon === undefined ? {} : { providerIcon: p.icon }),
         label: m.name === "" ? m.id : m.name,
-        more: m.hidden === true || m.show === false,
         efforts: m.efforts ?? [],
         ...(m.defaultEffort === undefined ? {} : { defaultEffort: m.defaultEffort }),
         fast: m.fast === true,
