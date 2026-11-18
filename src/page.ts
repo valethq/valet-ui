@@ -123,12 +123,12 @@ label.chip .lead, label.chip .chevron { position: absolute; }
 label.chip .lead { left: 12px; }
 label.chip .chevron { right: 11px; }
 .chip .lead > * { width: 15px; height: 15px; }
-/* Model mark, then the harness mark on the same line. In the chip the pair keeps a lone icon's 15px box and
+/* Harness mark, then the model mark on the same line. In the chip the pair keeps a lone icon's 15px box and
    spills out of it evenly on both sides, so its centre stays where that icon's would be; the right margin
-   (the spill) keeps the label its usual gap from the harness mark. */
+   (the spill) keeps the label its usual gap from the model mark. */
 .logo-pair { --pair-gap: 5px; display: inline-flex; flex: none; align-items: center; justify-content: center; }
 .logo-pair > .logo { width: 15px; height: 15px; }
-.logo-pair > .logo.harness { margin-left: var(--pair-gap); }
+.logo-pair > .logo.harness { margin-right: var(--pair-gap); }
 .chip .lead > .logo-pair { margin-right: calc((15px + var(--pair-gap)) / 2); }
 button.chip .lead > * { --fx-from: scale(.7); --fx-blur: 3px; animation: focus-in var(--dur-focus-sm) var(--ease-focus); }
 .chip .chevron { opacity: .7; transition: transform .22s var(--ease-focus), opacity .15s ease; }

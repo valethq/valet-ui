@@ -70,23 +70,23 @@ export function logoFor(model: string, provider = ""): LogoId | undefined {
 const isLogo = (key: string): key is LogoId => Object.hasOwn(LOGOS, key);
 
 /** Marks for a model run by a harness whose plugin named `icon` (an inference
- * provider's logo key): model first, then harness. The harness mark only shows
+ * provider's logo key): harness first, then model. The harness mark only shows
  * when the key is known and differs from the model's; it stands alone when the
  * model has no mark of its own. */
 export function logosFor(model: string, provider = "", icon?: string): LogoId[] {
   const own = logoFor(model, provider);
   const harness = icon !== undefined && isLogo(icon) ? icon : undefined;
   if (harness === undefined || harness === own) return own === undefined ? [] : [own];
-  return own === undefined ? [harness] : [own, harness];
+  return own === undefined ? [harness] : [harness, own];
 }
 
-/** One mark, or for [model, harness] a `.logo-pair`: the two side by side,
- * model first. Undefined when there are none. */
+/** One mark, or for [harness, model] a `.logo-pair`: the two side by side,
+ * harness first. Undefined when there are none. */
 export function logoMarks(ids: LogoId[]): HTMLSpanElement | undefined {
   const [first, second] = ids;
   if (first === undefined) return undefined;
   if (second === undefined) return logoMark(first);
-  return el("span", { class: "logo-pair" }, logoMark(first), logoMark(second, "harness"));
+  return el("span", { class: "logo-pair" }, logoMark(first, "harness"), logoMark(second));
 }
 
 export function logoMark(id: LogoId, extra = ""): HTMLSpanElement {

@@ -1568,9 +1568,9 @@ describe("model chip logos", () => {
     }
   };
 
-  test("a harness running another lab's model puts its mark beside the model's, with an 'on' line", () => {
+  test("a harness running another lab's model puts its mark first, beside the model's, with an 'on' line", () => {
     expect(chipFor("cursor", "claude-sonnet-5-high")).toMatchObject({
-      logos: ["claude", "cursor"],
+      logos: ["cursor", "claude"],
       pair: true,
       harness: "cursor",
       name: "Claude Sonnet 5",

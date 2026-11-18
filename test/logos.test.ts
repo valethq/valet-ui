@@ -57,8 +57,8 @@ describe("logoFor", () => {
 
 describe("logosFor", () => {
   test("a harness logo shows only when it is known and differs from the model's", () => {
-    expect(logosFor("Claude Sonnet 5", "cursor", "cursor")).toEqual(["claude", "cursor"]);
-    expect(logosFor("GPT-6", "cursor", "cursor")).toEqual(["openai", "cursor"]);
+    expect(logosFor("Claude Sonnet 5", "cursor", "cursor")).toEqual(["cursor", "claude"]);
+    expect(logosFor("GPT-6", "cursor", "cursor")).toEqual(["cursor", "openai"]);
     expect(logosFor("Claude Opus 5.5", "claude-code", "claude")).toEqual(["claude"]);
     expect(logosFor("gpt-6-codex", "codex", "openai")).toEqual(["openai"]);
     expect(logosFor("Composer 2.5", "cursor", "cursor")).toEqual(["cursor"]);
