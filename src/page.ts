@@ -250,7 +250,16 @@ button.chip:active:not(:disabled) { transform: none; }
 .menu-aside .icon { width: 14px; height: 14px; }
 @media (hover: none) { .menu-aside { opacity: 1; } }
 .menu-section + .menu-section { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
-.menu-title { padding: 6px 10px 4px; font-size: 11.5px; color: var(--faint); }
+.menu-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 10px 4px;
+  font-size: 11.5px;
+  color: var(--faint);
+  background: var(--surface);
+}
+.menu:has(> .menu-search) .menu-title { top: 34px; }
 .menu-item {
   display: flex;
   align-items: center;
@@ -701,7 +710,9 @@ button.sub-row:hover .icon { color: var(--accent); transform: translateX(3px); }
 .composer-bar .controls { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1 1 auto; }
 .composer-bar .actions { display: flex; align-items: center; gap: 6px; flex: none; }
 .model-pop { flex: 0 1 auto; max-width: 260px; }
-.effort-pop { flex: none; }
+.effort-pop, .fast-pop { flex: none; }
+button.chip.fast[aria-pressed=true] { background: var(--tint); color: var(--text); }
+button.chip.fast .chevron { display: none; }
 .context-bar {
   position: relative;
   display: inline-flex;

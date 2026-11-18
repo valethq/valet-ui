@@ -26,7 +26,13 @@ export interface Session {
 }
 
 export interface SessionSettings {
-  model?: { provider: string; model: string; fallbacks?: { provider: string; model: string }[] };
+  model?: {
+    provider: string;
+    model: string;
+    effort?: string;
+    fast?: boolean;
+    fallbacks?: { provider: string; model: string; effort?: string; fast?: boolean }[];
+  };
   [key: string]: unknown;
 }
 
@@ -34,7 +40,7 @@ export interface SessionSettings {
 export interface SessionState {
   activeRunId?: string;
   queued: number;
-  model: { provider: string; model: string };
+  model: { provider: string; model: string; effort?: string; fast?: boolean };
   usage?: Record<string, number>;
 }
 
@@ -118,6 +124,13 @@ export interface ModelInfo {
   id: string;
   name: string;
   contextWindow?: number;
+  efforts?: string[];
+  defaultEffort?: string;
+  fast?: boolean;
+  fastByDefault?: boolean;
+  hidden?: boolean;
+  /** Catalog: false → More section (out of the main picker). */
+  show?: boolean;
 }
 
 export interface ProviderModels {

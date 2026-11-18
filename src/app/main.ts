@@ -48,7 +48,7 @@ import type {
 } from "./types";
 import { syncCustom } from "./themes";
 import { renderAuth } from "./views/auth";
-import { createChat, type ChatHandle } from "./views/chat";
+import { createChat, type ChatHandle, type ModelSel } from "./views/chat";
 import { openSettings } from "./views/settings";
 import { refreshTimes, renderSidebar, type SidebarProps } from "./views/sidebar";
 import { CoreSocket } from "./ws";
@@ -687,7 +687,7 @@ function newSession(): void {
 }
 
 // The landing page's model pick; applied to the session when it is first created.
-let draftModel: { provider: string; model: string } | undefined;
+let draftModel: ModelSel | undefined;
 
 async function createSessionForDraft(): Promise<boolean> {
   if (app.projectId === null) return false;
@@ -700,7 +700,7 @@ async function createSessionForDraft(): Promise<boolean> {
   const configured =
     pick === undefined
       ? session
-      : await api.setSessionModel(session, pick.provider, pick.model).catch((e: unknown) => {
+      : await api.setSessionModel(session, pick).catch((e: unknown) => {
           toast(e instanceof Error ? e.message : "could not set model");
           return session;
         });
@@ -1008,10 +1008,10 @@ async function startApp(): Promise<void> {
       if (runId == null) return;
       api.cancelRun(runId).catch((e: unknown) => toast(e instanceof Error ? e.message : "cancel failed"));
     },
-    onModel: (provider, model) => {
+    onModel: (sel) => {
       const view = app.view;
       if (view === null) {
-        draftModel = { provider, model };
+        draftModel = sel;
         scheduleRender();
         return;
       }
@@ -1022,7 +1022,7 @@ async function startApp(): Promise<void> {
       }
       if (view.activeRunId !== null) toast("Model change applies from the next message");
       api
-        .setSessionModel(view.session, provider, model)
+        .setSessionModel(view.session, sel)
         .then((session) => {
           if (app.view?.session.id === session.id) app.view.session = session;
           app.sessions = upsertSession(app.sessions, session);

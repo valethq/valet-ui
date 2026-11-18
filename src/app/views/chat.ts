@@ -4,7 +4,7 @@ import { logoFor, logoMark, logoMarks, logosFor } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { focusDuration } from "../motion";
-import { familyOf, groupModels, type ModelFamily, type ModelVariant } from "../models";
+import { groupModels, type ModelFamily, pickEffort } from "../models";
 import { queueModeOf, type SessionView } from "../state";
 import {
   bindSubs,
@@ -29,12 +29,19 @@ import { createAttachments, filePart } from "./attachments";
 import { galleryItems, openLightbox } from "./lightbox";
 import { copyImage, type FileData, imageDeck, imageFigures, isImage, releaseBlobs, saveBlob } from "./media";
 
+export interface ModelSel {
+  provider: string;
+  model: string;
+  effort?: string;
+  fast?: boolean;
+}
+
 export interface ChatCallbacks {
   /** Resolves true when the POST succeeded; the draft is kept on failure. */
   onSend(parts: PartInput[], clientMessageId: string): Promise<boolean>;
   onUpload(file: File): Promise<string>;
   onStop(): void;
-  onModel(provider: string, model: string): void;
+  onModel(sel: ModelSel): void;
   onRename(): void;
   onDelete(): void;
   /** Fork the open session; `messageId` forks from that message, otherwise from the latest. */
@@ -47,11 +54,6 @@ export interface ChatCallbacks {
   onOpenSession(id: string): void;
   /** The reader is nearing the top of what is loaded and the chat has older pages. */
   onLoadOlder(): void;
-}
-
-export interface ModelSel {
-  provider: string;
-  model: string;
 }
 
 export interface ChatHandle {
@@ -615,14 +617,6 @@ function iconOf(providers: ProviderModels[], provider: string): { providerIcon?:
   return icon === undefined ? {} : { providerIcon: icon };
 }
 
-function pickVariant(f: ModelFamily): ModelVariant {
-  return (
-    f.variants.find((v) => v.effort === "high") ??
-    f.variants.find((v) => v.effort === "medium") ??
-    (f.variants[0] as ModelVariant)
-  );
-}
-
 function contextWindow(view: SessionView, providers: ProviderModels[]): number | undefined {
   let sel = view.session.settings.model;
   for (let i = view.messages.length - 1; i >= 0; i--) {
@@ -643,11 +637,22 @@ function contextWindow(view: SessionView, providers: ProviderModels[]): number |
   return view.contextWindow ?? undefined;
 }
 
+function selOf(f: ModelFamily, prev?: ModelSel): ModelSel {
+  const effort = pickEffort(f, prev?.effort);
+  const fast = f.fast ? prev?.fast : undefined;
+  return {
+    provider: f.provider,
+    model: f.key,
+    ...(effort === undefined ? {} : { effort }),
+    ...(fast === undefined ? {} : { fast }),
+  };
+}
+
 /** The landing page's model: the user's pick, else the first provider's first family. */
 function draftPick(draft: ModelSel | undefined, providers: ProviderModels[]): ModelSel | undefined {
   if (draft !== undefined) return draft;
   const first = groupModels(providers).find((f) => !f.more);
-  return first === undefined ? undefined : { provider: first.provider, model: pickVariant(first).id };
+  return first === undefined ? undefined : selOf(first);
 }
 
 function flashCopy(btn: HTMLButtonElement, name: "check" | "close", label: string): void {
@@ -735,7 +740,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   let draftId: string | null = null;
   let families: ModelFamily[] = [];
   let activeFamily: ModelFamily | null = null;
-  let activeVariant: ModelVariant | null = null;
+  let activeEffort: string | null = null;
+  let activeFast: boolean | undefined;
   let tick: ReturnType<typeof setInterval> | undefined;
   /** Blobs of the chat just left, freed once the open chat has rendered. */
   let released: string[] = [];
@@ -761,7 +767,15 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
           label: f.label,
           lead: familyLogo(f),
           selected: f === activeFamily,
-          onSelect: () => cb.onModel(f.provider, pickVariant(f).id),
+          onSelect: () =>
+            cb.onModel(
+              selOf(f, {
+                provider: f.provider,
+                model: f.key,
+                ...(activeEffort === null ? {} : { effort: activeEffort }),
+                ...(activeFast === undefined ? {} : { fast: activeFast }),
+              }),
+            ),
         });
       }
       return [...sections.values(), ...(more.items.length > 0 ? [more] : [])];
@@ -774,15 +788,35 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     () => {
       const f = activeFamily;
       if (f === null) return [];
-      const items = f.variants.map((v) => ({
-        label: cap(v.effort),
-        selected: v === activeVariant,
-        onSelect: () => cb.onModel(f.provider, v.id),
+      const items = f.efforts.map((effort) => ({
+        label: cap(effort),
+        selected: effort === activeEffort,
+        onSelect: () =>
+          cb.onModel({
+            provider: f.provider,
+            model: f.key,
+            effort,
+            ...(activeFast === undefined ? {} : { fast: activeFast }),
+          }),
       }));
       return [{ title: "Effort", items }];
     },
     "effort-pop",
   );
+  const fastChip = chipButton("fast", icon("zap"), "Fast");
+  const fastMenu = el("span", { class: "pop fast-pop" }, fastChip.button);
+  fastChip.button.setAttribute("aria-pressed", "false");
+  fastChip.button.addEventListener("click", () => {
+    const f = activeFamily;
+    if (f === null || !f.fast) return;
+    const on = !(activeFast ?? f.fastByDefault);
+    cb.onModel({
+      provider: f.provider,
+      model: f.key,
+      ...(activeEffort === null ? {} : { effort: activeEffort }),
+      fast: on,
+    });
+  });
 
   const syncSend = (): void => {
     send.disabled = textarea.value.trim() === "" && attachments.list().length === 0;
@@ -997,7 +1031,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         el(
           "div",
           { class: "composer-bar" },
-          el("div", { class: "controls" }, attachMenu, modelMenu, effortMenu),
+          el("div", { class: "controls" }, attachMenu, modelMenu, effortMenu, fastMenu),
           el("div", { class: "actions" }, queuedBadge, contextBar, stop, send),
         ),
         imageInput,
@@ -1008,7 +1042,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   root.replaceChildren(main);
   syncSend();
   setContext(null);
-  setModels(null, null);
+  setModels(null, null, undefined);
 
   let subs: SubInfo[] = [];
   // Each loader is one node for the chat's lifetime so re-renders don't restart its animation.
@@ -1197,30 +1231,30 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     let sel =
       selected === undefined
         ? undefined
-        : families.find(
-            (f) => f.provider === selected.provider && f.variants.some((v) => v.id === selected.model),
-          );
+        : families.find((f) => f.provider === selected.provider && f.key === selected.model);
     if (selected !== undefined && sel === undefined) {
       sel = {
-        key: familyOf(selected.model).family,
+        key: selected.model,
         provider: selected.provider,
         providerLabel: selected.provider,
         ...iconOf(providers, selected.provider),
         label: `${selected.model} (${selected.provider})`,
         more: false,
-        variants: [{ id: selected.model, name: selected.model, effort: "default" }],
+        efforts: selected.effort === undefined ? [] : [selected.effort],
+        fast: selected.fast === true,
+        fastByDefault: false,
       };
       families.unshift(sel);
     }
-    setModels(
-      sel ?? null,
-      sel === undefined ? null : (sel.variants.find((v) => v.id === selected?.model) ?? pickVariant(sel)),
-    );
+    const effort =
+      selected === undefined || sel === undefined ? null : (pickEffort(sel, selected.effort) ?? null);
+    setModels(sel ?? null, effort, selected?.fast);
   }
 
-  function setModels(f: ModelFamily | null, v: ModelVariant | null): void {
+  function setModels(f: ModelFamily | null, effort: string | null, fast: boolean | undefined): void {
     activeFamily = f;
-    activeVariant = v;
+    activeEffort = effort;
+    activeFast = fast;
     // Key on the rendered icon, not the model: the lead animates on insert,
     // so only swap (and replay) when the icon itself changes.
     const logos = f === null ? [] : familyLogos(f);
@@ -1234,8 +1268,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     modelSub.textContent = on;
     modelSub.style.display = on === "" ? "none" : "";
     modelChip.button.disabled = families.length === 0;
-    effortMenu.style.display = f === null || f.variants.length <= 1 ? "none" : "";
-    effortChip.text.textContent = v === null ? "" : cap(v.effort);
+    effortMenu.style.display = f === null || f.efforts.length <= 1 ? "none" : "";
+    effortChip.text.textContent = effort === null ? "" : cap(effort);
+    const showFast = f?.fast === true;
+    fastMenu.style.display = showFast ? "" : "none";
+    const fastOn = f !== null && showFast ? (fast ?? f.fastByDefault) : false;
+    fastChip.button.setAttribute("aria-pressed", String(fastOn));
+    fastChip.text.textContent = fastOn ? "Fast" : "Std";
   }
 
   connLine.style.display = connOpen ? "none" : "";

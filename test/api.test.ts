@@ -17,6 +17,7 @@ import {
   releaseBlobUrl,
   saveSettings,
   sendMessage,
+  setSessionModel,
   updateSession,
   uploadBlob,
 } from "../src/app/api";
@@ -369,12 +370,13 @@ describe("valet-agent session actions", () => {
     expect(await compactSession("ses_1", "").catch((e: unknown) => e)).toBeInstanceOf(ApiError);
   });
 
-  test("the default queue mode comes from the agent panel and falls back to queue", async () => {
+  test("the default queue mode comes from core settings and falls back to queue", async () => {
     record(
-      () => new Response('{"key":"valet-agent","values":{"defaultQueueMode":"interrupt"}}', { status: 200 }),
+      () =>
+        new Response('{"plugin":"valet-agent","values":{"defaultQueueMode":"interrupt"}}', { status: 200 }),
     );
     expect(await defaultQueueMode()).toBe("interrupt");
-    record(() => new Response('{"key":"valet-agent","values":{"defaultQueueMode":""}}', { status: 200 }));
+    record(() => new Response('{"plugin":"valet-agent","values":{"defaultQueueMode":""}}', { status: 200 }));
     expect(await defaultQueueMode()).toBe("queue");
     record(() => new Response("{}", { status: 403 }));
     expect(await defaultQueueMode()).toBe("queue");
@@ -392,5 +394,88 @@ describe("listModels", () => {
       { provider: "cursor", label: "Cursor", icon: "cursor", models: [{ id: "m", name: "M" }] },
       { provider: "x", label: "x", models: [] },
     ]);
+  });
+
+  test("parses effort and fast fields from each model", async () => {
+    stubFetch(() =>
+      Response.json({
+        providers: [
+          {
+            provider: "openai",
+            label: "OpenAI",
+            models: [
+              {
+                id: "gpt-6",
+                name: "GPT-6",
+                contextWindow: 200000,
+                efforts: ["medium", "high"],
+                defaultEffort: "medium",
+                fast: true,
+                fastByDefault: true,
+                hidden: false,
+                show: true,
+              },
+              { id: "niche", name: "Niche", show: false },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(await listModels()).toEqual([
+      {
+        provider: "openai",
+        label: "OpenAI",
+        models: [
+          {
+            id: "gpt-6",
+            name: "GPT-6",
+            contextWindow: 200000,
+            efforts: ["medium", "high"],
+            defaultEffort: "medium",
+            fast: true,
+            fastByDefault: true,
+            hidden: false,
+            show: true,
+          },
+          { id: "niche", name: "Niche", show: false },
+        ],
+      },
+    ]);
+  });
+});
+
+describe("setSessionModel", () => {
+  test("writes effort/fast and keeps fallbacks", async () => {
+    const session = {
+      id: "ses_1",
+      settings: {
+        model: {
+          provider: "old",
+          model: "old",
+          fallbacks: [{ provider: "b", model: "bb" }],
+        },
+      },
+    } as never;
+    let seen: { url: string; method?: string; body?: unknown } = { url: "" };
+    g.fetch = ((url: string, init: RequestInit) => {
+      seen = { url, method: init.method, body: init.body };
+      return Promise.resolve(new Response('{"id":"ses_1","settings":{}}'));
+    }) as unknown as typeof fetch;
+    await setSessionModel(session, { provider: "openai", model: "gpt-6", effort: "high", fast: true });
+    expect(seen).toEqual({
+      url: "/api/core/sessions/ses_1",
+      method: "PATCH",
+      body: JSON.stringify({
+        settings: {
+          model: {
+            provider: "openai",
+            model: "gpt-6",
+            effort: "high",
+            fast: true,
+            fallbacks: [{ provider: "b", model: "bb" }],
+          },
+        },
+      }),
+    });
   });
 });

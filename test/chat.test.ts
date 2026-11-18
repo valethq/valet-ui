@@ -1508,13 +1508,13 @@ describe("model chip logos", () => {
       provider: "cursor",
       label: "Cursor",
       icon: "cursor",
-      models: [{ id: "claude-sonnet-5-high", name: "Claude Sonnet 5 High" }],
+      models: [{ id: "claude-sonnet-5", name: "Claude Sonnet 5", efforts: ["high"] }],
     },
     {
       provider: "claude-code",
       label: "Claude Code",
       icon: "claude",
-      models: [{ id: "opus-high", name: "Claude Opus 5.5 High" }],
+      models: [{ id: "opus", name: "Claude Opus 5.5", efforts: ["high"] }],
     },
   ];
   const logos = (n: FakeEl): string[] => [
@@ -1574,7 +1574,7 @@ describe("model chip logos", () => {
   };
 
   test("a harness running another lab's model puts its mark first, under the model's, with an 'on' line", () => {
-    expect(chipFor("cursor", "claude-sonnet-5-high")).toMatchObject({
+    expect(chipFor("cursor", "claude-sonnet-5")).toMatchObject({
       logos: ["cursor", "claude"],
       pair: true,
       harness: "cursor",
@@ -1585,7 +1585,7 @@ describe("model chip logos", () => {
   });
 
   test("a harness whose logo matches the model shows the model mark and name alone", () => {
-    expect(chipFor("claude-code", "opus-high")).toMatchObject({
+    expect(chipFor("claude-code", "opus")).toMatchObject({
       logos: ["claude"],
       pair: false,
       harness: undefined,
@@ -1596,6 +1596,6 @@ describe("model chip logos", () => {
   });
 
   test("picker rows show only the model's own logo, never the harness's", () => {
-    expect(chipFor("cursor", "claude-sonnet-5-high").rows).toEqual([["claude"], ["claude"]]);
+    expect(chipFor("cursor", "claude-sonnet-5").rows).toEqual([["claude"], ["claude"]]);
   });
 });

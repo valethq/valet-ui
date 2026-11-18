@@ -265,10 +265,24 @@ export const updateSession = (
 export const deleteSession = (sessionId: string): Promise<Session> =>
   req("DELETE", `/api/core/sessions/${encodeURIComponent(sessionId)}`);
 
-export const setSessionModel = (session: Session, provider: string, model: string): Promise<Session> =>
-  updateSession(session.id, {
-    settings: { ...session.settings, model: { provider, model } },
+export const setSessionModel = (
+  session: Session,
+  ref: { provider: string; model: string; effort?: string; fast?: boolean },
+): Promise<Session> => {
+  const fallbacks = session.settings.model?.fallbacks;
+  return updateSession(session.id, {
+    settings: {
+      ...session.settings,
+      model: {
+        provider: ref.provider,
+        model: ref.model,
+        ...(ref.effort === undefined ? {} : { effort: ref.effort }),
+        ...(ref.fast === undefined ? {} : { fast: ref.fast }),
+        ...(fallbacks === undefined ? {} : { fallbacks }),
+      },
+    },
   });
+};
 
 export const cancelRun = (runId: string): Promise<{ ok: boolean }> =>
   req("POST", `/api/core/runs/${encodeURIComponent(runId)}/cancel`);
@@ -339,10 +353,28 @@ export async function compactSession(id: string, instructions: string): Promise<
   });
 }
 
-/** The agent's default queue mode from its settings panel; "queue" when it is unset or unreadable. */
+/** One plugin's config as GET /api/core/settings serves it (12.1). */
+export interface CorePluginSettings {
+  plugin: string;
+  values: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export const listCoreSettings = (): Promise<CorePluginSettings[]> => get("/api/core/settings");
+
+export const getCoreSettings = (plugin: string): Promise<CorePluginSettings> =>
+  get(`/api/core/settings/${encodeURIComponent(plugin)}`);
+
+/** The agent's default queue mode from its core config; "queue" when it is unset or unreadable. */
 export async function defaultQueueMode(): Promise<QueueMode> {
-  const entry = await getSettings("valet-agent").catch(() => undefined);
+  const entry = await getCoreSettings("valet-agent").catch(() => undefined);
   return entry?.values?.defaultQueueMode === "interrupt" ? "interrupt" : "queue";
+}
+
+function stringList(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.filter((x): x is string => typeof x === "string");
+  return out.length === 0 ? undefined : out;
 }
 
 export async function listModels(): Promise<ProviderModels[]> {
@@ -364,11 +396,20 @@ export async function listModels(): Promise<ProviderModels[]> {
       provider,
       label: String(e.label ?? e.name ?? provider),
       ...(typeof e.icon === "string" && e.icon !== "" ? { icon: e.icon } : {}),
-      models: models.map((m) => ({
-        id: String(m.id ?? m.model ?? m.name ?? ""),
-        name: String(m.name ?? m.label ?? m.id ?? m.model ?? ""),
-        ...(typeof m.contextWindow === "number" ? { contextWindow: m.contextWindow } : {}),
-      })),
+      models: models.map((m) => {
+        const efforts = stringList(m.efforts);
+        return {
+          id: String(m.id ?? m.model ?? m.name ?? ""),
+          name: String(m.name ?? m.label ?? m.id ?? m.model ?? ""),
+          ...(typeof m.contextWindow === "number" ? { contextWindow: m.contextWindow } : {}),
+          ...(efforts === undefined ? {} : { efforts }),
+          ...(typeof m.defaultEffort === "string" ? { defaultEffort: m.defaultEffort } : {}),
+          ...(typeof m.fast === "boolean" ? { fast: m.fast } : {}),
+          ...(typeof m.fastByDefault === "boolean" ? { fastByDefault: m.fastByDefault } : {}),
+          ...(typeof m.hidden === "boolean" ? { hidden: m.hidden } : {}),
+          ...(typeof m.show === "boolean" ? { show: m.show } : {}),
+        };
+      }),
     });
   }
   return out;
