@@ -40,6 +40,14 @@ export const GROUP_LABEL: Record<SettingsGroup, string> = {
   system: "System",
 };
 
+/** First few page titles for a group row; ellipsis when there are more than three. */
+export function groupSubtitle(titles: string[]): string {
+  const clean = titles.map((t) => t.trim()).filter((t) => t !== "");
+  if (clean.length === 0) return "";
+  if (clean.length <= 3) return clean.join(", ");
+  return `${clean.slice(0, 3).join(", ")}…`;
+}
+
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 

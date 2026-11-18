@@ -1,11 +1,17 @@
 import { getSecretMeta, listCoreSettings, listModels, patchCoreSettings, putSecret } from "../api";
 import { el, leave } from "../dom";
 import { EXPERIMENTAL_KEY, experimentalEntry, saveExperimental } from "../experimental";
-import { iconButton } from "../icons";
-import type { CorePluginSettings, SettingsEntry } from "../types";
+import { icon, iconButton } from "../icons";
+import type { CorePluginSettings, SettingsEntry, SettingsGroup } from "../types";
 import { refreshInterval, renderBlocks } from "./blocks";
 import { schemaForm, type SchemaFormDeps } from "./schema-form";
-import { buildSettingsPages, GROUP_LABEL, groupPages, type SettingsPage } from "./settings-pages";
+import {
+  buildSettingsPages,
+  GROUP_LABEL,
+  groupPages,
+  groupSubtitle,
+  type SettingsPage,
+} from "./settings-pages";
 import { themeSection } from "./themes";
 
 export interface SettingsDeps {
@@ -246,6 +252,47 @@ function builtinSection(page: SettingsPage, deps: SettingsDeps): HTMLElement {
   return section;
 }
 
+/** Saves the Experimental panel in this browser; everything else goes to the server. */
+const withLocalPanels = (deps: SettingsDeps): SettingsDeps => ({
+  ...deps,
+  save: (key, values) =>
+    key === EXPERIMENTAL_KEY ? Promise.resolve(saveExperimental(values)) : deps.save(key, values),
+  listCore: deps.listCore ?? listCoreSettings,
+  patchCore: deps.patchCore ?? patchCoreSettings,
+});
+
+function builtinPages(): SettingsPage[] {
+  return [
+    {
+      id: "ui-theme",
+      title: "Theme",
+      group: "system",
+      order: 900,
+      kind: "theme",
+      values: {},
+      sources: {},
+      fieldKeys: [],
+      panels: [],
+    },
+    {
+      id: "ui-experimental",
+      title: "Experimental",
+      group: "system",
+      order: 901,
+      kind: "experimental",
+      values: {},
+      sources: {},
+      fieldKeys: [],
+      panels: [],
+    },
+  ];
+}
+
+function pagePanel(page: SettingsPage, deps: SettingsDeps): HTMLElement {
+  if (page.kind === "theme" || page.kind === "experimental") return builtinSection(page, deps);
+  return configSection(page, deps);
+}
+
 interface Tab {
   label: string;
   panel: HTMLElement;
@@ -321,45 +368,122 @@ function tabbed(tabs: Tab[]): HTMLElement {
   return el("div", { class: "settings-tabbed" }, bar, body);
 }
 
-/** Saves the Experimental panel in this browser; everything else goes to the server. */
-const withLocalPanels = (deps: SettingsDeps): SettingsDeps => ({
-  ...deps,
-  save: (key, values) =>
-    key === EXPERIMENTAL_KEY ? Promise.resolve(saveExperimental(values)) : deps.save(key, values),
-  listCore: deps.listCore ?? listCoreSettings,
-  patchCore: deps.patchCore ?? patchCoreSettings,
-});
+const NARROW_SETTINGS = "(max-width: 900px), (max-height: 500px) and (pointer: coarse)";
 
-function builtinPages(): SettingsPage[] {
-  return [
-    {
-      id: "ui-theme",
-      title: "Theme",
-      group: "system",
-      order: 900,
-      kind: "theme",
-      values: {},
-      sources: {},
-      fieldKeys: [],
-      panels: [],
-    },
-    {
-      id: "ui-experimental",
-      title: "Experimental",
-      group: "system",
-      order: 901,
-      kind: "experimental",
-      values: {},
-      sources: {},
-      fieldKeys: [],
-      panels: [],
-    },
-  ];
+function navRow(label: string, sub: string, onSelect: () => void): HTMLButtonElement {
+  const text = el(
+    "span",
+    { class: "settings-nav-text" },
+    el("span", { class: "settings-nav-label", text: label }),
+  );
+  if (sub !== "") text.append(el("span", { class: "settings-nav-sub", text: sub }));
+  const b = el(
+    "button",
+    { class: "settings-nav-row", type: "button" },
+    text,
+    el("span", { class: "chevron" }, icon("chevronRight")),
+  );
+  b.addEventListener("click", onSelect);
+  return b;
 }
 
-function pagePanel(page: SettingsPage, deps: SettingsDeps): HTMLElement {
-  if (page.kind === "theme" || page.kind === "experimental") return builtinSection(page, deps);
-  return configSection(page, deps);
+/**
+ * Mobile settings: Groups → pages in that group → page form.
+ * Returns `back()` which pops one level (true) or says we are at the root (false).
+ */
+function drillDown(
+  grouped: { group: SettingsGroup; pages: SettingsPage[] }[],
+  deps: SettingsDeps,
+  chrome: { title: HTMLElement; back: HTMLButtonElement },
+): { root: HTMLElement; back: () => boolean } {
+  const panels = new Map<string, HTMLElement>();
+  const pageOf = new Map<string, SettingsPage>();
+  for (const g of grouped) {
+    for (const p of g.pages) {
+      pageOf.set(p.id, p);
+      panels.set(p.id, pagePanel(p, deps));
+    }
+  }
+
+  type Loc =
+    | { kind: "root" }
+    | { kind: "group"; group: SettingsGroup }
+    | { kind: "page"; group: SettingsGroup; id: string };
+  let loc: Loc = { kind: "root" };
+  const root = el("div", { class: "settings-drill" });
+
+  const showGroups = (): HTMLElement => {
+    const list = el("div", { class: "settings-nav", role: "list" });
+    for (const g of grouped) {
+      const sub = groupSubtitle(g.pages.map((p) => p.title));
+      list.append(
+        navRow(GROUP_LABEL[g.group], sub, () => {
+          loc = { kind: "group", group: g.group };
+          paint();
+        }),
+      );
+    }
+    return list;
+  };
+
+  const showPages = (group: SettingsGroup): HTMLElement => {
+    const list = el("div", { class: "settings-nav", role: "list" });
+    const pages = grouped.find((g) => g.group === group)?.pages ?? [];
+    for (const p of pages) {
+      list.append(
+        navRow(p.title, "", () => {
+          loc = { kind: "page", group, id: p.id };
+          paint();
+        }),
+      );
+    }
+    return list;
+  };
+
+  const paint = (): void => {
+    if (loc.kind === "root") {
+      chrome.title.textContent = "Settings";
+      chrome.back.hidden = true;
+      root.classList.remove("settings-drill-page");
+      root.replaceChildren(showGroups());
+      return;
+    }
+    if (loc.kind === "group") {
+      chrome.title.textContent = GROUP_LABEL[loc.group];
+      chrome.back.hidden = false;
+      root.classList.remove("settings-drill-page");
+      root.replaceChildren(showPages(loc.group));
+      return;
+    }
+    const page = pageOf.get(loc.id);
+    const panel = panels.get(loc.id);
+    chrome.title.textContent = page?.title ?? "Settings";
+    chrome.back.hidden = false;
+    root.classList.add("settings-drill-page");
+    if (panel === undefined) {
+      root.replaceChildren(el("div", { class: "hint", text: "Missing page." }));
+      return;
+    }
+    panel.hidden = false;
+    root.replaceChildren(el("div", { class: "settings-panels" }, panel));
+  };
+
+  const back = (): boolean => {
+    if (loc.kind === "page") {
+      loc = { kind: "group", group: loc.group };
+      paint();
+      return true;
+    }
+    if (loc.kind === "group") {
+      loc = { kind: "root" };
+      paint();
+      return true;
+    }
+    return false;
+  };
+
+  paint();
+  return { root, back };
 }
 
 /** Opens the settings dialog: core configSchema pages grouped by x-group, plus Theme / Experimental. */
@@ -367,18 +491,11 @@ export function openSettings(serverDeps: SettingsDeps): void {
   const deps = withLocalPanels(serverDeps);
   if (document.querySelector(".modal-backdrop:not(.leaving)") !== null) return;
   const opener = document.activeElement as HTMLElement | null;
+  const title = el("h2", { id: "settings-title", text: "Settings" });
+  const back = iconButton("chevronLeft", "Back", "settings-back");
+  back.hidden = true;
   const close = iconButton("close", "Close");
-  const content = el(
-    "div",
-    { class: "modal-body" },
-    tabbed(
-      builtinPages().map((p) => ({
-        label: p.title,
-        group: GROUP_LABEL[p.group],
-        panel: pagePanel(p, deps),
-      })),
-    ),
-  );
+  const content = el("div", { class: "modal-body" });
   const dialog = el(
     "div",
     {
@@ -388,29 +505,28 @@ export function openSettings(serverDeps: SettingsDeps): void {
       "aria-labelledby": "settings-title",
       tabindex: "-1",
     },
-    el("div", { class: "modal-head" }, el("h2", { id: "settings-title", text: "Settings" }), close),
+    el("div", { class: "modal-head" }, el("div", { class: "modal-head-start" }, back, title), close),
     content,
   );
   const backdrop = el("div", { class: "modal-backdrop" }, dialog);
-  const onKey = (ev: KeyboardEvent): void => {
-    if (ev.key === "Escape") dismiss();
-  };
-  function dismiss(): void {
-    leave(backdrop);
-    document.removeEventListener("keydown", onKey);
-    opener?.focus();
-  }
-  close.addEventListener("click", dismiss);
-  backdrop.addEventListener("pointerdown", (ev) => {
-    if (ev.target === backdrop) dismiss();
-  });
-  document.addEventListener("keydown", onKey);
-  document.body.append(backdrop);
-  dialog.focus();
 
-  Promise.all([deps.listCore?.() ?? listCoreSettings(), deps.load()])
-    .then(([core, panels]) => {
-      const pages = [...buildSettingsPages(core, panels), ...builtinPages()];
+  let pages: SettingsPage[] = builtinPages();
+  let popLevel: (() => boolean) | null = null;
+  const mq = matchMedia(NARROW_SETTINGS);
+
+  const mount = (): void => {
+    popLevel = null;
+    back.hidden = true;
+    back.onclick = null;
+    title.textContent = "Settings";
+    if (mq.matches) {
+      const drilled = drillDown(groupPages(pages), deps, { title, back });
+      popLevel = drilled.back;
+      back.onclick = () => {
+        popLevel?.();
+      };
+      content.replaceChildren(drilled.root);
+    } else {
       const tabs = groupPages(pages).flatMap(({ group, pages: list }) =>
         list.map((p) => ({
           label: p.title,
@@ -419,6 +535,34 @@ export function openSettings(serverDeps: SettingsDeps): void {
         })),
       );
       content.replaceChildren(tabbed(tabs));
+    }
+  };
+
+  const onKey = (ev: KeyboardEvent): void => {
+    if (ev.key !== "Escape") return;
+    if (popLevel?.()) return;
+    dismiss();
+  };
+  function dismiss(): void {
+    leave(backdrop);
+    document.removeEventListener("keydown", onKey);
+    mq.removeEventListener("change", mount);
+    opener?.focus();
+  }
+  close.addEventListener("click", dismiss);
+  backdrop.addEventListener("pointerdown", (ev) => {
+    if (ev.target === backdrop) dismiss();
+  });
+  document.addEventListener("keydown", onKey);
+  mq.addEventListener("change", mount);
+  document.body.append(backdrop);
+  dialog.focus();
+  mount();
+
+  Promise.all([deps.listCore?.() ?? listCoreSettings(), deps.load()])
+    .then(([core, panels]) => {
+      pages = [...buildSettingsPages(core, panels), ...builtinPages()];
+      mount();
     })
     .catch((e: unknown) =>
       content.append(el("div", { class: "hint error", text: `Settings unavailable: ${errorText(e)}` })),

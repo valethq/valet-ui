@@ -4,6 +4,7 @@ import {
   buildSettingsPages,
   deriveGroup,
   groupPages,
+  groupSubtitle,
   propertiesForPage,
 } from "../src/app/views/settings-pages";
 
@@ -113,5 +114,18 @@ describe("buildSettingsPages", () => {
     expect(pages).toHaveLength(1);
     expect(pages[0]?.id).toBe("valet-auth");
     expect(pages[0]?.panels[0]?.key).toBe("pwd");
+  });
+});
+
+describe("groupSubtitle", () => {
+  test("joins up to three titles, then ellipsizes", () => {
+    expect(groupSubtitle([])).toBe("");
+    expect(groupSubtitle(["Agent"])).toBe("Agent");
+    expect(groupSubtitle(["Claude Code", "Codex", "Cursor"])).toBe("Claude Code, Codex, Cursor");
+    expect(groupSubtitle(["Claude Code", "Codex", "Cursor", "Devin"])).toBe("Claude Code, Codex, Cursor…");
+  });
+
+  test("drops blank titles", () => {
+    expect(groupSubtitle(["  ", "Agent", ""])).toBe("Agent");
   });
 });
