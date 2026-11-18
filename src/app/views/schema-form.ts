@@ -1,8 +1,8 @@
 import { el } from "../dom";
-import { selectChip } from "../icons";
+import { iconButton, selectChip } from "../icons";
 
 type Prop = Record<string, unknown>;
-export type FieldKind = "boolean" | "enum" | "number" | "secret" | "text" | "list" | "json";
+export type FieldKind = "boolean" | "enum" | "number" | "secret" | "text" | "list" | "rows" | "json";
 
 /** Maps a JSON-schema property to the control that edits it; anything
  * outside the simple subset falls back to a JSON textarea. */
@@ -17,12 +17,51 @@ export function fieldKind(p: Prop): FieldKind {
     case "string":
       return p.format === "password" || p.writeOnly === true ? "secret" : "text";
     case "array": {
-      const t = (p.items as Prop | undefined)?.type;
-      return t === "string" || t === "number" || t === "integer" ? "list" : "json";
+      const items = p.items as Prop | undefined;
+      const t = items?.type;
+      if (t === "string" || t === "number" || t === "integer") return "list";
+      return rowColumns(items) ? "rows" : "json";
     }
     default:
       return "json";
   }
+}
+
+type Column = { key: string; prop: Prop; label: string };
+
+/** Columns of an array-of-objects schema whose properties are all plain strings or numbers; otherwise undefined. */
+export function rowColumns(items: Prop | undefined): Column[] | undefined {
+  if (items?.type !== "object") return undefined;
+  const entries = Object.entries((items.properties ?? {}) as Record<string, Prop>);
+  const simple = entries.every(([, q]) => {
+    const k = fieldKind(q);
+    return k === "text" || k === "number";
+  });
+  if (entries.length === 0 || !simple) return undefined;
+  return entries.map(([key, prop]) => ({
+    key,
+    prop,
+    label: typeof prop.title === "string" ? prop.title : key,
+  }));
+}
+
+/** One row -> object. Blank fields are left out; a blank required field is an error. */
+export function parseRow(
+  cols: Column[],
+  raw: string[],
+  required: unknown,
+  label: string,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  cols.forEach((c, i) => {
+    const kind = fieldKind(c.prop);
+    const v = parseField(kind, raw[i] ?? "", c.prop, `${label} ${c.label}`);
+    const blank = v === undefined || v === "";
+    if (blank && Array.isArray(required) && required.includes(c.key))
+      throw new Error(`${label}: ${c.label} is required`);
+    if (!blank) out[c.key] = v;
+  });
+  return out;
 }
 
 export function formatField(kind: FieldKind, value: unknown): string | boolean {
@@ -82,6 +121,64 @@ export function enumLabels(p: Prop): string[] {
 
 let seq = 0;
 
+/** An editable list of objects: one line of inputs per entry, a remove button each, and an add button. */
+function rowsEditor(p: Prop, cols: Column[], value: unknown, label: string) {
+  const node = el("div", { class: "rows" });
+  const list = el("div", { class: "rows-list" });
+  const rows: { inputs: HTMLInputElement[]; extra: Record<string, unknown>; node: HTMLElement }[] = [];
+  const keys = new Set(cols.map((c) => c.key));
+  const add = (entry: Record<string, unknown> = {}) => {
+    const inputs = cols.map((c) => {
+      const kind = fieldKind(c.prop);
+      const input = el("input", {
+        class: "input",
+        type: kind === "number" ? "number" : "text",
+        autocomplete: "off",
+        spellcheck: "false",
+        placeholder: c.label,
+        "aria-label": c.label,
+      });
+      input.value = String(entry[c.key] ?? "");
+      return input;
+    });
+    const extra = Object.fromEntries(Object.entries(entry).filter(([k]) => !keys.has(k)));
+    const remove = iconButton("trash", `Remove ${label}`);
+    remove.type = "button";
+    const row = el("div", { class: "rows-row" }, ...inputs, remove);
+    const item = { inputs, extra, node: row };
+    remove.addEventListener("click", () => {
+      rows.splice(rows.indexOf(item), 1);
+      row.remove();
+    });
+    rows.push(item);
+    list.append(row);
+  };
+  for (const e of Array.isArray(value) ? value : []) {
+    if (typeof e === "object" && e !== null && !Array.isArray(e)) add(e as Record<string, unknown>);
+  }
+  const addBtn = el("button", { type: "button", class: "chip", text: "Add" });
+  addBtn.addEventListener("click", () => {
+    add();
+    rows[rows.length - 1]?.inputs[0]?.focus();
+  });
+  node.append(list, el("div", { class: "rows-add" }, addBtn));
+  return {
+    node,
+    read: () =>
+      rows
+        .map((r) => ({
+          ...r.extra,
+          ...parseRow(
+            cols,
+            r.inputs.map((i) => i.value),
+            (p.items as Prop).required,
+            label,
+          ),
+        }))
+        .filter((o) => Object.keys(o).length > 0),
+  };
+}
+
 function control(kind: FieldKind, p: Prop, value: string | boolean, id: string): HTMLElement {
   switch (kind) {
     case "boolean": {
@@ -137,11 +234,18 @@ export function schemaForm(
     const kind = fieldKind(p);
     const label = typeof p.title === "string" ? p.title : key;
     const id = `sf-${++seq}`;
-    const ctl = control(kind, p, formatField(kind, key === "" ? values : values[key]), id);
-    const input = (ctl.tagName === "LABEL" ? ctl.querySelector("select") : ctl) as HTMLInputElement;
     const head = el("label", { class: "field-label", for: id, text: label });
     const desc =
       typeof p.description === "string" ? el("div", { class: "field-desc", text: p.description }) : null;
+    if (kind === "rows") {
+      const cols = rowColumns(p.items as Prop) as Column[];
+      const rows = rowsEditor(p, cols, values[key], label);
+      node.append(el("div", { class: "field" }, head, ...(desc ? [desc] : []), rows.node));
+      readers.push(() => [key, rows.read()]);
+      continue;
+    }
+    const ctl = control(kind, p, formatField(kind, key === "" ? values : values[key]), id);
+    const input = (ctl.tagName === "LABEL" ? ctl.querySelector("select") : ctl) as HTMLInputElement;
     node.append(
       kind === "boolean"
         ? el("div", { class: "field toggle" }, el("div", {}, head, ...(desc ? [desc] : [])), ctl)

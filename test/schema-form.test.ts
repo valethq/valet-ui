@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { enumLabels, fieldKind, formatField, parseField } from "../src/app/views/schema-form";
+import {
+  enumLabels,
+  fieldKind,
+  formatField,
+  parseField,
+  parseRow,
+  rowColumns,
+} from "../src/app/views/schema-form";
 
 test("enum options are labelled by enumNames, values stay raw", () => {
   const p = { enum: ["acceptEdits", "plan"], enumNames: ["Accept edits", "Plan"] };
@@ -26,6 +33,9 @@ describe("fieldKind", () => {
   test("anything else is edited as JSON", () => {
     expect(fieldKind({ type: "object" })).toBe("json");
     expect(fieldKind({ type: "array", items: { type: "object" } })).toBe("json");
+    expect(
+      fieldKind({ type: "array", items: { type: "object", properties: { a: { type: "array" } } } }),
+    ).toBe("json");
     expect(fieldKind({})).toBe("json");
   });
 });
@@ -64,5 +74,28 @@ describe("formatField / parseField", () => {
     expect(() => parseField("json", "{", {}, "Extra")).toThrow("Extra is not valid JSON");
     expect(formatField("boolean", true)).toBe(true);
     expect(parseField("boolean", false, {}, "On")).toBe(false);
+  });
+});
+
+describe("arrays of objects", () => {
+  const items = {
+    type: "object",
+    required: ["id"],
+    properties: { id: { type: "string", title: "Model" }, name: { type: "string" }, n: { type: "integer" } },
+  };
+
+  test("flat objects of strings and numbers get a row editor", () => {
+    expect(fieldKind({ type: "array", items })).toBe("rows");
+    expect(rowColumns(items)?.map((c) => c.label)).toEqual(["Model", "name", "n"]);
+  });
+
+  test("a row keeps typed values and drops blanks", () => {
+    const cols = rowColumns(items) ?? [];
+    expect(parseRow(cols, ["gpt-x", "", "8"], items.required, "Model")).toEqual({ id: "gpt-x", n: 8 });
+  });
+
+  test("a blank required field is rejected", () => {
+    const cols = rowColumns(items) ?? [];
+    expect(() => parseRow(cols, ["", "Friendly", ""], items.required, "Model")).toThrow("required");
   });
 });

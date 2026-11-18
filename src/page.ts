@@ -1136,6 +1136,11 @@ input.pane-name:focus { background: var(--raised); border-color: var(--strong); 
 .form { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field.toggle { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.rows-list { display: flex; flex-direction: column; gap: 8px; }
+.rows-row { display: flex; align-items: center; gap: 8px; }
+.rows-row .input { flex: 1; min-width: 0; }
+.rows-row .icon-btn { flex: none; }
+.rows-add { display: flex; }
 .field-label { font-size: 13px; font-weight: 500; }
 .field-desc { font-size: 12px; color: var(--faint); }
 .field.toggle .field-desc { margin-top: 2px; }
