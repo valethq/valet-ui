@@ -30,6 +30,14 @@ describe("fieldKind", () => {
     expect(fieldKind({ type: "array", items: { type: "string" } })).toBe("list");
   });
 
+  test("honors x-widget hints", () => {
+    expect(fieldKind({ type: "string", "x-widget": "textarea" })).toBe("textarea");
+    expect(fieldKind({ type: "string", "x-widget": "secret" })).toBe("secretName");
+    expect(fieldKind({ type: "object", "x-widget": "model" })).toBe("model");
+    expect(fieldKind({ type: "array", "x-widget": "models" })).toBe("models");
+    expect(fieldKind({ type: "string", enum: ["a", "b"], "x-widget": "segmented" })).toBe("segmented");
+  });
+
   test("anything else is edited as JSON", () => {
     expect(fieldKind({ type: "object" })).toBe("json");
     expect(fieldKind({ type: "array", items: { type: "object" } })).toBe("json");

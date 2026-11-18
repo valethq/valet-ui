@@ -124,6 +124,7 @@ export interface ModelInfo {
   id: string;
   name: string;
   contextWindow?: number;
+  maxOutputTokens?: number;
   efforts?: string[];
   defaultEffort?: string;
   fast?: boolean;
@@ -131,6 +132,8 @@ export interface ModelInfo {
   hidden?: boolean;
   /** Catalog: false → More section (out of the main picker). */
   show?: boolean;
+  /** Added by hand in valet-agent's models config. */
+  custom?: boolean;
 }
 
 export interface ProviderModels {
@@ -168,12 +171,39 @@ export interface SettingsEntry {
   pluginName?: string;
   title: string;
   description?: string;
+  /** One of the plugin's `x-pages` ids; omit for the main page (12.1). */
+  page?: string;
   schema?: Record<string, unknown>;
   values?: Record<string, unknown>;
   /** Raw view blocks; views/blocks.ts validates them. */
   blocks?: unknown[];
   viewError?: string;
   refreshMs?: number;
+}
+
+/** Group a settings page is listed under (SDK SettingsGroup). */
+export type SettingsGroup = "models" | "providers" | "tools" | "system";
+
+/** One plugin's config as GET /api/core/settings serves it (12.1). */
+export interface CorePluginSettings {
+  plugin: string;
+  name?: string;
+  description?: string;
+  version?: string;
+  provides: string[];
+  state: "active" | "failed" | "disabled" | "pending";
+  enabled: boolean;
+  schema?: Record<string, unknown>;
+  values: Record<string, unknown>;
+  sources: Record<string, "default" | "file" | "settings">;
+  restartRequired?: string;
+}
+
+export type SecretSource = "file" | "env" | null;
+
+export interface SecretMeta {
+  name: string;
+  source: SecretSource;
 }
 
 // ---- WS frames (10.3) ----

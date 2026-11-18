@@ -1,5 +1,6 @@
 import type {
   ChatMessage,
+  CorePluginSettings,
   PartInput,
   PartType,
   PluginStatus,
@@ -7,6 +8,7 @@ import type {
   ProviderModels,
   QueueMode,
   Run,
+  SecretMeta,
   Session,
   SessionState,
   SettingsEntry,
@@ -353,17 +355,28 @@ export async function compactSession(id: string, instructions: string): Promise<
   });
 }
 
-/** One plugin's config as GET /api/core/settings serves it (12.1). */
-export interface CorePluginSettings {
-  plugin: string;
-  values: Record<string, unknown>;
-  [key: string]: unknown;
-}
+export type { CorePluginSettings };
 
 export const listCoreSettings = (): Promise<CorePluginSettings[]> => get("/api/core/settings");
 
 export const getCoreSettings = (plugin: string): Promise<CorePluginSettings> =>
   get(`/api/core/settings/${encodeURIComponent(plugin)}`);
+
+export const patchCoreSettings = (
+  plugin: string,
+  patch: { config?: Record<string, unknown>; enabled?: boolean },
+): Promise<CorePluginSettings> => req("PATCH", `/api/core/settings/${encodeURIComponent(plugin)}`, patch);
+
+export const listSecrets = (): Promise<SecretMeta[]> => get("/api/core/secrets");
+
+export const getSecretMeta = (name: string): Promise<SecretMeta> =>
+  get(`/api/core/secrets/${encodeURIComponent(name)}`);
+
+export const putSecret = (name: string, value: string): Promise<SecretMeta> =>
+  req("PUT", `/api/core/secrets/${encodeURIComponent(name)}`, { value });
+
+export const deleteSecret = (name: string): Promise<SecretMeta> =>
+  req("DELETE", `/api/core/secrets/${encodeURIComponent(name)}`);
 
 /** The agent's default queue mode from its core config; "queue" when it is unset or unreadable. */
 export async function defaultQueueMode(): Promise<QueueMode> {
@@ -377,15 +390,34 @@ function stringList(v: unknown): string[] | undefined {
   return out.length === 0 ? undefined : out;
 }
 
+function parseModel(m: Record<string, unknown>) {
+  const efforts = stringList(m.efforts);
+  return {
+    id: String(m.id ?? m.model ?? m.name ?? ""),
+    name: String(m.name ?? m.label ?? m.id ?? m.model ?? ""),
+    ...(typeof m.contextWindow === "number" ? { contextWindow: m.contextWindow } : {}),
+    ...(typeof m.maxOutputTokens === "number" ? { maxOutputTokens: m.maxOutputTokens } : {}),
+    ...(efforts === undefined ? {} : { efforts }),
+    ...(typeof m.defaultEffort === "string" ? { defaultEffort: m.defaultEffort } : {}),
+    ...(typeof m.fast === "boolean" ? { fast: m.fast } : {}),
+    ...(typeof m.fastByDefault === "boolean" ? { fastByDefault: m.fastByDefault } : {}),
+    ...(typeof m.hidden === "boolean" ? { hidden: m.hidden } : {}),
+    ...(typeof m.show === "boolean" ? { show: m.show } : {}),
+    ...(typeof m.custom === "boolean" ? { custom: m.custom } : {}),
+  };
+}
+
+function catalogEntries(d: unknown): Record<string, unknown>[] {
+  if (Array.isArray(d)) return d as Record<string, unknown>[];
+  const o = d as Record<string, unknown>;
+  const list = o.providers ?? o.models ?? [];
+  return Array.isArray(list) ? (list as Record<string, unknown>[]) : [];
+}
+
 export async function listModels(): Promise<ProviderModels[]> {
   const d = (await get("/plugins/valet-agent/models")) as unknown;
-  const entries = Array.isArray(d)
-    ? d
-    : (((d as Record<string, unknown>).providers ??
-        (d as Record<string, unknown>).models ??
-        []) as unknown[]);
   const out: ProviderModels[] = [];
-  for (const e of entries as Record<string, unknown>[]) {
+  for (const e of catalogEntries(d)) {
     const provider = String(e.provider ?? e.key ?? e.id ?? "");
     if (provider === "") continue;
     const models = (Array.isArray(e.models) ? e.models : Array.isArray(e.list) ? e.list : []) as Record<
@@ -396,20 +428,7 @@ export async function listModels(): Promise<ProviderModels[]> {
       provider,
       label: String(e.label ?? e.name ?? provider),
       ...(typeof e.icon === "string" && e.icon !== "" ? { icon: e.icon } : {}),
-      models: models.map((m) => {
-        const efforts = stringList(m.efforts);
-        return {
-          id: String(m.id ?? m.model ?? m.name ?? ""),
-          name: String(m.name ?? m.label ?? m.id ?? m.model ?? ""),
-          ...(typeof m.contextWindow === "number" ? { contextWindow: m.contextWindow } : {}),
-          ...(efforts === undefined ? {} : { efforts }),
-          ...(typeof m.defaultEffort === "string" ? { defaultEffort: m.defaultEffort } : {}),
-          ...(typeof m.fast === "boolean" ? { fast: m.fast } : {}),
-          ...(typeof m.fastByDefault === "boolean" ? { fastByDefault: m.fastByDefault } : {}),
-          ...(typeof m.hidden === "boolean" ? { hidden: m.hidden } : {}),
-          ...(typeof m.show === "boolean" ? { show: m.show } : {}),
-        };
-      }),
+      models: models.map(parseModel),
     });
   }
   return out;

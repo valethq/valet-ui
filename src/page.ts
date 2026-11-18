@@ -984,11 +984,20 @@ button.part-file:hover { background: var(--tint); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 8px 24px; }
 .modal-head h2 { font-family: var(--font-head); margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; }
 .modal-body { overflow-y: auto; padding: 0 0 24px; }
-.modal.settings-modal { width: min(720px, 100%); height: min(640px, 100%); max-height: none; }
+.modal.settings-modal { width: min(880px, 100%); height: min(680px, 100%); max-height: none; }
 .modal.settings-modal .modal-body { flex: 1; min-height: 0; display: flex; }
 .settings-tabbed { display: flex; flex: 1; min-height: 0; width: 100%; }
-.settings-tabs { display: flex; flex-direction: column; gap: 2px; flex: none; width: 176px; min-height: 0; overflow-y: auto; padding: 4px 12px 16px 16px; border-right: 1px solid var(--border); scrollbar-width: none; }
+.settings-tabs { display: flex; flex-direction: column; gap: 2px; flex: none; width: 188px; min-height: 0; overflow-y: auto; padding: 4px 12px 16px 16px; border-right: 1px solid var(--border); scrollbar-width: none; }
 .settings-tabs::-webkit-scrollbar { display: none; }
+.settings-group-label {
+  margin: 12px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.settings-group-label:first-child { margin-top: 4px; }
 .settings-tab {
   flex: none;
   padding: 8px 10px;
@@ -1009,6 +1018,47 @@ button.part-file:hover { background: var(--tint); }
 .settings-section h3 { font-family: var(--font-head); display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 13.5px; font-weight: 600; }
 .settings-section .plugin-id { font-size: 11.5px; font-weight: 400; color: var(--faint); font-family: var(--mono); }
 .settings-section .plugin-name { font-size: 11.5px; font-weight: 400; color: var(--faint); }
+.settings-banner {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  color: var(--text);
+  font-size: 12.5px;
+}
+.settings-panel-block { margin: 0 0 18px; padding: 0 0 16px; border-bottom: 1px solid var(--border); }
+.settings-panel-block .panel-title { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.form-section { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+.form-section-title { margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--faint); letter-spacing: .02em; }
+.form-advanced { margin-top: 4px; }
+.form-advanced > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--muted);
+  padding: 6px 0;
+}
+.form-advanced > summary::-webkit-details-marker { display: none; }
+.form-advanced-body { display: flex; flex-direction: column; gap: 14px; padding: 4px 0 0; }
+.secret-name { display: flex; flex-direction: column; gap: 8px; }
+.secret-row { display: flex; align-items: center; gap: 8px; }
+.secret-row .input { flex: 1; min-width: 0; }
+.model-ref { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center; }
+.model-ref .model-fast { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.models-table { display: flex; flex-direction: column; gap: 8px; overflow-x: auto; }
+.models-head, .models-row {
+  display: grid;
+  grid-template-columns: 44px minmax(72px, 0.7fr) minmax(100px, 1fr) minmax(100px, 1fr) 72px 72px minmax(90px, 0.9fr) 44px 32px;
+  gap: 6px;
+  align-items: center;
+}
+.models-head { font-size: 11px; font-weight: 600; color: var(--faint); letter-spacing: .02em; }
+.models-provider { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.models-row .input { min-width: 0; padding: 6px 8px; font-size: 12.5px; height: 32px; }
+.models-row .switch { transform: scale(0.9); transform-origin: left center; }
+.models-add { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.models-add .field-select { width: auto; min-width: 140px; height: 34px; }
 .section-desc { margin: -6px 0 14px; font-size: 13px; color: var(--muted); }
 .form-actions.start { justify-content: flex-start; flex-wrap: wrap; }
 .input[aria-invalid=true] { border-color: var(--danger); }
