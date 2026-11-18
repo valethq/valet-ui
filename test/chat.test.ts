@@ -1524,7 +1524,12 @@ describe("model chip logos", () => {
   const chipFor = (provider: string, model: string) => {
     const g = globalThis as Record<string, unknown>;
     const savedDocument = g.document;
-    g.document = { createElement: (tag: string) => new FakeEl(tag) };
+    const savedWindow = g.window;
+    // Just enough DOM for the model popover to open and fill its rows.
+    const createElement = (tag: string) =>
+      Object.assign(new FakeEl(tag), { focus() {}, scrollIntoView() {} }, { style: { removeProperty() {} } });
+    g.document = { createElement, addEventListener() {}, removeEventListener() {} };
+    g.window = { innerWidth: 1000 };
     try {
       const root = new FakeEl("div");
       const chat = createChat(root as unknown as HTMLElement, {
@@ -1547,35 +1552,43 @@ describe("model chip logos", () => {
       const chip = findByClass(root, "model") as FakeEl;
       const lead = findByClass(chip, "lead") as FakeEl;
       const sub = findByClass(chip, "chip-sub") as FakeEl;
-      return {
+      const shown = {
         logos: logos(lead),
-        stack: findByClass(lead, "logo-stack") !== undefined,
-        behind: findByClass(lead, "harness")?.attrs.get("data-logo"),
+        pair: findByClass(lead, "logo-pair") !== undefined,
+        harness: findByClass(lead, "harness")?.attrs.get("data-logo"),
         name: findByClass(chip, "chip-label")?.textContent,
         sub: sub.style.display === "none" ? undefined : sub.textContent,
       };
+      (findTag(chip, "button") as FakeEl).dispatch("click", {});
+      const rows = (findByClass(root, "menu") as FakeEl).querySelectorAll(".menu-lead").map(logos);
+      return { ...shown, rows };
     } finally {
       g.document = savedDocument;
+      g.window = savedWindow;
     }
   };
 
-  test("a harness running another lab's model stacks its mark behind the model's, with an 'on' line", () => {
-    expect(chipFor("cursor", "claude-sonnet-5-high")).toEqual({
-      logos: ["cursor", "claude"],
-      stack: true,
-      behind: "cursor",
+  test("a harness running another lab's model puts its mark beside the model's, with an 'on' line", () => {
+    expect(chipFor("cursor", "claude-sonnet-5-high")).toMatchObject({
+      logos: ["claude", "cursor"],
+      pair: true,
+      harness: "cursor",
       name: "Claude Sonnet 5",
       sub: "on Cursor",
     });
   });
 
   test("a harness whose logo matches the model shows the model mark and name alone", () => {
-    expect(chipFor("claude-code", "opus-high")).toEqual({
+    expect(chipFor("claude-code", "opus-high")).toMatchObject({
       logos: ["claude"],
-      stack: false,
-      behind: undefined,
+      pair: false,
+      harness: undefined,
       name: "Claude Opus 5.5",
       sub: undefined,
     });
+  });
+
+  test("picker rows show only the model's own logo, never the harness's", () => {
+    expect(chipFor("cursor", "claude-sonnet-5-high").rows).toEqual([["claude"], ["claude"]]);
   });
 });

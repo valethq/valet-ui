@@ -123,6 +123,12 @@ label.chip .lead, label.chip .chevron { position: absolute; }
 label.chip .lead { left: 12px; }
 label.chip .chevron { right: 11px; }
 .chip .lead > * { width: 15px; height: 15px; }
+/* Model mark in front, the harness mark beside it on the same line, tucked slightly under. */
+.logo-pair { display: inline-flex; flex: none; align-items: center; }
+.chip .lead > .logo-pair { width: auto; }
+.logo-pair > .logo { width: 15px; height: 15px; }
+.logo-pair > .logo:not(.harness) { position: relative; z-index: 1; }
+.logo-pair > .logo.harness { margin-left: -4px; }
 button.chip .lead > * { --fx-from: scale(.7); --fx-blur: 3px; animation: focus-in var(--dur-focus-sm) var(--ease-focus); }
 .chip .chevron { opacity: .7; transition: transform .22s var(--ease-focus), opacity .15s ease; }
 button.chip[aria-expanded=true] .chevron { transform: rotate(180deg); opacity: 1; }
@@ -266,11 +272,6 @@ button.chip:active:not(:disabled) { transform: none; }
 .menu-item:active:not(:disabled) { transform: none; }
 .menu-lead { display: inline-flex; flex: none; }
 .menu-lead .logo, .menu-lead .icon { width: 16px; height: 16px; }
-.menu-lead .logo-stack { width: 16px; height: 16px; }
-/* Harness mark behind the model mark, peeking out at the lower left. */
-.logo-stack { position: relative; display: inline-flex; flex: none; }
-.logo-stack > .logo { position: relative; z-index: 1; width: 100%; height: 100%; }
-.logo-stack > .logo.harness { position: absolute; z-index: 0; left: -38%; top: 38%; width: 85%; height: 85%; }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-check { display: inline-flex; flex: none; color: var(--muted); visibility: hidden; }
 .menu-check .icon { width: 15px; height: 15px; }

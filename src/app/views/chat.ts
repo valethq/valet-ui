@@ -741,7 +741,11 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   let released: string[] = [];
 
   const familyLogos = (f: ModelFamily) => logosFor(`${f.label} ${f.key}`, f.provider, f.providerIcon);
-  const familyLogo = (f: ModelFamily): HTMLElement => logoMarks(familyLogos(f)) ?? icon("sparkles");
+  /** Picker rows show the model's own mark only, never the harness's. */
+  const familyLogo = (f: ModelFamily): HTMLElement => {
+    const logo = logoFor(`${f.label} ${f.key}`, f.provider);
+    return logo === undefined ? icon("sparkles") : logoMark(logo);
+  };
   const modelMenu = popover(
     modelChip.button,
     () => {
