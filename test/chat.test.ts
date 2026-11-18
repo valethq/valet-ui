@@ -182,6 +182,11 @@ class FakeEl {
     return FakeEl.layout(this);
   }
   readonly classList = {
+    add: (...names: string[]): void => {
+      const cur = new Set((this.attrs.get("class") ?? "").split(" ").filter(Boolean));
+      for (const n of names) cur.add(n);
+      this.attrs.set("class", [...cur].join(" "));
+    },
     remove: (...names: string[]): void => {
       const left = (this.attrs.get("class") ?? "").split(" ").filter((c) => !names.includes(c));
       this.attrs.set("class", left.join(" "));

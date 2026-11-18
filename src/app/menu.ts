@@ -220,14 +220,19 @@ export function popover(
         m.classList.add("panel");
         if (panel.querySelector(".fb") !== null) stretch(m, true);
       });
-    m.classList.remove("panel");
+    m.classList.remove("panel", "searchable");
     stretch(m, false);
     const search = searchable
       ? el("input", { class: "menu-search", type: "search", placeholder: "Search", "aria-label": "Search" })
       : null;
     const empty = el("div", { class: "menu-empty", text: "No matches" });
     empty.style.display = "none";
-    if (search !== null) m.append(search);
+    // Search stays outside the scroll body so it never rides the list.
+    const body = search !== null ? el("div", { class: "menu-body" }) : m;
+    if (search !== null) {
+      m.classList.add("searchable");
+      m.append(search, body);
+    }
     const groups: { title: string; group: HTMLElement }[] = [];
     for (const s of sections()) {
       const group = el("div", { class: "menu-section" });
@@ -276,9 +281,9 @@ export function popover(
         if (move !== undefined) dragRow(row, b, index, move);
         group.append(row);
       }
-      m.append(group);
+      body.append(group);
     }
-    m.append(empty);
+    body.append(empty);
     const filter = (): void => {
       const q = search?.value.trim().toLowerCase() ?? "";
       let total = 0;
