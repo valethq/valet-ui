@@ -80,21 +80,29 @@ export function logosFor(model: string, provider = "", icon?: string): LogoId[] 
   return own === undefined ? [harness] : [harness, own];
 }
 
-/** One mark, or for [harness, model] a `.logo-pair`: the two side by side,
- * harness first. Undefined when there are none. */
+const logoUrl = (id: LogoId): string => `url("data:image/svg+xml,${encodeURIComponent(LOGOS[id].svg)}")`;
+
+/** One mark, or for [harness, model] a `.logo-pair`: harness first, the model
+ * mark over it. The pair carries the model mark's image as `--model-logo`,
+ * which shapes the cutout in the harness mark. Undefined when there are none. */
 export function logoMarks(ids: LogoId[]): HTMLSpanElement | undefined {
   const [first, second] = ids;
   if (first === undefined) return undefined;
   if (second === undefined) return logoMark(first);
-  return el("span", { class: "logo-pair" }, logoMark(first, "harness"), logoMark(second));
+  return el(
+    "span",
+    { class: "logo-pair", style: `--model-logo: ${logoUrl(second)}` },
+    logoMark(first, "harness"),
+    logoMark(second),
+  );
 }
 
 export function logoMark(id: LogoId, extra = ""): HTMLSpanElement {
-  const { svg, mono } = LOGOS[id];
+  const { mono } = LOGOS[id];
   return el("span", {
     class: `logo${mono ? " mono" : ""}${extra === "" ? "" : ` ${extra}`}`,
     "data-logo": id,
     "aria-hidden": "true",
-    style: `--logo: url("data:image/svg+xml,${encodeURIComponent(svg)}")`,
+    style: `--logo: ${logoUrl(id)}`,
   });
 }

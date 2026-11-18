@@ -1,3 +1,4 @@
+import { logoPairCss } from "./app/logo-pair";
 import { themeBootScript, themeCss } from "./app/themes";
 
 const CSS = `
@@ -123,13 +124,7 @@ label.chip .lead, label.chip .chevron { position: absolute; }
 label.chip .lead { left: 12px; }
 label.chip .chevron { right: 11px; }
 .chip .lead > * { width: 15px; height: 15px; }
-/* Harness mark, then the model mark on the same line. In the chip the pair keeps a lone icon's 15px box and
-   spills out of it evenly on both sides, so its centre stays where that icon's would be; the right margin
-   (the spill) keeps the label its usual gap from the model mark. */
-.logo-pair { --pair-gap: 5px; display: inline-flex; flex: none; align-items: center; justify-content: center; }
-.logo-pair > .logo { width: 15px; height: 15px; }
-.logo-pair > .logo.harness { margin-right: var(--pair-gap); }
-.chip .lead > .logo-pair { margin-right: calc((15px + var(--pair-gap)) / 2); }
+${logoPairCss()}
 button.chip .lead > * { --fx-from: scale(.7); --fx-blur: 3px; animation: focus-in var(--dur-focus-sm) var(--ease-focus); }
 .chip .chevron { opacity: .7; transition: transform .22s var(--ease-focus), opacity .15s ease; }
 button.chip[aria-expanded=true] .chevron { transform: rotate(180deg); opacity: 1; }
@@ -147,7 +142,7 @@ button.chip:hover:not(:disabled), button.chip[aria-expanded=true] { background: 
 button.chip:active:not(:disabled) { transform: none; }
 .chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-text { display: inline-flex; flex-direction: column; min-width: 0; line-height: 1.15; text-align: left; }
-.chip-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 400; color: var(--faint); }
+.chip-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9.5px; font-weight: 400; color: var(--faint); }
 
 .pop { position: relative; display: inline-flex; min-width: 0; }
 .menu {

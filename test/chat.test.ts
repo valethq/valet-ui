@@ -1552,7 +1552,12 @@ describe("model chip logos", () => {
       const chip = findByClass(root, "model") as FakeEl;
       const lead = findByClass(chip, "lead") as FakeEl;
       const sub = findByClass(chip, "chip-sub") as FakeEl;
+      const pair = findByClass(lead, "logo-pair");
+      const cutoutUrl = pair?.attrs.get("style")?.replace("--model-logo: ", "");
       const shown = {
+        cutout: pair?.children.find(
+          (c) => c instanceof FakeEl && c.attrs.get("style") === `--logo: ${cutoutUrl}`,
+        ) as FakeEl | undefined,
         logos: logos(lead),
         pair: findByClass(lead, "logo-pair") !== undefined,
         harness: findByClass(lead, "harness")?.attrs.get("data-logo"),
@@ -1561,18 +1566,19 @@ describe("model chip logos", () => {
       };
       (findTag(chip, "button") as FakeEl).dispatch("click", {});
       const rows = (findByClass(root, "menu") as FakeEl).querySelectorAll(".menu-lead").map(logos);
-      return { ...shown, rows };
+      return { ...shown, cutout: shown.cutout?.attrs.get("data-logo"), rows };
     } finally {
       g.document = savedDocument;
       g.window = savedWindow;
     }
   };
 
-  test("a harness running another lab's model puts its mark first, beside the model's, with an 'on' line", () => {
+  test("a harness running another lab's model puts its mark first, under the model's, with an 'on' line", () => {
     expect(chipFor("cursor", "claude-sonnet-5-high")).toMatchObject({
       logos: ["cursor", "claude"],
       pair: true,
       harness: "cursor",
+      cutout: "claude",
       name: "Claude Sonnet 5",
       sub: "on Cursor",
     });
@@ -1583,6 +1589,7 @@ describe("model chip logos", () => {
       logos: ["claude"],
       pair: false,
       harness: undefined,
+      cutout: undefined,
       name: "Claude Opus 5.5",
       sub: undefined,
     });
