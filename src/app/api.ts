@@ -6,7 +6,6 @@ import type {
   PluginStatus,
   Project,
   ProviderModels,
-  QueueMode,
   Run,
   SecretMeta,
   Session,
@@ -377,12 +376,6 @@ export const putSecret = (name: string, value: string): Promise<SecretMeta> =>
 
 export const deleteSecret = (name: string): Promise<SecretMeta> =>
   req("DELETE", `/api/core/secrets/${encodeURIComponent(name)}`);
-
-/** The agent's default queue mode from its core config; "queue" when it is unset or unreadable. */
-export async function defaultQueueMode(): Promise<QueueMode> {
-  const entry = await getCoreSettings("valet-agent").catch(() => undefined);
-  return entry?.values?.defaultQueueMode === "interrupt" ? "interrupt" : "queue";
-}
 
 function stringList(v: unknown): string[] | undefined {
   if (!Array.isArray(v)) return undefined;

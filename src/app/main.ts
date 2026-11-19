@@ -33,19 +33,8 @@ import {
   titleSuffixes,
   topLevel,
   upsertSession,
-  withQueueMode,
 } from "./state";
-import type {
-  Message,
-  MessageDelta,
-  Part,
-  Project,
-  ProviderModels,
-  QueueMode,
-  Run,
-  RunStatus,
-  Session,
-} from "./types";
+import type { Message, MessageDelta, Part, Project, ProviderModels, Run, RunStatus, Session } from "./types";
 import { syncCustom } from "./themes";
 import { renderAuth } from "./views/auth";
 import { createChat, type ChatHandle, type ModelSel } from "./views/chat";
@@ -769,19 +758,6 @@ function compactOpen(): void {
     .catch((e: unknown) => toast(e instanceof Error ? e.message : "compact failed"));
 }
 
-function setQueueMode(mode: QueueMode): void {
-  const view = app.view;
-  if (view === null) return;
-  api
-    .updateSession(view.session.id, { settings: withQueueMode(view.session.settings, mode) })
-    .then((session) => {
-      if (app.view?.session.id === session.id) app.view.session = session;
-      app.sessions = upsertSession(app.sessions, session);
-      scheduleRender();
-    })
-    .catch((e: unknown) => toast(e instanceof Error ? e.message : "queue mode change failed"));
-}
-
 async function renameSession(id: string, title: string): Promise<void> {
   const session = await api.updateSession(id, { title }).catch((e: unknown) => {
     toast(e instanceof Error ? e.message : "rename failed");
@@ -1002,7 +978,6 @@ async function startApp(): Promise<void> {
       if (app.view !== null) void moveTo(app.view.session.id, projectId);
     },
     onCompact: compactOpen,
-    onQueueMode: setQueueMode,
     onStop: () => {
       const runId = app.view?.activeRunId;
       if (runId == null) return;
@@ -1073,7 +1048,6 @@ async function startApp(): Promise<void> {
   app.projects = await api.listProjects();
   app.providers = await api.listModels().catch(() => []);
   app.chat.setProjects(app.projects);
-  api.defaultQueueMode().then((mode) => app.chat?.setDefaultQueueMode(mode));
   loadPartTypes();
   const remembered = (() => {
     try {

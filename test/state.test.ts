@@ -13,7 +13,6 @@ import {
   forkSource,
   hasPartial,
   newSessionView,
-  queueModeOf,
   replaceMessages,
   searchSessions,
   needsUser,
@@ -22,7 +21,6 @@ import {
   timeAgo,
   titleSuffixes,
   upsertSession,
-  withQueueMode,
 } from "../src/app/state";
 import type { ChatMessage, Message, MessageDelta, Part, PartData, Run, Session } from "../src/app/types";
 
@@ -533,28 +531,6 @@ describe("session state", () => {
     applySessionState(view, { ...state, queued: 0 });
     expect(view.queued).toBe(0);
     expect(view.activeRunId).toBe("run_1");
-  });
-});
-
-describe("queue mode", () => {
-  test("the session's own mode wins over the default", () => {
-    expect(queueModeOf(session({ settings: { agent: { queueMode: "interrupt" } } }), "queue")).toBe(
-      "interrupt",
-    );
-    expect(queueModeOf(session(), "interrupt")).toBe("interrupt");
-    expect(queueModeOf(session({ settings: { agent: { queueMode: "bogus" } } }), "queue")).toBe("queue");
-  });
-
-  test("setting it keeps every other setting", () => {
-    const settings = {
-      model: { provider: "p", model: "m" },
-      agent: { parentRunId: "run_1", forkedFrom: { sessionId: "ses_0" } },
-    };
-    expect(withQueueMode(settings, "interrupt")).toEqual({
-      model: { provider: "p", model: "m" },
-      agent: { parentRunId: "run_1", forkedFrom: { sessionId: "ses_0" }, queueMode: "interrupt" },
-    });
-    expect(withQueueMode({}, "queue")).toEqual({ agent: { queueMode: "queue" } });
   });
 });
 

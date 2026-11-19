@@ -5,7 +5,7 @@ import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
 import { focusDuration } from "../motion";
 import { groupModels, type ModelFamily, pickEffort } from "../models";
-import { queueModeOf, type SessionView } from "../state";
+import type { SessionView } from "../state";
 import {
   bindSubs,
   isSubagentCall,
@@ -15,16 +15,7 @@ import {
   type SubRow,
   type ToolData,
 } from "../subagents";
-import type {
-  ChatMessage,
-  Part,
-  PartData,
-  PartInput,
-  PartType,
-  Project,
-  ProviderModels,
-  QueueMode,
-} from "../types";
+import type { ChatMessage, Part, PartData, PartInput, PartType, Project, ProviderModels } from "../types";
 import { createAttachments, filePart } from "./attachments";
 import { galleryItems, openLightbox } from "./lightbox";
 import { copyImage, type FileData, imageDeck, imageFigures, isImage, releaseBlobs, saveBlob } from "./media";
@@ -48,7 +39,6 @@ export interface ChatCallbacks {
   onFork(messageId?: string): void;
   onMove(projectId: string): void;
   onCompact(): void;
-  onQueueMode(mode: QueueMode): void;
   onToggleNav(): void;
   /** A subagent card or the parent breadcrumb was clicked. */
   onOpenSession(id: string): void;
@@ -71,8 +61,6 @@ export interface ChatHandle {
   setPartTypes(types: PartType[]): void;
   /** Projects a session can move to. */
   setProjects(projects: Project[]): void;
-  /** The agent's default queue mode, for sessions that don't set their own. */
-  setDefaultQueueMode(mode: QueueMode): void;
 }
 
 const LANDING = ["How are you?", "Ready when you are.", "What should we work on?", "What's on your mind?"];
@@ -967,12 +955,10 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   );
 
   let projects: Project[] = [];
-  let defaultMode: QueueMode = "queue";
   const sessionMenu = popover(
     iconButton("more", "Session actions", "session-menu"),
     () => {
       const session = current?.session;
-      const mode = session === undefined ? defaultMode : queueModeOf(session, defaultMode);
       const targets = projects.filter((p) => p.id !== session?.projectId);
       const sections: MenuSection[] = [
         {
@@ -980,17 +966,6 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
             { label: "Rename", lead: icon("pencil"), onSelect: () => cb.onRename() },
             { label: "Fork", lead: icon("branch"), onSelect: () => cb.onFork() },
             { label: "Compact", lead: icon("compact"), onSelect: () => cb.onCompact() },
-          ],
-        },
-        {
-          title: "New messages while running",
-          items: [
-            { label: "Queue", selected: mode === "queue", onSelect: () => cb.onQueueMode("queue") },
-            {
-              label: "Interrupt",
-              selected: mode === "interrupt",
-              onSelect: () => cb.onQueueMode("interrupt"),
-            },
           ],
         },
       ];
@@ -1390,9 +1365,6 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     setSendError,
     setProjects(list) {
       projects = list;
-    },
-    setDefaultQueueMode(mode) {
-      defaultMode = mode;
     },
     setPartTypes(types) {
       partTypes.clear();

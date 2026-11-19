@@ -44,8 +44,6 @@ export interface SessionState {
   usage?: Record<string, number>;
 }
 
-export type QueueMode = "queue" | "interrupt";
-
 export interface Run {
   id: string;
   sessionId: string;

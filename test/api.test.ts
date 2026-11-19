@@ -4,7 +4,6 @@ import {
   authStatus,
   blobUrl,
   compactSession,
-  defaultQueueMode,
   deleteSession,
   forkSession,
   getSessionState,
@@ -368,18 +367,6 @@ describe("valet-agent session actions", () => {
   test("compact still fails on a real error", async () => {
     record(() => new Response('{"error":"nope"}', { status: 500 }));
     expect(await compactSession("ses_1", "").catch((e: unknown) => e)).toBeInstanceOf(ApiError);
-  });
-
-  test("the default queue mode comes from core settings and falls back to queue", async () => {
-    record(
-      () =>
-        new Response('{"plugin":"valet-agent","values":{"defaultQueueMode":"interrupt"}}', { status: 200 }),
-    );
-    expect(await defaultQueueMode()).toBe("interrupt");
-    record(() => new Response('{"plugin":"valet-agent","values":{"defaultQueueMode":""}}', { status: 200 }));
-    expect(await defaultQueueMode()).toBe("queue");
-    record(() => new Response("{}", { status: 403 }));
-    expect(await defaultQueueMode()).toBe("queue");
   });
 });
 

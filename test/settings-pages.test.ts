@@ -51,13 +51,13 @@ describe("buildSettingsPages", () => {
         models: { title: "Models", group: "inference", order: 900 },
       },
       properties: {
-        defaultQueueMode: { type: "string", enum: ["queue", "interrupt"] },
+        queueMode: { type: "string", enum: ["queue", "interrupt"] },
         models: { type: "array", "x-widget": "models", "x-page": "models" },
         defaultModel: { type: "object", "x-widget": "model", "x-page": "models" },
       },
     },
-    values: { defaultQueueMode: "queue", models: [] },
-    sources: { defaultQueueMode: "default" },
+    values: { queueMode: "queue", models: [] },
+    sources: { queueMode: "default" },
   };
 
   const provider: CorePluginSettings = {
@@ -91,7 +91,7 @@ describe("buildSettingsPages", () => {
     expect(pages.map((p) => p.id).sort()).toEqual(["valet-agent", "valet-agent:models", "valet-modelapi"]);
     const main = pages.find((p) => p.id === "valet-agent");
     const models = pages.find((p) => p.id === "valet-agent:models");
-    expect(main?.fieldKeys).toEqual(["defaultQueueMode"]);
+    expect(main?.fieldKeys).toEqual(["queueMode"]);
     expect(main?.panels.map((p) => p.key)).toEqual(["usage"]);
     expect(models?.group).toBe("inference");
     expect(models?.fieldKeys.sort()).toEqual(["defaultModel", "models"]);
