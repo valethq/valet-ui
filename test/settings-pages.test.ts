@@ -10,8 +10,8 @@ import {
 
 describe("deriveGroup", () => {
   test("honors x-group, else inference → providers, tools-only → tools", () => {
-    expect(deriveGroup([], { "x-group": "models" })).toBe("models");
-    expect(deriveGroup(["inference@1"])).toBe("providers");
+    expect(deriveGroup([], { "x-group": "inference" })).toBe("inference");
+    expect(deriveGroup(["inference@1"])).toBe("inference");
     expect(deriveGroup(["tools@1"])).toBe("tools");
     expect(deriveGroup(["tools@1", "settings@1"])).toBe("tools");
     expect(deriveGroup(["context@1", "tools@1"])).toBe("system");
@@ -48,7 +48,7 @@ describe("buildSettingsPages", () => {
       "x-group": "system",
       "x-order": 0,
       "x-pages": {
-        models: { title: "Models", group: "models", order: 0 },
+        models: { title: "Models", group: "inference", order: 900 },
       },
       properties: {
         defaultQueueMode: { type: "string", enum: ["queue", "interrupt"] },
@@ -68,7 +68,7 @@ describe("buildSettingsPages", () => {
     enabled: true,
     schema: {
       type: "object",
-      "x-group": "providers",
+      "x-group": "inference",
       "x-order": 20,
       properties: { endpoints: { type: "array" } },
     },
@@ -93,17 +93,17 @@ describe("buildSettingsPages", () => {
     const models = pages.find((p) => p.id === "valet-agent:models");
     expect(main?.fieldKeys).toEqual(["defaultQueueMode"]);
     expect(main?.panels.map((p) => p.key)).toEqual(["usage"]);
-    expect(models?.group).toBe("models");
+    expect(models?.group).toBe("inference");
     expect(models?.fieldKeys.sort()).toEqual(["defaultModel", "models"]);
     expect(models?.panels.map((p) => p.key)).toEqual(["models-extra"]);
-    expect(pages.find((p) => p.id === "valet-modelapi")?.group).toBe("providers");
+    expect(pages.find((p) => p.id === "valet-modelapi")?.group).toBe("inference");
   });
 
   test("groupPages sorts by group order then page order", () => {
     const pages = buildSettingsPages([agent, provider], []);
     const grouped = groupPages(pages);
-    expect(grouped.map((g) => g.group)).toEqual(["models", "providers", "system"]);
-    expect(grouped[0]?.pages[0]?.title).toBe("Models");
+    expect(grouped.map((g) => g.group)).toEqual(["system", "inference"]);
+    expect(grouped[1]?.pages.map((p) => p.title)).toEqual(["Model API", "Models"]);
   });
 
   test("panel-only plugin gets a synthetic system page", () => {

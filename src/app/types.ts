@@ -182,7 +182,7 @@ export interface SettingsEntry {
 }
 
 /** Group a settings page is listed under (SDK SettingsGroup). */
-export type SettingsGroup = "models" | "providers" | "tools" | "system";
+export type SettingsGroup = "system" | "inference" | "tools";
 
 /** One plugin's config as GET /api/core/settings serves it (12.1). */
 export interface CorePluginSettings {

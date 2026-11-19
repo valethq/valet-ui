@@ -720,9 +720,7 @@ button.sub-row:hover .icon { color: var(--accent); transform: translateX(3px); }
 .composer-bar .controls { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1 1 auto; }
 .composer-bar .actions { display: flex; align-items: center; gap: 6px; flex: none; }
 .model-pop { flex: 0 1 auto; max-width: 260px; }
-.effort-pop, .fast-pop { flex: none; }
-button.chip.fast[aria-pressed=true] { background: var(--tint); color: var(--text); }
-button.chip.fast .chevron { display: none; }
+.effort-pop { flex: none; }
 .context-bar {
   position: relative;
   display: inline-flex;

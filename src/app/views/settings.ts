@@ -510,7 +510,8 @@ export function openSettings(serverDeps: SettingsDeps): void {
   );
   const backdrop = el("div", { class: "modal-backdrop" }, dialog);
 
-  let pages: SettingsPage[] = builtinPages();
+  /** Null until the server pages have loaded, so the dialog never opens on a built-in page. */
+  let pages: SettingsPage[] | null = null;
   let popLevel: (() => boolean) | null = null;
   const mq = matchMedia(NARROW_SETTINGS);
 
@@ -519,6 +520,10 @@ export function openSettings(serverDeps: SettingsDeps): void {
     back.hidden = true;
     back.onclick = null;
     title.textContent = "Settings";
+    if (pages === null) {
+      content.replaceChildren(el("div", { class: "hint", text: "Loading…" }));
+      return;
+    }
     if (mq.matches) {
       const drilled = drillDown(groupPages(pages), deps, { title, back });
       popLevel = drilled.back;
@@ -564,7 +569,9 @@ export function openSettings(serverDeps: SettingsDeps): void {
       pages = [...buildSettingsPages(core, panels), ...builtinPages()];
       mount();
     })
-    .catch((e: unknown) =>
-      content.append(el("div", { class: "hint error", text: `Settings unavailable: ${errorText(e)}` })),
-    );
+    .catch((e: unknown) => {
+      pages = builtinPages();
+      mount();
+      content.prepend(el("div", { class: "hint error", text: `Settings unavailable: ${errorText(e)}` }));
+    });
 }

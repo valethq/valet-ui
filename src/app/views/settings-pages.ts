@@ -31,13 +31,12 @@ export interface SettingsPage {
   panels: SettingsEntry[];
 }
 
-export const GROUP_ORDER: SettingsGroup[] = ["models", "providers", "tools", "system"];
+export const GROUP_ORDER: SettingsGroup[] = ["system", "inference", "tools"];
 
 export const GROUP_LABEL: Record<SettingsGroup, string> = {
-  models: "Models",
-  providers: "Providers",
-  tools: "Tools",
   system: "System",
+  inference: "Inference",
+  tools: "Tools",
 };
 
 /** First few page titles for a group row; ellipsis when there are more than three. */
@@ -51,12 +50,11 @@ export function groupSubtitle(titles: string[]): string {
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
-/** Without `x-group`: inference → providers, tool-only → tools, else system. */
+/** Without `x-group`: inference → inference, tool-only → tools, else system. */
 export function deriveGroup(provides: string[], schema?: Record<string, unknown>): SettingsGroup {
   const hinted = schema?.["x-group"];
-  if (hinted === "models" || hinted === "providers" || hinted === "tools" || hinted === "system")
-    return hinted;
-  if (provides.some((p) => p.startsWith("inference@"))) return "providers";
+  if (hinted === "system" || hinted === "inference" || hinted === "tools") return hinted;
+  if (provides.some((p) => p.startsWith("inference@"))) return "inference";
   const substantive = provides.filter((p) => !p.startsWith("settings@"));
   if (substantive.length > 0 && substantive.every((p) => p.startsWith("tools@"))) return "tools";
   return "system";
@@ -85,9 +83,7 @@ function pageInfoOf(raw: unknown): SettingsPageInfo | undefined {
   return {
     title: raw.title,
     ...(typeof raw.description === "string" ? { description: raw.description } : {}),
-    ...(group === "models" || group === "providers" || group === "tools" || group === "system"
-      ? { group }
-      : {}),
+    ...(group === "system" || group === "inference" || group === "tools" ? { group } : {}),
     ...(typeof raw.icon === "string" ? { icon: raw.icon } : {}),
     ...(typeof raw.order === "number" ? { order: raw.order } : {}),
   };

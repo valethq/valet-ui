@@ -787,35 +787,38 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     () => {
       const f = activeFamily;
       if (f === null) return [];
-      const items = f.efforts.map((effort) => ({
-        label: cap(effort),
-        selected: effort === activeEffort,
-        onSelect: () =>
-          cb.onModel({
-            provider: f.provider,
-            model: f.key,
-            effort,
-            ...(activeFast === undefined ? {} : { fast: activeFast }),
-          }),
-      }));
-      return [{ title: "Effort", items }];
+      const pick = (effort: string | null, fast: boolean | undefined): void =>
+        cb.onModel({
+          provider: f.provider,
+          model: f.key,
+          ...(effort === null ? {} : { effort }),
+          ...(fast === undefined ? {} : { fast }),
+        });
+      const sections: MenuSection[] = [];
+      if (f.efforts.length > 1) {
+        sections.push({
+          title: "Effort",
+          items: f.efforts.map((effort) => ({
+            label: cap(effort),
+            selected: effort === activeEffort,
+            onSelect: () => pick(effort, activeFast),
+          })),
+        });
+      }
+      if (f.fast) {
+        const on = activeFast ?? f.fastByDefault;
+        sections.push({
+          title: "Speed",
+          items: [
+            { label: "Standard", selected: !on, onSelect: () => pick(activeEffort, false) },
+            { label: "Fast", lead: icon("zap"), selected: on, onSelect: () => pick(activeEffort, true) },
+          ],
+        });
+      }
+      return sections;
     },
     "effort-pop",
   );
-  const fastChip = chipButton("fast", icon("zap"), "Fast");
-  const fastMenu = el("span", { class: "pop fast-pop" }, fastChip.button);
-  fastChip.button.setAttribute("aria-pressed", "false");
-  fastChip.button.addEventListener("click", () => {
-    const f = activeFamily;
-    if (f === null || !f.fast) return;
-    const on = !(activeFast ?? f.fastByDefault);
-    cb.onModel({
-      provider: f.provider,
-      model: f.key,
-      ...(activeEffort === null ? {} : { effort: activeEffort }),
-      fast: on,
-    });
-  });
 
   const syncSend = (): void => {
     send.disabled = textarea.value.trim() === "" && attachments.list().length === 0;
@@ -1030,7 +1033,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         el(
           "div",
           { class: "composer-bar" },
-          el("div", { class: "controls" }, attachMenu, modelMenu, effortMenu, fastMenu),
+          el("div", { class: "controls" }, attachMenu, modelMenu, effortMenu),
           el("div", { class: "actions" }, queuedBadge, contextBar, stop, send),
         ),
         imageInput,
@@ -1266,13 +1269,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     modelSub.textContent = on;
     modelSub.style.display = on === "" ? "none" : "";
     modelChip.button.disabled = families.length === 0;
-    effortMenu.style.display = f === null || f.efforts.length <= 1 ? "none" : "";
-    effortChip.text.textContent = effort === null ? "" : cap(effort);
     const showFast = f?.fast === true;
-    fastMenu.style.display = showFast ? "" : "none";
-    const fastOn = f !== null && showFast ? (fast ?? f.fastByDefault) : false;
-    fastChip.button.setAttribute("aria-pressed", String(fastOn));
-    fastChip.text.textContent = fastOn ? "Fast" : "Std";
+    effortMenu.style.display = f === null || (f.efforts.length <= 1 && !showFast) ? "none" : "";
+    const fastOn = showFast && (fast ?? f.fastByDefault);
+    effortChip.text.textContent =
+      [effort === null || f === null || f.efforts.length <= 1 ? "" : cap(effort), fastOn ? "Fast" : ""]
+        .filter((t) => t !== "")
+        .join(" · ") || (showFast ? "Standard" : "");
   }
 
   connLine.style.display = connOpen ? "none" : "";
