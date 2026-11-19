@@ -14,6 +14,8 @@ export interface MenuItem {
   label: string;
   lead?: HTMLElement;
   selected?: boolean;
+  /** A switch row: shows `toggle` as its state, flips it on select and leaves the menu open. */
+  toggle?: boolean;
   onSelect(): void;
   /** Instead of closing, selecting the row swaps the menu's content for this element. */
   panel?(api: PanelApi): HTMLElement;
@@ -251,17 +253,23 @@ export function popover(
             };
       if (s.title !== undefined) group.append(el("div", { class: "menu-title", text: s.title }));
       for (const [index, it] of s.items.entries()) {
+        const toggled = it.toggle !== undefined;
         const b = el("button", {
           class: `menu-item${it.selected === true ? " selected" : ""}`,
-          role: "menuitemradio",
-          "aria-checked": String(it.selected === true),
+          role: toggled ? "menuitemcheckbox" : "menuitemradio",
+          "aria-checked": String(toggled ? it.toggle === true : it.selected === true),
         });
         if (it.lead !== undefined) b.append(el("span", { class: "menu-lead" }, it.lead));
         b.append(
           el("span", { class: "menu-label", text: it.label }),
-          el("span", { class: "menu-check" }, icon("check")),
+          toggled ? el("span", { class: "menu-switch" }) : el("span", { class: "menu-check" }, icon("check")),
         );
         b.addEventListener("click", () => {
+          if (toggled) {
+            b.setAttribute("aria-checked", String(b.getAttribute("aria-checked") !== "true"));
+            it.onSelect();
+            return;
+          }
           if (it.panel !== undefined) {
             show(it.panel(api));
             return;

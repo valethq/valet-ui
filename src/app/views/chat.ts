@@ -808,10 +808,17 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       if (f.fast) {
         const on = activeFast ?? f.fastByDefault;
         sections.push({
-          title: "Speed",
           items: [
-            { label: "Standard", selected: !on, onSelect: () => pick(activeEffort, false) },
-            { label: "Fast", lead: icon("zap"), selected: on, onSelect: () => pick(activeEffort, true) },
+            {
+              label: "Fast mode",
+              lead: icon("zap"),
+              toggle: on,
+              onSelect: () => {
+                // The menu stays open, so a second click must see this one before the server answers.
+                activeFast = !(activeFast ?? f.fastByDefault);
+                pick(activeEffort, activeFast);
+              },
+            },
           ],
         });
       }
@@ -1275,7 +1282,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     effortChip.text.textContent =
       [effort === null || f === null || f.efforts.length <= 1 ? "" : cap(effort), fastOn ? "Fast" : ""]
         .filter((t) => t !== "")
-        .join(" · ") || (showFast ? "Standard" : "");
+        .join(" · ") || (showFast ? "Fast off" : "");
   }
 
   connLine.style.display = connOpen ? "none" : "";

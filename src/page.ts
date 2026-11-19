@@ -291,6 +291,10 @@ button.chip:active:not(:disabled) { transform: none; }
 .menu-check { display: inline-flex; flex: none; color: var(--muted); visibility: hidden; }
 .menu-check .icon { width: 15px; height: 15px; }
 .menu-item.selected .menu-check { visibility: visible; }
+.menu-switch { position: relative; flex: none; width: 30px; height: 18px; border-radius: 999px; background: var(--strong); transition: background .15s; }
+.menu-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); transition: transform .15s; }
+.menu-item[aria-checked=true] .menu-switch { background: var(--accent); }
+.menu-item[aria-checked=true] .menu-switch::after { transform: translateX(12px); background: var(--on-accent); }
 .logo { display: inline-block; flex: none; width: 14px; height: 14px; background: var(--logo) center / contain no-repeat; }
 .logo.mono {
   background: currentColor;
