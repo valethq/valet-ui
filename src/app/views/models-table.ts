@@ -186,7 +186,9 @@ export function modelsTable(
       node: line,
     };
     remove.addEventListener("click", () => {
-      rows.splice(rows.indexOf(state), 1);
+      const i = rows.indexOf(state);
+      if (i < 0) return;
+      rows.splice(i, 1);
       collapse(line);
     });
     rows.push(state);

@@ -210,7 +210,9 @@ function rowsEditor(p: Prop, cols: Column[], value: unknown, label: string) {
     const row = el("div", { class: "rows-row" }, ...inputs, remove);
     const item: RowItem = { inputs, checks, extra, node: row };
     remove.addEventListener("click", () => {
-      rows.splice(rows.indexOf(item), 1);
+      const i = rows.indexOf(item);
+      if (i < 0) return;
+      rows.splice(i, 1);
       collapse(row);
     });
     rows.push(item);
