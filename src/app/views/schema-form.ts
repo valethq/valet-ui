@@ -1,5 +1,6 @@
 import { el } from "../dom";
 import { iconButton, selectChip } from "../icons";
+import { collapse, enter } from "../motion";
 import type { ProviderModels, SecretMeta } from "../types";
 import { modelsTable, type CatalogLoader } from "./models-table";
 
@@ -210,7 +211,7 @@ function rowsEditor(p: Prop, cols: Column[], value: unknown, label: string) {
     const item: RowItem = { inputs, checks, extra, node: row };
     remove.addEventListener("click", () => {
       rows.splice(rows.indexOf(item), 1);
-      row.remove();
+      collapse(row);
     });
     rows.push(item);
     list.append(row);
@@ -221,7 +222,9 @@ function rowsEditor(p: Prop, cols: Column[], value: unknown, label: string) {
   const addBtn = el("button", { type: "button", class: "chip", text: "Add" });
   addBtn.addEventListener("click", () => {
     add();
-    rows[rows.length - 1]?.inputs[0]?.focus();
+    const last = rows[rows.length - 1];
+    if (last !== undefined) enter(last.node);
+    last?.inputs[0]?.focus();
   });
   node.append(list, el("div", { class: "rows-add" }, addBtn));
   return {

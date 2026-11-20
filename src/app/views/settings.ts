@@ -2,6 +2,7 @@ import { getSecretMeta, listCoreSettings, listModels, patchCoreSettings, putSecr
 import { el, leave } from "../dom";
 import { EXPERIMENTAL_KEY, experimentalEntry, saveExperimental } from "../experimental";
 import { icon, iconButton } from "../icons";
+import { enter } from "../motion";
 import type { CorePluginSettings, SettingsEntry, SettingsGroup } from "../types";
 import { refreshInterval, renderBlocks } from "./blocks";
 import { schemaForm, type SchemaFormDeps } from "./schema-form";
@@ -333,7 +334,10 @@ function tabbed(tabs: Tab[]): HTMLElement {
     bar.append(b);
   });
 
+  let selected = -1;
   const select = (i: number, focus = false): void => {
+    const from = selected;
+    selected = i;
     tabs.forEach((t, j) => {
       const on = j === i;
       const b = buttons[j];
@@ -343,6 +347,11 @@ function tabbed(tabs: Tab[]): HTMLElement {
       }
       t.panel.hidden = !on;
     });
+    const panel = tabs[i]?.panel;
+    if (from >= 0 && from !== i && panel !== undefined) {
+      body.scrollTop = 0;
+      enter(panel);
+    }
     if (focus) buttons[i]?.focus();
   };
   buttons.forEach((b, i) => {
@@ -410,6 +419,9 @@ function drillDown(
     | { kind: "group"; group: SettingsGroup }
     | { kind: "page"; group: SettingsGroup; id: string };
   let loc: Loc = { kind: "root" };
+  /** How deep the shown level is, so a move further in slides from the right and a step back from the left. */
+  let shownDepth = -1;
+  const depth = (l: Loc): number => (l.kind === "root" ? 0 : l.kind === "group" ? 1 : 2);
   const root = el("div", { class: "settings-drill" });
 
   const showGroups = (): HTMLElement => {
@@ -441,6 +453,18 @@ function drillDown(
   };
 
   const paint = (): void => {
+    draw();
+    const d = depth(loc);
+    const first = root.firstElementChild;
+    if (shownDepth >= 0 && d !== shownDepth && first !== null) {
+      const way = d > shownDepth ? "fwd" : "back";
+      enter(first, way);
+      enter(chrome.title, way);
+    }
+    shownDepth = d;
+  };
+
+  const draw = (): void => {
     if (loc.kind === "root") {
       chrome.title.textContent = "Settings";
       chrome.back.hidden = true;

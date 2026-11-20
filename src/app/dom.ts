@@ -73,12 +73,46 @@ function sameElement(a: Node, b: Node): boolean {
   return blob !== null && x.getAttribute("data-blob") === blob;
 }
 
-/** Plays the `.leaving` exit animation from page.ts, then removes the node. */
-export function leave(node: HTMLElement, ms = 460): void {
+/** Plays the `.leaving` exit animation from page.ts, then runs `then` (by default removing the node) once. */
+export function leave(node: HTMLElement, ms = 460, then: () => void = () => node.remove()): void {
   node.classList.add("leaving");
-  const done = (): void => node.remove();
-  node.addEventListener("animationend", (ev) => {
+  let ran = false;
+  const onEnd = (ev: AnimationEvent): void => {
     if (ev.target === node) done();
-  });
+  };
+  const done = (): void => {
+    if (ran) return;
+    ran = true;
+    node.removeEventListener("animationend", onEnd);
+    then();
+  };
+  node.addEventListener("animationend", onEnd);
   setTimeout(done, ms);
+}
+
+/** The hide in flight per node; a newer show or hide supersedes it. */
+const hiding = new WeakMap<HTMLElement, object>();
+
+/** Shows or hides `node` through `style.display`. Showing replays its CSS entrance; hiding plays the generic
+ * `.fx-out` exit first (instantly when detached). Showing again mid-exit cancels the hide. */
+export function setShown(node: HTMLElement, on: boolean): void {
+  if (on) {
+    if (hiding.delete(node)) node.classList.remove("leaving", "fx-out");
+    node.style.display = "";
+    return;
+  }
+  if (node.style.display === "none" || hiding.has(node)) return;
+  if (node.isConnected !== true) {
+    node.style.display = "none";
+    return;
+  }
+  const token = {};
+  hiding.set(node, token);
+  node.classList.add("fx-out");
+  leave(node, 360, () => {
+    if (hiding.get(node) !== token) return;
+    hiding.delete(node);
+    node.classList.remove("leaving", "fx-out");
+    node.style.display = "none";
+  });
 }

@@ -3,7 +3,7 @@ import * as api from "./api";
 import { createPageLoader, type Loaded } from "./chat-pages";
 import { el, leave } from "./dom";
 import { experimentalEnabled } from "./experimental";
-import { focusDuration } from "./motion";
+import { focusDuration, focusEasing, glide, reducedMotion } from "./motion";
 import { defaultStore } from "./page-cache";
 import {
   applyDelta,
@@ -44,10 +44,21 @@ import { CoreSocket } from "./ws";
 
 const root = document.getElementById("root") as HTMLElement;
 
+/** Toasts stack bottom-right; when one arrives or leaves, the others slide to their new places. */
+const toasts = el("div", { class: "toasts" });
+
+function restack(change: () => void): void {
+  const kids = [...toasts.children] as HTMLElement[];
+  const tops = kids.map((k) => k.getBoundingClientRect().top);
+  change();
+  for (const [i, k] of kids.entries()) glide(k, tops[i] as number);
+}
+
 function toast(message: string): void {
+  if (!toasts.isConnected) document.body.append(toasts);
   const node = el("div", { class: "toast", text: message });
-  document.body.append(node);
-  setTimeout(() => leave(node), 5000);
+  restack(() => toasts.append(node));
+  setTimeout(() => leave(node, 460, () => restack(() => node.remove())), 5000);
 }
 
 function fatal(message: string): void {
@@ -100,12 +111,12 @@ function slideColumn(app: HTMLElement, change: () => void): void {
   const was = anchor?.getBoundingClientRect().left;
   change();
   if (column == null || anchor == null || was === undefined) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (reducedMotion()) return;
   const dx = was - anchor.getBoundingClientRect().left;
   if (Math.abs(dx) < 1) return;
   column.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], {
     duration: focusDuration(),
-    easing: getComputedStyle(app).getPropertyValue("--ease-focus").trim() || "ease",
+    easing: focusEasing(),
   });
 }
 
