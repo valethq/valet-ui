@@ -1,5 +1,6 @@
-import { el } from "../dom";
+import { el, leave } from "../dom";
 import { icon, iconButton } from "../icons";
+import { glide } from "../motion";
 import {
   childrenOf,
   type Indicator,
@@ -100,6 +101,53 @@ function frameFor(node: HTMLElement): Frame {
   return frame;
 }
 
+/** Rows on a project switch fade in one after another, this far apart, up to `STAGGER_ROWS` rows. */
+const STAGGER_MS = 22;
+const STAGGER_ROWS = 12;
+
+/** Where a row sat before a re-render: its viewport top, for the slide, and its box in the list, for a ghost. */
+interface RowPlace {
+  top: number;
+  box: { top: number; left: number; width: number };
+  visible: boolean;
+}
+
+/** The list's live rows (not ones already fading out), by session id. */
+function itemsOf(list: HTMLElement | null): Map<string, HTMLElement> {
+  const out = new Map<string, HTMLElement>();
+  for (const item of list?.querySelectorAll<HTMLElement>(":scope > .session-item:not(.leaving)") ?? []) {
+    const id = item.querySelector<HTMLElement>(".session-row")?.dataset.id;
+    if (id !== undefined) out.set(id, item);
+  }
+  return out;
+}
+
+function placesOf(list: HTMLElement, items: Map<string, HTMLElement>): Map<string, RowPlace> {
+  const view = list.getBoundingClientRect();
+  const out = new Map<string, RowPlace>();
+  for (const [id, item] of items) {
+    const r = item.getBoundingClientRect();
+    out.set(id, {
+      top: r.top,
+      box: { top: item.offsetTop, left: item.offsetLeft, width: item.offsetWidth },
+      visible: r.bottom > view.top && r.top < view.bottom,
+    });
+  }
+  return out;
+}
+
+/** A removed row fades out where it stood, over the new list, while the rows around it close the gap. */
+function ghost(item: HTMLElement, place: RowPlace, into: HTMLElement): void {
+  item.style.position = "absolute";
+  item.style.top = `${place.box.top}px`;
+  item.style.left = `${place.box.left}px`;
+  item.style.width = `${place.box.width}px`;
+  item.setAttribute("aria-hidden", "true");
+  item.classList.add("fx-out");
+  into.append(item);
+  leave(item, 360);
+}
+
 const rowLabel = (session: Session, dot: Indicator, suffix: number | undefined, now: number): string => {
   const label = dot === "running" ? "Working" : timeAgo(session.lastResponseAt ?? session.createdAt, now);
   return suffix === undefined ? label : `${label} · #${suffix}`;
@@ -124,10 +172,13 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   // a subagent chat highlights (and animates as) its top-level parent
   const openId = (p.openId === null ? undefined : rootOf(p.sessions, p.openId)?.id) ?? "";
   const same = prevList?.dataset.project === project;
+  const switched = prevList != null && !same;
   const prevOpen = prevList?.dataset.open;
+  const prevItems = itemsOf(prevList);
   const prev = new Map<string, DOMStringMap>();
-  for (const r of prevList?.querySelectorAll<HTMLElement>(".session-row") ?? []) {
-    prev.set(r.dataset.id ?? "", r.dataset);
+  for (const [id, item] of prevItems) {
+    const row = item.querySelector<HTMLElement>(".session-row");
+    if (row !== null) prev.set(id, row.dataset);
   }
 
   const all = topLevel(p.sessions);
@@ -135,14 +186,18 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   const shown = searchSessions(p.sessions, all, frame.search.value);
   const now = Date.now();
   const list = el("div", { class: "sessions", "data-project": project, "data-open": openId });
-  for (const session of shown) {
+  // Rows that came, went or changed places slide; a render that kept the order (a dot, a title) measures nothing.
+  const ids = [...prevItems.keys()];
+  const reordered = ids.length !== shown.length || ids.some((id, i) => shown[i]?.id !== id);
+  const before = same && prevList != null && reordered ? placesOf(prevList, prevItems) : null;
+  shown.forEach((session, i) => {
     const open = session.id === openId;
     const was = same ? prev.get(session.id) : undefined;
     const dot = p.indicators.get(session.id) ?? "done";
     const unread = p.unread.has(session.id);
     const moved = was !== undefined && prevOpen !== openId;
     const fx =
-      same && was === undefined
+      (same && was === undefined) || switched
         ? " enter"
         : moved && open
           ? " opening"
@@ -182,9 +237,10 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
         ),
       ),
     );
+    if (switched) row.style.animationDelay = `${Math.min(i, STAGGER_ROWS) * STAGGER_MS}ms`;
     row.addEventListener("click", () => p.onSession(session.id));
     list.append(el("div", { class: "session-item" }, row, sessionMenuButton(session.id, p)));
-  }
+  });
   if (shown.length === 0) {
     list.append(
       el("div", { class: "hint", text: all.length === 0 ? "No sessions yet." : "No matching sessions." }),
@@ -192,9 +248,24 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   }
 
   const scrollTop = prevList?.scrollTop ?? 0;
+  const fading = [...(prevList?.querySelectorAll<HTMLElement>(":scope > .session-item.leaving") ?? [])];
   prevList?.replaceWith(list);
   list.scrollTop = scrollTop;
   syncSessionMenu(list, p);
+  list.append(...fading);
+  if (before === null) return;
+  const items = itemsOf(list);
+  for (const [id, place] of before) {
+    const item = items.get(id);
+    const old = prevItems.get(id);
+    if (item === undefined) {
+      if (place.visible && old !== undefined) ghost(old, place, list);
+    } else if (place.visible) {
+      glide(item, place.top);
+    } else {
+      item.querySelector(".session-row")?.classList.add("enter");
+    }
+  }
 }
 
 /** Rewrites the relative times ("5m", "3h") on the rows already shown, for the passing of time alone. */

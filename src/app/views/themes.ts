@@ -1,4 +1,4 @@
-import { el } from "../dom";
+import { el, setShown } from "../dom";
 import { icon } from "../icons";
 import {
   allThemes,
@@ -463,7 +463,13 @@ export function themeSection(): HTMLElement {
   const lists = el("div", { class: "theme-lists" });
   const paneSlot = el("div", { class: "theme-pane-slot" });
   const importBox = el("div", { class: "theme-import" });
-  importBox.hidden = true;
+  importBox.style.display = "none";
+  let importOpen = false;
+  const showImport = (on: boolean): void => {
+    importOpen = on;
+    setShown(importBox, on);
+    toggleImport.setAttribute("aria-expanded", String(on));
+  };
   const importStatus = el("span", { class: "form-status" });
   const tiles = new Map<string, HTMLButtonElement>();
 
@@ -551,9 +557,8 @@ export function themeSection(): HTMLElement {
   const toggleImport = el("button", { class: "chip", type: "button", "aria-expanded": "false" });
   toggleImport.append(icon("import"), "Import");
   toggleImport.addEventListener("click", () => {
-    importBox.hidden = !importBox.hidden;
-    toggleImport.setAttribute("aria-expanded", String(!importBox.hidden));
-    if (!importBox.hidden) paste.focus();
+    showImport(!importOpen);
+    if (importOpen) paste.focus();
   });
   const paste = el("textarea", {
     class: "input mono",
@@ -572,8 +577,7 @@ export function themeSection(): HTMLElement {
     }
     paste.value = "";
     importStatus.textContent = "";
-    importBox.hidden = true;
-    toggleImport.setAttribute("aria-expanded", "false");
+    showImport(false);
     add(t);
   });
   importBox.append(paste, el("div", { class: "form-actions" }, importStatus, addImported));

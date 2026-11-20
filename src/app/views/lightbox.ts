@@ -1,5 +1,6 @@
 import { el, leave } from "../dom";
 import { iconButton } from "../icons";
+import { reducedMotion } from "../motion";
 import { blobImage, copyImage, type FileData, saveBlob } from "./media";
 
 export interface LightboxItem {
@@ -12,8 +13,6 @@ const token = (name: string): string =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "ease";
 const MAX_ZOOM = 8;
 const SWIPE = 50;
-
-const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** The images under `root` (a message, or one gallery), in order, one per blob. */
 export function galleryItems(root: Element): LightboxItem[] {

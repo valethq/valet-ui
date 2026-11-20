@@ -2,6 +2,7 @@ import { ApiError, createProject, deleteProject, updateProject } from "../api";
 import { el } from "../dom";
 import { chipButton, icon } from "../icons";
 import { type MenuSection, type PanelApi, popover } from "../menu";
+import { enter } from "../motion";
 import { applyOrder, loadOrder, moveItem, saveOrder } from "../project-order";
 import type { Project } from "../types";
 import { folderBrowser } from "./folder-browser";
@@ -114,6 +115,7 @@ export function createProjectPicker(initial: ProjectPickerProps): ProjectPicker 
     );
     const back = (): void => {
       body.replaceChildren(main);
+      enter(body, "back");
       api.fit(false);
     };
     relocate.addEventListener("click", () => {
@@ -129,6 +131,7 @@ export function createProjectPicker(initial: ProjectPickerProps): ProjectPicker 
           },
         }),
       );
+      enter(body, "fwd");
       api.fit(true);
     });
     body.append(main);

@@ -1,9 +1,9 @@
-import { clear, el, morph, reconcile, sameChildren } from "../dom";
-import { chipButton, icon, iconButton } from "../icons";
+import { clear, el, morph, reconcile, sameChildren, setShown } from "../dom";
+import { chipButton, icon, iconButton, type IconName } from "../icons";
 import { logoFor, logoMark, logoMarks, logosFor } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
-import { focusDuration } from "../motion";
+import { enter, focusDuration, glide } from "../motion";
 import { groupModels, type ModelFamily, pickEffort } from "../models";
 import type { SessionView } from "../state";
 import {
@@ -643,13 +643,20 @@ function draftPick(draft: ModelSel | undefined, providers: ProviderModels[]): Mo
   return first === undefined ? undefined : selOf(first);
 }
 
+/** An icon that pops in, for a button whose glyph swaps to confirm what it did. */
+function popIcon(name: IconName): HTMLElement {
+  const i = icon(name);
+  i.classList.add("fx-pop");
+  return i;
+}
+
 function flashCopy(btn: HTMLButtonElement, name: "check" | "close", label: string): void {
   const was = btn.title;
-  btn.replaceChildren(icon(name));
+  btn.replaceChildren(popIcon(name));
   btn.title = label;
   btn.setAttribute("aria-label", label);
   setTimeout(() => {
-    btn.replaceChildren(icon("copy"));
+    btn.replaceChildren(popIcon("copy"));
     btn.title = was;
     btn.setAttribute("aria-label", was);
   }, 1500);
@@ -686,6 +693,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   forkCrumb.addEventListener("click", () => {
     if (forkSourceId !== null) cb.onOpenSession(forkSourceId);
   });
+  const titleGroup = el(
+    "div",
+    { class: "title-group" },
+    crumb,
+    forkCrumb,
+    el("div", { class: "title-line" }, title, titleNum, subTag),
+  );
   const modelChip = chipButton("model", icon("sparkles"), "Model");
   /** "on <harness>" under the model name, shown with the harness mark. */
   const modelSub = el("span", { class: "chip-sub" });
@@ -985,43 +999,32 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   );
   sessionMenu.style.display = "none";
 
+  const composerWrap = el(
+    "div",
+    { class: "composer-wrap" },
+    connLine,
+    sendErr,
+    el(
+      "div",
+      { class: "composer" },
+      attachments.row,
+      textarea,
+      el(
+        "div",
+        { class: "composer-bar" },
+        el("div", { class: "controls" }, attachMenu, modelMenu, effortMenu),
+        el("div", { class: "actions" }, queuedBadge, contextBar, stop, send),
+      ),
+      imageInput,
+      fileInput,
+    ),
+  );
   const main = el(
     "div",
     { class: "main" },
-    el(
-      "div",
-      { class: "chat-header" },
-      navToggle,
-      el(
-        "div",
-        { class: "title-group" },
-        crumb,
-        forkCrumb,
-        el("div", { class: "title-line" }, title, titleNum, subTag),
-      ),
-      sessionMenu,
-    ),
+    el("div", { class: "chat-header" }, navToggle, titleGroup, sessionMenu),
     messages,
-    el(
-      "div",
-      { class: "composer-wrap" },
-      connLine,
-      sendErr,
-      el(
-        "div",
-        { class: "composer" },
-        attachments.row,
-        textarea,
-        el(
-          "div",
-          { class: "composer-bar" },
-          el("div", { class: "controls" }, attachMenu, modelMenu, effortMenu),
-          el("div", { class: "actions" }, queuedBadge, contextBar, stop, send),
-        ),
-        imageInput,
-        fileInput,
-      ),
-    ),
+    composerWrap,
   );
   root.replaceChildren(main);
   syncSend();
@@ -1265,7 +1268,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   /** Ring fill only; the exact numbers live in the hover/focus tip. Hidden
    * until a run reports usage. */
   function setContext(tokens: number | null, win?: number): void {
-    contextBar.style.display = tokens === null ? "none" : "";
+    setShown(contextBar, tokens !== null);
     if (tokens === null) return;
     const pct = win !== undefined && win > 0 ? Math.min(100, (tokens / win) * 100) : 0;
     ring.style.setProperty("--fill", `${pct}%`);
@@ -1289,7 +1292,12 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       subs = links?.subs ?? [];
       parentId = links?.parent?.id ?? null;
       const sid = view?.session.id ?? null;
-      if (sid !== sessionId) {
+      const switched = sid !== sessionId;
+      // Entering or leaving the landing page moves the composer; it glides between the two places.
+      const landing = view === null;
+      const composerFrom =
+        landing === main.hasAttribute("data-landing") ? null : composerWrap.getBoundingClientRect().top;
+      if (switched) {
         sessionId = sid;
         openState.clear();
         showAll.clear();
@@ -1301,7 +1309,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         released = previous === null ? [] : blobIds(previous);
       }
 
-      if (view === null) main.setAttribute("data-landing", "");
+      if (landing) main.setAttribute("data-landing", "");
       else main.removeAttribute("data-landing");
       if (view === null) {
         title.textContent = "";
@@ -1309,7 +1317,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         subTag.style.display = "none";
         crumb.style.display = "none";
         forkCrumb.style.display = "none";
-        queuedBadge.style.display = "none";
+        setShown(queuedBadge, false);
         sessionMenu.style.display = "none";
         rebuildModels(draftPick(draft, providers), providers);
         if (messages.querySelector(".landing") === null) {
@@ -1321,16 +1329,21 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
             }),
           );
         }
-        stop.style.display = "none";
+        setShown(stop, false);
         setContext(null);
         syncSend();
         syncTick(false);
         releaseBlobs(released);
         released = [];
+        if (composerFrom !== null) glide(composerWrap, composerFrom);
         return;
       }
 
-      title.textContent = view.session.title ?? "Untitled";
+      const nextTitle = view.session.title ?? "Untitled";
+      if (switched || title.textContent !== nextTitle) {
+        title.textContent = nextTitle;
+        enter(titleGroup);
+      }
       sessionMenu.style.display = "";
       subTag.style.display = view.session.parentSessionId === null ? "none" : "";
       crumb.style.display = links?.parent === undefined ? "none" : "";
@@ -1338,8 +1351,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       forkSourceId = links?.forkedFrom?.id ?? null;
       forkCrumb.style.display = forkSourceId === null ? "none" : "";
       forkCrumbText.textContent = `Forked from ${links?.forkedFrom?.title ?? "Untitled"}`;
-      queuedBadge.style.display = view.queued > 0 ? "" : "none";
-      queuedBadge.textContent = `${view.queued} queued`;
+      setShown(queuedBadge, view.queued > 0);
+      if (view.queued > 0) queuedBadge.textContent = `${view.queued} queued`;
       if (titleSuffix !== undefined) {
         titleNum.textContent = `#${titleSuffix}`;
         titleNum.style.display = "";
@@ -1347,11 +1360,12 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         titleNum.style.display = "none";
       }
       rebuildModels(view.session.settings.model, providers);
-      stop.style.display = view.activeRunId === null ? "none" : "";
+      setShown(stop, view.activeRunId !== null);
 
       setContext(view.contextTokens, contextWindow(view, providers));
       syncSend();
       renderMessages(view);
+      if (composerFrom !== null) glide(composerWrap, composerFrom);
       // The previous chat's images left the DOM in that render; the new chat keeps any it shares.
       const keep = new Set(blobIds(view));
       releaseBlobs(released.filter((id) => !keep.has(id)));

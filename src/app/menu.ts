@@ -1,6 +1,6 @@
 import { el, leave } from "./dom";
 import { icon, type IconName } from "./icons";
-import { focusDuration } from "./motion";
+import { focusDuration, focusEasing, reducedMotion } from "./motion";
 
 /** Handed to a panel: swap back to the menu's list, or close the whole menu. */
 export interface PanelApi {
@@ -135,14 +135,13 @@ export function resize(m: HTMLElement, change: () => void): void {
   const from = m.getBoundingClientRect().height;
   sizing.get(m)?.cancel();
   change();
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (reducedMotion()) return;
   const to = m.offsetHeight;
   if (Math.abs(from - to) < 1) return;
-  const easing = getComputedStyle(m).getPropertyValue("--ease-focus").trim() || "ease";
   m.style.overflow = "hidden";
   const a = m.animate([{ height: `${from}px` }, { height: `${to}px` }], {
     duration: focusDuration(),
-    easing,
+    easing: focusEasing(),
   });
   sizing.set(m, a);
   a.onfinish = a.oncancel = () => {

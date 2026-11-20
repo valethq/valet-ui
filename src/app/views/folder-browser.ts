@@ -2,6 +2,7 @@ import { type DirListing, listDirs, makeDir } from "../api";
 import { el } from "../dom";
 import { icon } from "../icons";
 import { resize } from "../menu";
+import { enter, type Way } from "../motion";
 
 export interface FolderBrowserOptions {
   /** Where to start; the server's home directory when omitted. */
@@ -27,6 +28,14 @@ export function crumbs(path: string, home: string): Crumb[] {
     out.push({ name: part, path: at });
   }
   return out;
+}
+
+/** Into a subfolder slides in from the right, up to a parent from the left; a jump elsewhere rises, a reload stays put. */
+function travel(from: string, to: string): Way | null {
+  if (from === to) return null;
+  if (to.startsWith(from === "/" ? "/" : `${from}/`)) return "fwd";
+  if (from.startsWith(to === "/" ? "/" : `${to}/`)) return "back";
+  return "rise";
 }
 
 const messageOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -56,6 +65,7 @@ export function folderBrowser(o: FolderBrowserOptions): HTMLElement {
     error.textContent = "";
     try {
       const l = await listDirs(path);
+      const way = current === null ? null : travel(current.path, l.path);
       current = l;
       const menu = root.closest<HTMLElement>(".menu");
       const paint = (): void => {
@@ -98,6 +108,7 @@ export function folderBrowser(o: FolderBrowserOptions): HTMLElement {
           ...(rows.length === 0 ? [el("div", { class: "fb-empty", text: "No subfolders" })] : []),
         );
         trail.scrollLeft = trail.scrollWidth;
+        if (way !== null) enter(list, way);
       };
       if (menu === null) paint();
       else resize(menu, paint);

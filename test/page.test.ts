@@ -60,7 +60,6 @@ describe("page css", () => {
 
   test("the theme studio splits in two on desktop and still respects hidden", () => {
     expect(html).toContain(".theme-studio[hidden] { display: none; }");
-    expect(html).toContain(".theme-import[hidden] { display: none; }");
     expect(html).toContain(".theme-studio { display: grid; grid-template-columns: 304px minmax(0, 1fr);");
     const mobile = html.slice(html.indexOf("@media (max-width: 900px)"));
     expect(mobile).toContain(".theme-studio { display: block; }");
