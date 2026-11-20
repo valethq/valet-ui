@@ -13,15 +13,14 @@ import {
   forkSource,
   hasPartial,
   newSessionView,
-  queueModeOf,
   replaceMessages,
+  searchSessions,
   needsUser,
   sessionIndicator,
   STALE_MS,
   timeAgo,
   titleSuffixes,
   upsertSession,
-  withQueueMode,
 } from "../src/app/state";
 import type { ChatMessage, Message, MessageDelta, Part, PartData, Run, Session } from "../src/app/types";
 
@@ -535,28 +534,6 @@ describe("session state", () => {
   });
 });
 
-describe("queue mode", () => {
-  test("the session's own mode wins over the default", () => {
-    expect(queueModeOf(session({ settings: { agent: { queueMode: "interrupt" } } }), "queue")).toBe(
-      "interrupt",
-    );
-    expect(queueModeOf(session(), "interrupt")).toBe("interrupt");
-    expect(queueModeOf(session({ settings: { agent: { queueMode: "bogus" } } }), "queue")).toBe("queue");
-  });
-
-  test("setting it keeps every other setting", () => {
-    const settings = {
-      model: { provider: "p", model: "m" },
-      agent: { parentRunId: "run_1", forkedFrom: { sessionId: "ses_0" } },
-    };
-    expect(withQueueMode(settings, "interrupt")).toEqual({
-      model: { provider: "p", model: "m" },
-      agent: { parentRunId: "run_1", forkedFrom: { sessionId: "ses_0" }, queueMode: "interrupt" },
-    });
-    expect(withQueueMode({}, "queue")).toEqual({ agent: { queueMode: "queue" } });
-  });
-});
-
 describe("forkSource", () => {
   const source = session({ id: "ses_src", title: "Original" });
   const fork = session({
@@ -649,4 +626,19 @@ describe("partial parts", () => {
     replaceMessages(view, [{ message: { id: "m1", seq: 1 } as Message, parts: [partial("p", "xyz", 9)] }]);
     expect(textOf(view)).toBe("xyz");
   });
+});
+
+describe("searchSessions", () => {
+  const a = session({ id: "a", title: "Fix login bug" });
+  const b = session({ id: "b", title: "Write docs" });
+  const c = session({ id: "c", title: null });
+  const sub = session({ id: "s", title: "Research OAuth", parentSessionId: "b" });
+  const all = [a, b, c, sub];
+  const top = [a, b, c];
+  const ids = (q: string) => searchSessions(all, top, q).map((s) => s.id);
+
+  test("empty query keeps everything", () => expect(ids("  ")).toEqual(["a", "b", "c"]));
+  test("matches every word, case-insensitive", () => expect(ids("LOGIN fix")).toEqual(["a"]));
+  test("untitled sessions match 'untitled'", () => expect(ids("untit")).toEqual(["c"]));
+  test("a subagent title surfaces its parent", () => expect(ids("oauth")).toEqual(["b"]));
 });

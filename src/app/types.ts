@@ -26,7 +26,13 @@ export interface Session {
 }
 
 export interface SessionSettings {
-  model?: { provider: string; model: string; fallbacks?: { provider: string; model: string }[] };
+  model?: {
+    provider: string;
+    model: string;
+    effort?: string;
+    fast?: boolean;
+    fallbacks?: { provider: string; model: string; effort?: string; fast?: boolean }[];
+  };
   [key: string]: unknown;
 }
 
@@ -34,11 +40,9 @@ export interface SessionSettings {
 export interface SessionState {
   activeRunId?: string;
   queued: number;
-  model: { provider: string; model: string };
+  model: { provider: string; model: string; effort?: string; fast?: boolean };
   usage?: Record<string, number>;
 }
-
-export type QueueMode = "queue" | "interrupt";
 
 export interface Run {
   id: string;
@@ -118,11 +122,23 @@ export interface ModelInfo {
   id: string;
   name: string;
   contextWindow?: number;
+  maxOutputTokens?: number;
+  efforts?: string[];
+  defaultEffort?: string;
+  fast?: boolean;
+  fastByDefault?: boolean;
+  hidden?: boolean;
+  /** Catalog: false → omitted from the picker. */
+  show?: boolean;
+  /** Added by hand in valet-agent's models config. */
+  custom?: boolean;
 }
 
 export interface ProviderModels {
   provider: string;
   label: string;
+  /** The provider's logo key (ProviderBase.icon), when its plugin names one. */
+  icon?: string;
   models: ModelInfo[];
 }
 
@@ -153,12 +169,39 @@ export interface SettingsEntry {
   pluginName?: string;
   title: string;
   description?: string;
+  /** One of the plugin's `x-pages` ids; omit for the main page (12.1). */
+  page?: string;
   schema?: Record<string, unknown>;
   values?: Record<string, unknown>;
   /** Raw view blocks; views/blocks.ts validates them. */
   blocks?: unknown[];
   viewError?: string;
   refreshMs?: number;
+}
+
+/** Group a settings page is listed under (SDK SettingsGroup). */
+export type SettingsGroup = "system" | "inference" | "tools";
+
+/** One plugin's config as GET /api/core/settings serves it (12.1). */
+export interface CorePluginSettings {
+  plugin: string;
+  name?: string;
+  description?: string;
+  version?: string;
+  provides: string[];
+  state: "active" | "failed" | "disabled" | "pending";
+  enabled: boolean;
+  schema?: Record<string, unknown>;
+  values: Record<string, unknown>;
+  sources: Record<string, "default" | "file" | "settings">;
+  restartRequired?: string;
+}
+
+export type SecretSource = "file" | "env" | null;
+
+export interface SecretMeta {
+  name: string;
+  source: SecretSource;
 }
 
 // ---- WS frames (10.3) ----

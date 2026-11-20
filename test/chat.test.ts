@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionView } from "../src/app/state";
-import type { ChatMessage, Message, Part, PartData, PartType, Session } from "../src/app/types";
+import type {
+  ChatMessage,
+  Message,
+  Part,
+  PartData,
+  PartType,
+  ProviderModels,
+  Session,
+} from "../src/app/types";
 import {
   copyText,
   createChat,
@@ -174,6 +182,11 @@ class FakeEl {
     return FakeEl.layout(this);
   }
   readonly classList = {
+    add: (...names: string[]): void => {
+      const cur = new Set((this.attrs.get("class") ?? "").split(" ").filter(Boolean));
+      for (const n of names) cur.add(n);
+      this.attrs.set("class", [...cur].join(" "));
+    },
     remove: (...names: string[]): void => {
       const left = (this.attrs.get("class") ?? "").split(" ").filter((c) => !names.includes(c));
       this.attrs.set("class", left.join(" "));
@@ -309,7 +322,6 @@ describe("send error line", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -411,7 +423,6 @@ describe("tool output rendering", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -450,7 +461,6 @@ describe("loading placeholder", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -490,7 +500,6 @@ describe("message entrance", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -553,7 +562,6 @@ describe("render cost", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -655,7 +663,6 @@ describe("load animation reach", () => {
       onFork() {},
       onMove() {},
       onCompact() {},
-      onQueueMode() {},
       onToggleNav() {},
       onOpenSession() {},
       onLoadOlder() {},
@@ -765,7 +772,6 @@ describe("streaming updates", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -825,7 +831,6 @@ describe("composer attachments", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -873,7 +878,6 @@ describe("composer attachments", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -903,7 +907,6 @@ describe("composer attachments", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -937,7 +940,6 @@ describe("composer attachments", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -966,7 +968,6 @@ describe("composer attachments", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -1086,7 +1087,6 @@ describe("message images", () => {
       onFork() {},
       onMove() {},
       onCompact() {},
-      onQueueMode() {},
       onToggleNav() {},
       onOpenSession() {},
       onLoadOlder() {},
@@ -1163,7 +1163,6 @@ describe("subagent sessions", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession: (id) => opened.push(id),
         onLoadOlder() {},
@@ -1300,7 +1299,6 @@ describe("session actions", () => {
         onFork: (id) => forks.push(id),
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -1386,7 +1384,6 @@ describe("custom parts", () => {
         onFork() {},
         onMove() {},
         onCompact() {},
-        onQueueMode() {},
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
@@ -1491,5 +1488,102 @@ describe("galleryItems", () => {
     const items = galleryItems({ querySelectorAll: () => nodes } as unknown as Element);
     expect(items.map((i) => i.file.blobId)).toEqual(["blb_a", "blb_b"]);
     expect(items[1]?.thumb).toBe(nodes[1] as unknown as HTMLElement);
+  });
+});
+
+describe("model chip logos", () => {
+  const providers: ProviderModels[] = [
+    {
+      provider: "cursor",
+      label: "Cursor",
+      icon: "cursor",
+      models: [{ id: "claude-sonnet-5", name: "Claude Sonnet 5", efforts: ["high"] }],
+    },
+    {
+      provider: "claude-code",
+      label: "Claude Code",
+      icon: "claude",
+      models: [{ id: "opus", name: "Claude Opus 5.5", efforts: ["high"] }],
+    },
+  ];
+  const logos = (n: FakeEl): string[] => [
+    ...(n.attrs.has("data-logo") ? [n.attrs.get("data-logo") as string] : []),
+    ...n.children.flatMap((c) => (c instanceof FakeEl ? logos(c) : [])),
+  ];
+  const chipFor = (provider: string, model: string) => {
+    const g = globalThis as Record<string, unknown>;
+    const savedDocument = g.document;
+    const savedWindow = g.window;
+    // Just enough DOM for the model popover to open and fill its rows.
+    const createElement = (tag: string) =>
+      Object.assign(new FakeEl(tag), { focus() {}, scrollIntoView() {} }, { style: { removeProperty() {} } });
+    g.document = { createElement, addEventListener() {}, removeEventListener() {} };
+    g.window = { innerWidth: 1000 };
+    try {
+      const root = new FakeEl("div");
+      const chat = createChat(root as unknown as HTMLElement, {
+        onSend: () => Promise.resolve(true),
+        onUpload: () => Promise.resolve("blb_1"),
+        onStop() {},
+        onModel() {},
+        onRename() {},
+        onDelete() {},
+        onFork() {},
+        onMove() {},
+        onCompact() {},
+        onToggleNav() {},
+        onOpenSession() {},
+        onLoadOlder() {},
+      });
+      const view = viewWith([]);
+      chat.update({ ...view, session: { ...session, settings: { model: { provider, model } } } }, providers);
+      const chip = findByClass(root, "model") as FakeEl;
+      const lead = findByClass(chip, "lead") as FakeEl;
+      const sub = findByClass(chip, "chip-sub") as FakeEl;
+      const pair = findByClass(lead, "logo-pair");
+      const cutoutUrl = pair?.attrs.get("style")?.replace("--model-logo: ", "");
+      const shown = {
+        cutout: pair?.children.find(
+          (c) => c instanceof FakeEl && c.attrs.get("style") === `--logo: ${cutoutUrl}`,
+        ) as FakeEl | undefined,
+        logos: logos(lead),
+        pair: findByClass(lead, "logo-pair") !== undefined,
+        harness: findByClass(lead, "harness")?.attrs.get("data-logo"),
+        name: findByClass(chip, "chip-label")?.textContent,
+        sub: sub.style.display === "none" ? undefined : sub.textContent,
+      };
+      (findTag(chip, "button") as FakeEl).dispatch("click", {});
+      const rows = (findByClass(root, "menu") as FakeEl).querySelectorAll(".menu-lead").map(logos);
+      return { ...shown, cutout: shown.cutout?.attrs.get("data-logo"), rows };
+    } finally {
+      g.document = savedDocument;
+      g.window = savedWindow;
+    }
+  };
+
+  test("a harness running another lab's model puts its mark first, under the model's, with an 'on' line", () => {
+    expect(chipFor("cursor", "claude-sonnet-5")).toMatchObject({
+      logos: ["cursor", "claude"],
+      pair: true,
+      harness: "cursor",
+      cutout: "claude",
+      name: "Claude Sonnet 5",
+      sub: "on Cursor",
+    });
+  });
+
+  test("a harness whose logo matches the model shows the model mark and name alone", () => {
+    expect(chipFor("claude-code", "opus")).toMatchObject({
+      logos: ["claude"],
+      pair: false,
+      harness: undefined,
+      cutout: undefined,
+      name: "Claude Opus 5.5",
+      sub: undefined,
+    });
+  });
+
+  test("picker rows show only the model's own logo, never the harness's", () => {
+    expect(chipFor("cursor", "claude-sonnet-5").rows).toEqual([["claude"], ["claude"]]);
   });
 });

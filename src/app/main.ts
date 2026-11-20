@@ -33,22 +33,11 @@ import {
   titleSuffixes,
   topLevel,
   upsertSession,
-  withQueueMode,
 } from "./state";
-import type {
-  Message,
-  MessageDelta,
-  Part,
-  Project,
-  ProviderModels,
-  QueueMode,
-  Run,
-  RunStatus,
-  Session,
-} from "./types";
+import type { Message, MessageDelta, Part, Project, ProviderModels, Run, RunStatus, Session } from "./types";
 import { syncCustom } from "./themes";
 import { renderAuth } from "./views/auth";
-import { createChat, type ChatHandle } from "./views/chat";
+import { createChat, type ChatHandle, type ModelSel } from "./views/chat";
 import { openSettings } from "./views/settings";
 import { refreshTimes, renderSidebar, type SidebarProps } from "./views/sidebar";
 import { CoreSocket } from "./ws";
@@ -687,7 +676,7 @@ function newSession(): void {
 }
 
 // The landing page's model pick; applied to the session when it is first created.
-let draftModel: { provider: string; model: string } | undefined;
+let draftModel: ModelSel | undefined;
 
 async function createSessionForDraft(): Promise<boolean> {
   if (app.projectId === null) return false;
@@ -700,7 +689,7 @@ async function createSessionForDraft(): Promise<boolean> {
   const configured =
     pick === undefined
       ? session
-      : await api.setSessionModel(session, pick.provider, pick.model).catch((e: unknown) => {
+      : await api.setSessionModel(session, pick).catch((e: unknown) => {
           toast(e instanceof Error ? e.message : "could not set model");
           return session;
         });
@@ -767,19 +756,6 @@ function compactOpen(): void {
   api
     .compactSession(view.session.id, instructions.trim())
     .catch((e: unknown) => toast(e instanceof Error ? e.message : "compact failed"));
-}
-
-function setQueueMode(mode: QueueMode): void {
-  const view = app.view;
-  if (view === null) return;
-  api
-    .updateSession(view.session.id, { settings: withQueueMode(view.session.settings, mode) })
-    .then((session) => {
-      if (app.view?.session.id === session.id) app.view.session = session;
-      app.sessions = upsertSession(app.sessions, session);
-      scheduleRender();
-    })
-    .catch((e: unknown) => toast(e instanceof Error ? e.message : "queue mode change failed"));
 }
 
 async function renameSession(id: string, title: string): Promise<void> {
@@ -1002,16 +978,15 @@ async function startApp(): Promise<void> {
       if (app.view !== null) void moveTo(app.view.session.id, projectId);
     },
     onCompact: compactOpen,
-    onQueueMode: setQueueMode,
     onStop: () => {
       const runId = app.view?.activeRunId;
       if (runId == null) return;
       api.cancelRun(runId).catch((e: unknown) => toast(e instanceof Error ? e.message : "cancel failed"));
     },
-    onModel: (provider, model) => {
+    onModel: (sel) => {
       const view = app.view;
       if (view === null) {
-        draftModel = { provider, model };
+        draftModel = sel;
         scheduleRender();
         return;
       }
@@ -1022,7 +997,7 @@ async function startApp(): Promise<void> {
       }
       if (view.activeRunId !== null) toast("Model change applies from the next message");
       api
-        .setSessionModel(view.session, provider, model)
+        .setSessionModel(view.session, sel)
         .then((session) => {
           if (app.view?.session.id === session.id) app.view.session = session;
           app.sessions = upsertSession(app.sessions, session);
@@ -1073,7 +1048,6 @@ async function startApp(): Promise<void> {
   app.projects = await api.listProjects();
   app.providers = await api.listModels().catch(() => []);
   app.chat.setProjects(app.projects);
-  api.defaultQueueMode().then((mode) => app.chat?.setDefaultQueueMode(mode));
   loadPartTypes();
   const remembered = (() => {
     try {

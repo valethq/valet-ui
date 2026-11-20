@@ -67,6 +67,7 @@ test("a view-only panel lists its blocks and refresh hint, with no form", async 
   const { call } = setup({
     usage: {
       title: "Usage",
+      page: "models",
       refreshMs: 30_000,
       view: () => [{ type: "meter", label: "Session", value: 44 }],
     },
@@ -75,6 +76,7 @@ test("a view-only panel lists its blocks and refresh hint, with no form", async 
     key: "usage",
     plugin: "valet-usage",
     title: "Usage",
+    page: "models",
     blocks: [{ type: "meter", label: "Session", value: 44 }],
     refreshMs: 30_000,
   });

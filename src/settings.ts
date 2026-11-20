@@ -34,6 +34,7 @@ async function describe(p: ScopeProvider<"settings">): Promise<SettingsEntry> {
     plugin: p.plugin,
     title: impl.title,
     ...(impl.description && { description: impl.description }),
+    ...(impl.page && { page: impl.page }),
     ...(impl.schema && { schema: impl.schema }),
     ...(values && { values }),
     ...view,

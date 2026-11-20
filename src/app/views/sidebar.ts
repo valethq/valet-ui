@@ -1,6 +1,14 @@
 import { el } from "../dom";
 import { icon, iconButton } from "../icons";
-import { childrenOf, type Indicator, rootOf, timeAgo, titleSuffixes, topLevel } from "../state";
+import {
+  childrenOf,
+  type Indicator,
+  rootOf,
+  searchSessions,
+  timeAgo,
+  titleSuffixes,
+  topLevel,
+} from "../state";
 import { subCount } from "../subagents";
 import type { Project, Session } from "../types";
 import { createProjectPicker, type ProjectPicker } from "./project-picker";
@@ -29,6 +37,7 @@ export interface SidebarProps {
 interface Frame {
   picker: ProjectPicker;
   add: HTMLButtonElement;
+  search: HTMLInputElement;
 }
 
 const props = new WeakMap<HTMLElement, SidebarProps>();
@@ -51,6 +60,19 @@ function frameFor(node: HTMLElement): Frame {
     return button;
   };
   const add = act("compose", "New session", "new-session", () => live().onNew());
+  const search = el("input", {
+    type: "search",
+    class: "session-search-input",
+    placeholder: "Search sessions",
+    "aria-label": "Search sessions",
+  });
+  search.addEventListener("input", () => renderSidebar(node, live()));
+  search.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || search.value === "") return;
+    e.stopPropagation();
+    search.value = "";
+    renderSidebar(node, live());
+  });
   node.replaceChildren(
     el(
       "div",
@@ -64,6 +86,7 @@ function frameFor(node: HTMLElement): Frame {
       ),
     ),
     el("div", { class: "project-picker" }, picker.root),
+    el("label", { class: "session-search" }, icon("search"), search),
     el("div", { class: "sessions" }),
     el(
       "div",
@@ -72,7 +95,7 @@ function frameFor(node: HTMLElement): Frame {
       act("logout", "Log out", "logout", () => live().onLogout()),
     ),
   );
-  const frame = { picker, add };
+  const frame = { picker, add, search };
   frames.set(node, frame);
   return frame;
 }
@@ -107,8 +130,9 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
     prev.set(r.dataset.id ?? "", r.dataset);
   }
 
-  const shown = topLevel(p.sessions);
-  const suffixes = titleSuffixes(shown);
+  const all = topLevel(p.sessions);
+  const suffixes = titleSuffixes(all);
+  const shown = searchSessions(p.sessions, all, frame.search.value);
   const now = Date.now();
   const list = el("div", { class: "sessions", "data-project": project, "data-open": openId });
   for (const session of shown) {
@@ -161,7 +185,11 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
     row.addEventListener("click", () => p.onSession(session.id));
     list.append(el("div", { class: "session-item" }, row, sessionMenuButton(session.id, p)));
   }
-  if (shown.length === 0) list.append(el("div", { class: "hint", text: "No sessions yet." }));
+  if (shown.length === 0) {
+    list.append(
+      el("div", { class: "hint", text: all.length === 0 ? "No sessions yet." : "No matching sessions." }),
+    );
+  }
 
   const scrollTop = prevList?.scrollTop ?? 0;
   prevList?.replaceWith(list);

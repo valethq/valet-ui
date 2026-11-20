@@ -1,15 +1,5 @@
 import { contentOf, type Piece, withContent } from "../chunking";
-import type {
-  ChatMessage,
-  Message,
-  MessageDelta,
-  Part,
-  PartData,
-  QueueMode,
-  Run,
-  Session,
-  SessionState,
-} from "./types";
+import type { ChatMessage, Message, MessageDelta, Part, PartData, Run, Session, SessionState } from "./types";
 
 /** Where a chat that loads in pages stands: `older` is the next page to fetch going back, `null` at the start. */
 export interface Paging {
@@ -319,20 +309,6 @@ export function applySessionState(view: SessionView, state: SessionState): void 
   if (view.contextWindow === null && typeof win === "number" && win > 0) view.contextWindow = win;
 }
 
-/** The session's own queue mode, else the agent default. */
-export function queueModeOf(session: Session, fallback: QueueMode): QueueMode {
-  const agent = session.settings.agent;
-  const mode =
-    typeof agent === "object" && agent !== null ? (agent as { queueMode?: unknown }).queueMode : undefined;
-  return mode === "queue" || mode === "interrupt" ? mode : fallback;
-}
-
-/** `settings` with agent.queueMode set; PATCH replaces settings wholesale, so everything else is kept. */
-export function withQueueMode(settings: Session["settings"], mode: QueueMode): Session["settings"] {
-  const agent = typeof settings.agent === "object" && settings.agent !== null ? settings.agent : {};
-  return { ...settings, agent: { ...agent, queueMode: mode } };
-}
-
 /** The session this one was forked from, when it is still in the list. */
 export function forkSource(list: Session[], session: Session): Session | undefined {
   const agent = session.settings.agent;
@@ -421,4 +397,18 @@ export class EventBuffer<E> {
     this.#events = [];
     return out;
   }
+}
+
+/** Top-level sessions whose title, or a subagent's title, contains every word of the query (case-insensitive). */
+export function searchSessions(all: Session[], shown: Session[], query: string): Session[] {
+  const words = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w !== "");
+  if (words.length === 0) return shown;
+  const hit = (s: Session) => {
+    const title = (s.title ?? "Untitled").toLowerCase();
+    return words.every((w) => title.includes(w));
+  };
+  return shown.filter((s) => hit(s) || childrenOf(all, s.id).some(hit));
 }

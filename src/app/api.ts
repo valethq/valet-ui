@@ -1,12 +1,13 @@
 import type {
   ChatMessage,
+  CorePluginSettings,
   PartInput,
   PartType,
   PluginStatus,
   Project,
   ProviderModels,
-  QueueMode,
   Run,
+  SecretMeta,
   Session,
   SessionState,
   SettingsEntry,
@@ -265,10 +266,24 @@ export const updateSession = (
 export const deleteSession = (sessionId: string): Promise<Session> =>
   req("DELETE", `/api/core/sessions/${encodeURIComponent(sessionId)}`);
 
-export const setSessionModel = (session: Session, provider: string, model: string): Promise<Session> =>
-  updateSession(session.id, {
-    settings: { ...session.settings, model: { provider, model } },
+export const setSessionModel = (
+  session: Session,
+  ref: { provider: string; model: string; effort?: string; fast?: boolean },
+): Promise<Session> => {
+  const fallbacks = session.settings.model?.fallbacks;
+  return updateSession(session.id, {
+    settings: {
+      ...session.settings,
+      model: {
+        provider: ref.provider,
+        model: ref.model,
+        ...(ref.effort === undefined ? {} : { effort: ref.effort }),
+        ...(ref.fast === undefined ? {} : { fast: ref.fast }),
+        ...(fallbacks === undefined ? {} : { fallbacks }),
+      },
+    },
   });
+};
 
 export const cancelRun = (runId: string): Promise<{ ok: boolean }> =>
   req("POST", `/api/core/runs/${encodeURIComponent(runId)}/cancel`);
@@ -339,21 +354,63 @@ export async function compactSession(id: string, instructions: string): Promise<
   });
 }
 
-/** The agent's default queue mode from its settings panel; "queue" when it is unset or unreadable. */
-export async function defaultQueueMode(): Promise<QueueMode> {
-  const entry = await getSettings("valet-agent").catch(() => undefined);
-  return entry?.values?.defaultQueueMode === "interrupt" ? "interrupt" : "queue";
+export type { CorePluginSettings };
+
+export const listCoreSettings = (): Promise<CorePluginSettings[]> => get("/api/core/settings");
+
+export const getCoreSettings = (plugin: string): Promise<CorePluginSettings> =>
+  get(`/api/core/settings/${encodeURIComponent(plugin)}`);
+
+export const patchCoreSettings = (
+  plugin: string,
+  patch: { config?: Record<string, unknown>; enabled?: boolean },
+): Promise<CorePluginSettings> => req("PATCH", `/api/core/settings/${encodeURIComponent(plugin)}`, patch);
+
+export const listSecrets = (): Promise<SecretMeta[]> => get("/api/core/secrets");
+
+export const getSecretMeta = (name: string): Promise<SecretMeta> =>
+  get(`/api/core/secrets/${encodeURIComponent(name)}`);
+
+export const putSecret = (name: string, value: string): Promise<SecretMeta> =>
+  req("PUT", `/api/core/secrets/${encodeURIComponent(name)}`, { value });
+
+export const deleteSecret = (name: string): Promise<SecretMeta> =>
+  req("DELETE", `/api/core/secrets/${encodeURIComponent(name)}`);
+
+function stringList(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.filter((x): x is string => typeof x === "string");
+  return out.length === 0 ? undefined : out;
+}
+
+function parseModel(m: Record<string, unknown>) {
+  const efforts = stringList(m.efforts);
+  return {
+    id: String(m.id ?? m.model ?? m.name ?? ""),
+    name: String(m.name ?? m.label ?? m.id ?? m.model ?? ""),
+    ...(typeof m.contextWindow === "number" ? { contextWindow: m.contextWindow } : {}),
+    ...(typeof m.maxOutputTokens === "number" ? { maxOutputTokens: m.maxOutputTokens } : {}),
+    ...(efforts === undefined ? {} : { efforts }),
+    ...(typeof m.defaultEffort === "string" ? { defaultEffort: m.defaultEffort } : {}),
+    ...(typeof m.fast === "boolean" ? { fast: m.fast } : {}),
+    ...(typeof m.fastByDefault === "boolean" ? { fastByDefault: m.fastByDefault } : {}),
+    ...(typeof m.hidden === "boolean" ? { hidden: m.hidden } : {}),
+    ...(typeof m.show === "boolean" ? { show: m.show } : {}),
+    ...(typeof m.custom === "boolean" ? { custom: m.custom } : {}),
+  };
+}
+
+function catalogEntries(d: unknown): Record<string, unknown>[] {
+  if (Array.isArray(d)) return d as Record<string, unknown>[];
+  const o = d as Record<string, unknown>;
+  const list = o.providers ?? o.models ?? [];
+  return Array.isArray(list) ? (list as Record<string, unknown>[]) : [];
 }
 
 export async function listModels(): Promise<ProviderModels[]> {
   const d = (await get("/plugins/valet-agent/models")) as unknown;
-  const entries = Array.isArray(d)
-    ? d
-    : (((d as Record<string, unknown>).providers ??
-        (d as Record<string, unknown>).models ??
-        []) as unknown[]);
   const out: ProviderModels[] = [];
-  for (const e of entries as Record<string, unknown>[]) {
+  for (const e of catalogEntries(d)) {
     const provider = String(e.provider ?? e.key ?? e.id ?? "");
     if (provider === "") continue;
     const models = (Array.isArray(e.models) ? e.models : Array.isArray(e.list) ? e.list : []) as Record<
@@ -363,11 +420,8 @@ export async function listModels(): Promise<ProviderModels[]> {
     out.push({
       provider,
       label: String(e.label ?? e.name ?? provider),
-      models: models.map((m) => ({
-        id: String(m.id ?? m.model ?? m.name ?? ""),
-        name: String(m.name ?? m.label ?? m.id ?? m.model ?? ""),
-        ...(typeof m.contextWindow === "number" ? { contextWindow: m.contextWindow } : {}),
-      })),
+      ...(typeof e.icon === "string" && e.icon !== "" ? { icon: e.icon } : {}),
+      models: models.map(parseModel),
     });
   }
   return out;

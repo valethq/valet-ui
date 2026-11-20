@@ -65,7 +65,7 @@ function show(id: string, trigger: HTMLElement, actions: SessionMenuActions): vo
   document.addEventListener("pointerdown", onDocPointer, true);
   document.addEventListener("keydown", onKey);
   window.addEventListener("resize", close);
-  window.addEventListener("scroll", close, true);
+  window.addEventListener("scroll", onScroll, true);
   menu.querySelector<HTMLElement>(".menu-item")?.focus({ preventScroll: true });
 }
 
@@ -106,7 +106,13 @@ function close(): void {
   document.removeEventListener("pointerdown", onDocPointer, true);
   document.removeEventListener("keydown", onKey);
   window.removeEventListener("resize", close);
-  window.removeEventListener("scroll", close, true);
+  window.removeEventListener("scroll", onScroll, true);
+}
+
+/** Scrolling moves the trigger, so the menu follows it; it closes only when the trigger is gone. */
+function onScroll(): void {
+  if (open?.trigger.isConnected) place();
+  else close();
 }
 
 function onDocPointer(ev: Event): void {
