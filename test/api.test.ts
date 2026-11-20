@@ -65,7 +65,7 @@ describe("sendMessage failure", () => {
     const err = await sendMessage("ses_1", [{ type: "text", text: "hi" }], "cm_1").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(0);
-    expect((err as ApiError).message).toBe("Network unreachable, try again");
+    expect((err as ApiError).message).toBe("Network unreachable. Try again.");
   });
 });
 

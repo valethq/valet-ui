@@ -92,7 +92,7 @@ function frameFor(node: HTMLElement): Frame {
       "div",
       { class: "sidebar-foot" },
       act("settings", "Settings", "", () => live().onSettings()),
-      act("logout", "Log out", "logout", () => live().onLogout()),
+      act("logout", "Sign out", "logout", () => live().onLogout()),
     ),
   );
   const frame = { picker, add, search };
@@ -187,7 +187,7 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
   }
   if (shown.length === 0) {
     list.append(
-      el("div", { class: "hint", text: all.length === 0 ? "No sessions yet." : "No matching sessions." }),
+      el("div", { class: "hint", text: all.length === 0 ? "No sessions yet" : "No matching sessions" }),
     );
   }
 

@@ -87,7 +87,7 @@ export function createProjectPicker(initial: ProjectPickerProps): ProjectPicker 
     remove.addEventListener("click", async () => {
       if (!armed) {
         armed = true;
-        remove.textContent = "Click again to remove (files stay on disk)";
+        remove.textContent = "Confirm remove (files stay on disk)";
         return;
       }
       try {
@@ -161,7 +161,7 @@ export function createProjectPicker(initial: ProjectPickerProps): ProjectPicker 
     props = p;
     const current = p.projects.find((x) => x.id === p.projectId);
     chip.text.textContent = current?.name ?? "No project";
-    chip.button.title = current === undefined ? "Project" : `${current.name} - ${current.workspaceDir}`;
+    chip.button.title = current === undefined ? "Project" : `${current.name} · ${current.workspaceDir}`;
   };
   update(initial);
   return { root, update };

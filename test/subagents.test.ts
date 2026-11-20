@@ -184,6 +184,6 @@ describe("subagent calls", () => {
   });
 
   test("subCount pluralises", () => {
-    expect([subCount(1), subCount(2)]).toEqual(["1 sub", "2 subs"]);
+    expect([subCount(1), subCount(2)]).toEqual(["1 subagent", "2 subagents"]);
   });
 });

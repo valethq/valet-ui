@@ -18,7 +18,7 @@ export function renderAuth(
     form.append(
       el("label", { for: "f-token", text: "Setup token" }),
       token,
-      el("label", { for: "f-password", text: "New owner password" }),
+      el("label", { for: "f-password", text: "Password" }),
       password,
     );
     token.id = "f-token";
@@ -31,10 +31,10 @@ export function renderAuth(
   form.append(button, error);
 
   card.append(
-    el("h1", { text: status.needsSetup ? "Set owner password" : "Sign in" }),
+    el("h1", { text: status.needsSetup ? "Create password" : "Sign in" }),
     el("div", {
       class: "sub",
-      text: status.needsSetup ? "First boot: paste the one-time setup token from the valet log." : "valet",
+      text: status.needsSetup ? "Paste the setup token from the server log to set your password." : "valet",
     }),
     form,
   );

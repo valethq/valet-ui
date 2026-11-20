@@ -40,7 +40,7 @@ export function folderBrowser(o: FolderBrowserOptions): HTMLElement {
   const typed = el("input", {
     class: "fb-path",
     type: "text",
-    placeholder: "Type a path and press Enter",
+    placeholder: "Enter a path…",
     "aria-label": "Folder path",
     spellcheck: "false",
   });
@@ -86,7 +86,7 @@ export function folderBrowser(o: FolderBrowserOptions): HTMLElement {
                 (() => {
                   const up = el(
                     "button",
-                    { class: "fb-dir up" },
+                    { class: "fb-dir up", "aria-label": "Parent folder", title: "Parent folder" },
                     icon("arrowLeft"),
                     el("span", { text: ".." }),
                   );

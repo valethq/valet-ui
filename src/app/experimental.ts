@@ -24,14 +24,14 @@ export function experimentalEntry(): SettingsEntry {
     pluginName: "Web UI",
     title: "Experimental",
     description:
-      "Features still being tuned, stored in this browser only. Reload the page after changing it. Currently enables compressed responses (brotli or gzip) for the page and the API.",
+      "Early features stored in this browser only. Enables compressed responses and paged chat loading. Reload after changing.",
     schema: {
       type: "object",
       properties: {
         enabled: {
           type: "boolean",
           title: "Enable experimental features",
-          description: "Turn this off if something misbehaves; the app works the same without it.",
+          description: "Turn off if you run into issues.",
         },
       },
     },

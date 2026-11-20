@@ -35,7 +35,7 @@ export const GROUP_ORDER: SettingsGroup[] = ["system", "inference", "tools"];
 
 export const GROUP_LABEL: Record<SettingsGroup, string> = {
   system: "System",
-  inference: "Inference",
+  inference: "Models",
   tools: "Tools",
 };
 

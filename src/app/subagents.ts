@@ -139,4 +139,4 @@ export function rowState(row: SubRow, live: boolean): RowState {
   return row.sub.indicator === "attention" ? "needs you" : "done";
 }
 
-export const subCount = (n: number): string => `${n} sub${n === 1 ? "" : "s"}`;
+export const subCount = (n: number): string => `${n} subagent${n === 1 ? "" : "s"}`;

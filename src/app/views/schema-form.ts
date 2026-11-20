@@ -281,7 +281,7 @@ function secretNameControl(
     type: "text",
     autocomplete: "off",
     spellcheck: "false",
-    placeholder: "secret_name",
+    placeholder: "Secret name",
   });
   name.value = typeof value === "string" ? value : "";
   const meta = el("span", { class: "secret-meta hint", text: "" });
@@ -289,11 +289,11 @@ function secretNameControl(
     class: "input",
     type: "password",
     autocomplete: "new-password",
-    placeholder: "New value",
+    placeholder: "Enter secret value",
     hidden: "true",
   });
-  const setBtn = el("button", { type: "button", class: "chip", text: "Set value…" });
-  const saveBtn = el("button", { type: "button", class: "chip", text: "Save secret", hidden: "true" });
+  const setBtn = el("button", { type: "button", class: "chip", text: "Set value" });
+  const saveBtn = el("button", { type: "button", class: "chip", text: "Save", hidden: "true" });
   const row = el("div", { class: "secret-row" }, name, setBtn, saveBtn);
   const node = el("div", { class: "secret-name" }, row, valueInput, meta);
 
@@ -307,11 +307,7 @@ function secretNameControl(
       .getSecretMeta(n)
       .then((m) => {
         meta.textContent =
-          m.source === "file"
-            ? "Stored as a file"
-            : m.source === "env"
-              ? "Set in the environment"
-              : "Not set";
+          m.source === "file" ? "Saved" : m.source === "env" ? "From environment" : "Not set";
       })
       .catch(() => {
         meta.textContent = "";
@@ -339,7 +335,7 @@ function secretNameControl(
         valueInput.hidden = true;
         saveBtn.hidden = true;
         setBtn.hidden = false;
-        meta.textContent = "Stored as a file";
+        meta.textContent = "Saved";
       })
       .catch((e: unknown) => {
         meta.className = "secret-meta hint error";
@@ -365,7 +361,7 @@ function modelControl(
   const provider = el("select", { id, "aria-label": "Provider" });
   const model = el("select", { "aria-label": "Model" });
   const effort = el("select", { "aria-label": "Effort" });
-  const fast = el("input", { type: "checkbox", class: "switch", "aria-label": "Fast" });
+  const fast = el("input", { type: "checkbox", class: "switch", "aria-label": "Fast mode" });
   fast.checked = current.fast === true;
   const node = el(
     "div",
@@ -391,7 +387,8 @@ function modelControl(
     const m = p?.models.find((x) => x.id === model.value);
     const efforts = m?.efforts ?? [];
     effort.replaceChildren(el("option", { value: "", text: "Default" }));
-    for (const e of efforts) effort.append(el("option", { value: e, text: e }));
+    for (const e of efforts)
+      effort.append(el("option", { value: e, text: e === "" ? e : e.charAt(0).toUpperCase() + e.slice(1) }));
     effort.hidden = efforts.length === 0;
     if (typeof current.effort === "string" && efforts.includes(current.effort)) effort.value = current.effort;
     else effort.value = "";
@@ -496,7 +493,7 @@ export function schemaForm(
 ): { node: HTMLElement; read(): Record<string, unknown> } {
   const node = el("div", { class: "form" });
   const props = Object.entries((schema.properties ?? {}) as Record<string, Prop>);
-  if (props.length === 0) props.push(["", { type: "object", title: "Values" }]);
+  if (props.length === 0) props.push(["", { type: "object", title: "Settings" }]);
   const readers: (() => [string, unknown])[] = [];
   const slots = fieldSlots(props);
 
@@ -589,7 +586,7 @@ export function schemaForm(
         const [k, v] = r();
         if (k === "") {
           if (typeof v !== "object" || v === null || Array.isArray(v))
-            throw new Error("Values must be an object");
+            throw new Error("Settings must be a JSON object");
           return v as Record<string, unknown>;
         }
         if (v === undefined) delete out[k];

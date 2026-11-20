@@ -3,32 +3,37 @@
   "id": "valet-ui",
   "name": "Web UI",
   "version": "0.1.0",
-  "description": "Minimal web chat UI served on its own port (default 127.0.0.1:7418).",
+  "description": "Web interface for valet (default 127.0.0.1:7418).",
   "valet": "^0.1.0",
   "main": "./src/index.ts",
   "configSchema": {
     "type": "object",
     "properties": {
       "host": {
-        "type": "string"
+        "type": "string",
+        "title": "Host"
       },
       "port": {
-        "type": "integer"
+        "type": "integer",
+        "title": "Port"
       },
       "coreUrl": {
-        "type": "string"
+        "type": "string",
+        "title": "Server URL"
       },
       "chunkMessages": {
         "type": "integer",
+        "title": "Messages per page",
         "minimum": 5,
         "maximum": 100,
-        "description": "Messages per page when a chat loads in pages (Experimental)."
+        "description": "Messages loaded per page (Experimental)."
       },
       "partChars": {
         "type": "integer",
+        "title": "Max characters per chunk",
         "minimum": 500,
         "maximum": 200000,
-        "description": "Most characters of one part's text or tool output sent at once; longer ones arrive in pieces."
+        "description": "Max characters sent per message part before streaming in chunks."
       }
     },
     "additionalProperties": false

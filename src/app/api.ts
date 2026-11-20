@@ -50,7 +50,7 @@ async function req<T>(method: string, path: string, body?: unknown, timeout = 15
   } catch {
     // Timeout (AbortError) or dead network (TypeError) — on a dead tailnet
     // fetch hangs forever without this, and the caller never hears back.
-    throw new ApiError(0, "Network unreachable, try again");
+    throw new ApiError(0, "Network unreachable. Try again.");
   }
   let data: unknown;
   try {
@@ -157,7 +157,7 @@ async function uiGet(
     });
     return { res, text: await res.text() };
   } catch {
-    throw new ApiError(0, "Network unreachable, try again");
+    throw new ApiError(0, "Network unreachable. Try again.");
   }
 }
 

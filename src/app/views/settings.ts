@@ -49,7 +49,7 @@ function panelBlock(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
       },
     });
     if (panel.viewError !== undefined) {
-      nodes.push(el("div", { class: "hint error", text: `Could not load this panel: ${panel.viewError}` }));
+      nodes.push(el("div", { class: "hint error", text: `Couldn't load section: ${panel.viewError}` }));
     }
     blocks.replaceChildren(...nodes);
     blocks.hidden = nodes.length === 0;
@@ -152,7 +152,7 @@ function configSection(page: SettingsPage, deps: SettingsDeps): HTMLElement {
                 el("label", { class: "field-label", for: `en-${p.id}`, text: "Enabled" }),
                 el("div", {
                   class: "field-desc",
-                  text: "Takes effect on the next start.",
+                  text: "Takes effect after restart.",
                 }),
               ),
               box,
@@ -212,7 +212,7 @@ function configSection(page: SettingsPage, deps: SettingsDeps): HTMLElement {
           });
       });
     } else if (p.panels.length === 0) {
-      kids.push(el("div", { class: "hint", text: "No settings on this page." }));
+      kids.push(el("div", { class: "hint", text: "No settings on this page" }));
     }
 
     section.replaceChildren(...kids);
@@ -247,7 +247,7 @@ function builtinSection(page: SettingsPage, deps: SettingsDeps): HTMLElement {
       return;
     }
     void deps.save(EXPERIMENTAL_KEY, values);
-    status.textContent = "Saved — reload to apply";
+    status.textContent = "Saved. Reload to apply";
   });
   return section;
 }
@@ -265,7 +265,7 @@ function builtinPages(): SettingsPage[] {
   return [
     {
       id: "ui-theme",
-      title: "Theme",
+      title: "Themes",
       group: "system",
       order: 900,
       kind: "theme",
@@ -461,7 +461,7 @@ function drillDown(
     chrome.back.hidden = false;
     root.classList.add("settings-drill-page");
     if (panel === undefined) {
-      root.replaceChildren(el("div", { class: "hint", text: "Missing page." }));
+      root.replaceChildren(el("div", { class: "hint", text: "Page not found" }));
       return;
     }
     panel.hidden = false;
@@ -572,6 +572,6 @@ export function openSettings(serverDeps: SettingsDeps): void {
     .catch((e: unknown) => {
       pages = builtinPages();
       mount();
-      content.prepend(el("div", { class: "hint error", text: `Settings unavailable: ${errorText(e)}` }));
+      content.prepend(el("div", { class: "hint error", text: `Couldn't load settings: ${errorText(e)}` }));
     });
 }

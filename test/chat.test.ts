@@ -950,7 +950,7 @@ describe("composer attachments", () => {
         preventDefault() {},
       });
       expect(uploads).toEqual([]);
-      expect((findByClass(root, "send-error") as FakeEl).textContent).toBe("big.bin is larger than 20 MB");
+      expect((findByClass(root, "send-error") as FakeEl).textContent).toBe("big.bin exceeds the 20 MB limit");
     }),
   );
 
@@ -1034,7 +1034,7 @@ describe("file parts", () => {
   test("an image file renders as a framed figure that opens the viewer and downloads", () => {
     withFakeDom(() => {
       const node = fileNode(imageData("blb_img", "a.png")) as unknown as FakeEl;
-      expect(node.attrs.get("data-gallery")).toBe("presented");
+      expect(node.attrs.get("data-gallery")).toBe("Assistant");
       const figure = findTag(node, "figure") as FakeEl;
       expect(findByClass(figure, "fig-pic")?.attrs.get("data-view")).toBe("blb_img");
       expect(text(findByClass(figure, "name"))).toBe("a.png");
@@ -1106,7 +1106,7 @@ describe("message images", () => {
       const [first, second] = msg.children as FakeEl[];
       expect(first?.attrs.get("class")).toBe("deck");
       expect(first?.attrs.get("style")).toBe("--n:2");
-      expect(first?.attrs.get("data-gallery")).toBe("your message");
+      expect(first?.attrs.get("data-gallery")).toBe("Your message");
       const cards = (first as FakeEl).querySelectorAll(".deck-card");
       expect(cards.map((c) => c.attrs.get("data-view"))).toEqual(["blb_a", "blb_b"]);
       expect(cards.map((c) => c.attrs.get("style"))).toEqual(["--i:0", "--i:1"]);
@@ -1244,7 +1244,7 @@ describe("subagent sessions", () => {
         chat.update(inRun(part), [], undefined, undefined, { subs: [{ session: child, indicator }] });
       show("running");
       const card = findByClass(root, "sub-card") as FakeEl;
-      expect(text(findByClass(card, "sub-tag"))).toBe("subagent");
+      expect(text(findByClass(card, "sub-tag"))).toBe("Subagent");
       expect(cls(findByClass(card, "dot"))).toBe("dot running");
       show("done");
       expect(cls(findByClass(card, "dot"))).toBe("dot done");
@@ -1458,7 +1458,7 @@ describe("custom parts", () => {
       expect(findTag(origin, "a")?.attrs.get("href")).toBe("https://github.com/valethq/valet-exec");
       const raw = findByClass(body, "part-row") as FakeEl;
       expect((raw as unknown as { open: boolean }).open).toBe(false);
-      expect(text(findTag(raw, "summary"))).toBe("Data");
+      expect(text(findTag(raw, "summary"))).toBe("Raw data");
       expect(JSON.parse(text(findTag(findByClass(raw, "body") as FakeEl, "pre")))).toEqual(jobData);
     });
   });

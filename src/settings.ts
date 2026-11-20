@@ -62,14 +62,14 @@ export function registerSettings(ctx: PluginContext): void {
   );
   ctx.http.route("GET", "/settings/:key", async (_req, { params }) => {
     const provider = find(params.key ?? "");
-    return provider ? json(await describe(provider)) : json({ error: "unknown settings panel" }, 404);
+    return provider ? json(await describe(provider)) : json({ error: "Unknown settings section" }, 404);
   });
   ctx.http.route("PUT", "/settings/:key", async (req, { params }) => {
     const provider = find(params.key ?? "");
-    if (!provider) return json({ error: "unknown settings panel" }, 404);
-    if (!provider.impl.set) return json({ error: "this panel has no editable values" }, 405);
+    if (!provider) return json({ error: "Unknown settings section" }, 404);
+    if (!provider.impl.set) return json({ error: "This section has no editable settings" }, 405);
     const body = parseObject(await req.text());
-    if (!body) return json({ error: "body must be a JSON object" }, 400);
+    if (!body) return json({ error: "Request body must be a JSON object" }, 400);
     try {
       await provider.impl.set(body);
     } catch (error) {
@@ -79,15 +79,15 @@ export function registerSettings(ctx: PluginContext): void {
   });
   ctx.http.route("POST", "/settings/:key/actions/:name", async (req, { params }) => {
     const provider = find(params.key ?? "");
-    if (!provider) return json({ error: "unknown settings panel" }, 404);
+    if (!provider) return json({ error: "Unknown settings section" }, 404);
     const name = params.name ?? "";
     const action = Object.hasOwn(provider.impl.actions ?? {}, name)
       ? provider.impl.actions?.[name]
       : undefined;
-    if (!action) return json({ error: "unknown action" }, 404);
+    if (!action) return json({ error: "Unknown action" }, 404);
     const text = await req.text();
     const args = text.trim() === "" ? {} : parseObject(text);
-    if (!args) return json({ error: "body must be a JSON object" }, 400);
+    if (!args) return json({ error: "Request body must be a JSON object" }, 400);
     try {
       await action(args);
     } catch (error) {
