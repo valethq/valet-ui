@@ -1,10 +1,12 @@
 import { el } from "../dom";
+import type { Tone } from "../types";
 
-export type Tone = "normal" | "good" | "warning" | "critical";
-
-/** The fields the UI reads from a plugin's settings block (mirrors SettingsBlock in @valethq/sdk). */
-export type Block =
-  | { type: "text"; text: string; tone: Tone }
+/** The fields the UI reads from a display item (settings v3 display types, 12.1). */
+export type Display =
+  | { type: "heading"; text: string }
+  | { type: "note"; text: string; tone: Tone }
+  | { type: "divider" }
+  | { type: "link"; text: string; href: string }
   | { type: "badge"; text: string; tone: Tone }
   | { type: "stat"; label: string; value: string; caption?: string }
   | {
@@ -19,17 +21,15 @@ export type Block =
     }
   | { type: "table"; columns: string[]; rows: string[][] }
   | {
-      type: "button";
-      label: string;
+      type: "action";
+      text: string;
       action: string;
       args: Record<string, unknown>;
       confirm?: string;
       tone: Tone;
     }
-  | { type: "group"; title?: string; layout: "stack" | "row"; blocks: Block[] }
   | { type: "unknown"; json: string };
 
-const MAX_DEPTH = 4;
 const MIN_REFRESH_MS = 1000;
 const TONES: readonly string[] = ["normal", "good", "warning", "critical"];
 
@@ -43,22 +43,36 @@ export function clampPercent(v: unknown): number | undefined {
   return typeof v === "number" && Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : undefined;
 }
 
-/** How often to re-fetch a panel, or undefined for "never". Plugins ask; the UI never polls faster than 1s. */
+/** How often to re-fetch a subsection, or undefined for "never". Plugins ask; the UI never polls faster than 1s. */
 export function refreshInterval(ms: unknown): number | undefined {
   return typeof ms === "number" && Number.isFinite(ms) && ms > 0 ? Math.max(MIN_REFRESH_MS, ms) : undefined;
 }
 
-const unknown = (raw: unknown): Block => ({
+const unknown = (raw: unknown): Display => ({
   type: "unknown",
   json: JSON.stringify(raw, null, 2) ?? "undefined",
 });
 
-/** Wire data is untrusted: anything malformed or newer than this UI becomes a JSON fallback block. */
-export function cleanBlock(raw: unknown, depth = 0): Block {
-  if (!isObject(raw) || depth > MAX_DEPTH) return unknown(raw);
+/** Only http(s) and relative links render as links; anything else (javascript:, data:) shows as text. */
+export const safeHref = (href: string): boolean => /^(https?:\/\/|\/(?!\/)|#)/i.test(href);
+
+/** Wire data is untrusted: anything malformed or newer than this UI becomes a JSON fallback. */
+export function cleanDisplay(raw: unknown): Display {
+  if (!isObject(raw)) return unknown(raw);
   const caption = str(raw.caption);
   switch (raw.type) {
-    case "text":
+    case "heading": {
+      const text = str(raw.text);
+      return text === undefined ? unknown(raw) : { type: "heading", text };
+    }
+    case "divider":
+      return { type: "divider" };
+    case "link": {
+      const text = str(raw.text);
+      const href = str(raw.href);
+      return text === undefined || href === undefined ? unknown(raw) : { type: "link", text, href };
+    }
+    case "note":
     case "badge": {
       const text = str(raw.text);
       return text === undefined ? unknown(raw) : { type: raw.type, text, tone: tone(raw.tone) };
@@ -96,28 +110,18 @@ export function cleanBlock(raw: unknown, depth = 0): Block {
         rows: raw.rows.map((r) => (Array.isArray(r) ? r.map((c) => str(c) ?? "") : [])),
       };
     }
-    case "button": {
-      const label = str(raw.label);
+    case "action": {
+      const text = str(raw.text);
       const action = str(raw.action);
-      if (label === undefined || action === undefined) return unknown(raw);
+      if (text === undefined || action === undefined) return unknown(raw);
       const confirm = str(raw.confirm);
       return {
-        type: "button",
-        label,
+        type: "action",
+        text,
         action,
         args: isObject(raw.args) ? raw.args : {},
         ...(confirm !== undefined && { confirm }),
         tone: tone(raw.tone),
-      };
-    }
-    case "group": {
-      if (!Array.isArray(raw.blocks)) return unknown(raw);
-      const title = str(raw.title);
-      return {
-        type: "group",
-        ...(title !== undefined && { title }),
-        layout: raw.layout === "row" ? "row" : "stack",
-        blocks: raw.blocks.map((b) => cleanBlock(b, depth + 1)),
       };
     }
     default:
@@ -125,14 +129,14 @@ export function cleanBlock(raw: unknown, depth = 0): Block {
   }
 }
 
-export interface BlockDeps {
-  /** Runs a button's action. Reject to show the message beside the button. */
+export interface DisplayDeps {
+  /** Runs an action display. Reject to show the message beside the button. */
   run(action: string, args: Record<string, unknown>): Promise<void>;
 }
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-function meterNode(b: Extract<Block, { type: "meter" }>): HTMLElement {
+function meterNode(b: Extract<Display, { type: "meter" }>): HTMLElement {
   const fill = el("div", { class: "meter-fill" });
   fill.style.width = `${b.value}%`;
   const bar = el("div", {
@@ -165,14 +169,14 @@ function meterNode(b: Extract<Block, { type: "meter" }>): HTMLElement {
   );
 }
 
-function tableNode(b: Extract<Block, { type: "table" }>): HTMLElement {
+function tableNode(b: Extract<Display, { type: "table" }>): HTMLElement {
   const head = el("tr", {}, ...b.columns.map((c) => el("th", { text: c })));
   const rows = b.rows.map((r) => el("tr", {}, ...r.map((c) => el("td", { text: c }))));
   return el("table", { class: "blk-table" }, el("thead", {}, head), el("tbody", {}, ...rows));
 }
 
-function buttonNode(b: Extract<Block, { type: "button" }>, deps: BlockDeps): HTMLElement {
-  const button = el("button", { class: `blk-button tone-${b.tone}`, type: "button", text: b.label });
+function actionNode(b: Extract<Display, { type: "action" }>, deps: DisplayDeps): HTMLElement {
+  const button = el("button", { class: `blk-button tone-${b.tone}`, type: "button", text: b.text });
   const error = el("span", { class: "blk-error" });
   button.addEventListener("click", () => {
     if (b.confirm !== undefined && !window.confirm(b.confirm)) return;
@@ -190,10 +194,24 @@ function buttonNode(b: Extract<Block, { type: "button" }>, deps: BlockDeps): HTM
   return el("span", { class: "blk-action" }, button, error);
 }
 
-export function blockNode(b: Block, deps: BlockDeps): HTMLElement {
+export function displayNode(b: Display, deps: DisplayDeps): HTMLElement {
   switch (b.type) {
-    case "text":
+    case "heading":
+      return el("h4", { class: "panel-title", text: b.text });
+    case "note":
       return el("p", { class: `blk-text tone-${b.tone}`, text: b.text });
+    case "divider":
+      return el("hr", { class: "blk-divider" });
+    case "link":
+      return safeHref(b.href)
+        ? el("a", {
+            class: "blk-link",
+            href: b.href,
+            target: "_blank",
+            rel: "noopener noreferrer",
+            text: b.text,
+          })
+        : el("p", { class: "blk-text tone-normal", text: `${b.text} (${b.href})` });
     case "badge":
       return el("span", { class: `blk-badge tone-${b.tone}`, text: b.text });
     case "stat":
@@ -208,20 +226,30 @@ export function blockNode(b: Block, deps: BlockDeps): HTMLElement {
       return meterNode(b);
     case "table":
       return tableNode(b);
-    case "button":
-      return buttonNode(b, deps);
-    case "group":
-      return el(
-        "div",
-        { class: `blk-group ${b.layout}` },
-        ...(b.title === undefined ? [] : [el("h4", { text: b.title })]),
-        ...b.blocks.map((c) => blockNode(c, deps)),
-      );
+    case "action":
+      return actionNode(b, deps);
     case "unknown":
       return el("pre", { class: "blk-unknown", text: b.json });
   }
 }
 
-export function renderBlocks(raw: unknown[], deps: BlockDeps): HTMLElement[] {
-  return raw.map((r) => blockNode(cleanBlock(r), deps));
+/** Badges, stats and actions that sit next to each other share a row, as v2 row groups did. */
+export function renderDisplays(raw: unknown[], deps: DisplayDeps): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  let row: HTMLElement | undefined;
+  for (const r of raw) {
+    const d = cleanDisplay(r);
+    const node = displayNode(d, deps);
+    if (d.type === "badge" || d.type === "action" || d.type === "stat") {
+      if (row === undefined) {
+        row = el("div", { class: "blk-group row" });
+        out.push(row);
+      }
+      row.append(node);
+    } else {
+      row = undefined;
+      out.push(node);
+    }
+  }
+  return out;
 }

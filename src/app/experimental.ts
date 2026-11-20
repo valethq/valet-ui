@@ -1,7 +1,5 @@
 import { EXPERIMENTAL_COOKIE, hasExperimentalCookie } from "../experimental";
-import type { SettingsEntry } from "./types";
 
-export const EXPERIMENTAL_KEY = "ui-experimental";
 const YEAR_SECONDS = 31_536_000;
 
 export function cookieFor(enabled: boolean, secure: boolean): string {
@@ -14,32 +12,4 @@ export const experimentalEnabled = (): boolean => hasExperimentalCookie(document
 export function setExperimental(enabled: boolean): void {
   // biome-ignore lint/suspicious/noDocumentCookie: the string is built by cookieFor, and cookieStore is not in every browser
   document.cookie = cookieFor(enabled, location.protocol === "https:");
-}
-
-/** The tab is a local panel shaped like a plugin one, so it reuses the settings form. */
-export function experimentalEntry(): SettingsEntry {
-  return {
-    key: EXPERIMENTAL_KEY,
-    plugin: "valet-ui",
-    pluginName: "Web UI",
-    title: "Experimental",
-    description:
-      "Early features stored in this browser only. Enables compressed responses and paged chat loading. Reload after changing.",
-    schema: {
-      type: "object",
-      properties: {
-        enabled: {
-          type: "boolean",
-          title: "Enable experimental features",
-          description: "Turn off if you run into issues.",
-        },
-      },
-    },
-    values: { enabled: experimentalEnabled() },
-  };
-}
-
-export function saveExperimental(values: Record<string, unknown>): SettingsEntry {
-  setExperimental(values.enabled === true);
-  return experimentalEntry();
 }

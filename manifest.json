@@ -6,36 +6,59 @@
   "description": "Web interface for valet (default 127.0.0.1:7418).",
   "valet": "^0.1.0",
   "main": "./src/index.ts",
-  "configSchema": {
-    "type": "object",
-    "properties": {
-      "host": {
-        "type": "string",
-        "title": "Host"
-      },
-      "port": {
-        "type": "integer",
-        "title": "Port"
-      },
-      "coreUrl": {
-        "type": "string",
-        "title": "Server URL"
-      },
-      "chunkMessages": {
-        "type": "integer",
-        "title": "Messages per page",
-        "minimum": 5,
-        "maximum": 100,
-        "description": "Messages loaded per page (Experimental)."
-      },
-      "partChars": {
-        "type": "integer",
-        "title": "Max characters per chunk",
-        "minimum": 500,
-        "maximum": 200000,
-        "description": "Max characters sent per message part before streaming in chunks."
+  "settings": {
+    "sections": {
+      "system": {
+        "subsections": [
+          {
+            "id": "general",
+            "label": "General",
+            "items": [
+              {
+                "id": "host",
+                "label": "Host",
+                "input": {
+                  "type": "string"
+                }
+              },
+              {
+                "id": "port",
+                "label": "Port",
+                "input": {
+                  "type": "int"
+                }
+              },
+              {
+                "id": "coreUrl",
+                "label": "Server URL",
+                "input": {
+                  "type": "string"
+                }
+              },
+              {
+                "id": "chunkMessages",
+                "label": "Messages per page",
+                "summary": "Messages loaded per page (Experimental).",
+                "input": {
+                  "type": "int",
+                  "min": 5,
+                  "max": 100
+                }
+              },
+              {
+                "id": "partChars",
+                "label": "Max characters per chunk",
+                "summary": "Max characters sent per message part before streaming in chunks.",
+                "input": {
+                  "type": "int",
+                  "min": 500,
+                  "max": 200000
+                }
+              }
+            ]
+          }
+        ]
       }
-    },
-    "additionalProperties": false
+    }
   }
 }

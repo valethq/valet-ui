@@ -161,28 +161,92 @@ export interface PartType {
   loaded?: boolean;
 }
 
-/** A plugin's settings panel from GET /plugins/valet-ui/settings (mirrors src/settings.ts). */
-export interface SettingsEntry {
-  key: string;
-  plugin: string;
-  /** Friendly name of `plugin` from core's plugin list; set by listSettings when known. */
-  pluginName?: string;
-  title: string;
-  description?: string;
-  /** One of the plugin's `x-pages` ids; omit for the main page (12.1). */
-  page?: string;
-  schema?: Record<string, unknown>;
-  values?: Record<string, unknown>;
-  /** Raw view blocks; views/blocks.ts validates them. */
-  blocks?: unknown[];
-  viewError?: string;
-  refreshMs?: number;
+// ---- settings v3 (12.1), mirrored from @valethq/sdk settings.ts ----
+
+export type SettingsGroup = "system" | "inference" | "tools";
+export type Tone = "normal" | "good" | "warning" | "critical";
+export type Path = string;
+export type Cond =
+  | { eq: [Path, unknown] }
+  | { ne: [Path, unknown] }
+  | { in: [Path, unknown[]] }
+  | { set: Path }
+  | { not: Cond }
+  | { all: Cond[] }
+  | { any: Cond[] };
+
+export interface OptionDef {
+  value: string;
+  label?: string;
+  summary?: string;
+  icon?: string;
+  group?: string;
+}
+export type Args = Record<string, unknown>;
+export type OptionsDef = OptionDef[] | { from: string; args?: Args };
+
+/** An input: `type` plus whatever fields its type takes (validated by core, read loosely here). */
+export interface InputDef {
+  type: string;
+  id?: string;
+  label?: string;
+  summary?: string;
+  default?: unknown;
+  required?: boolean;
+  readonly?: boolean;
+  when?: Cond;
+  refs?: string[];
+  [field: string]: unknown;
 }
 
-/** Group a settings page is listed under (SDK SettingsGroup). */
-export type SettingsGroup = "system" | "inference" | "tools";
+export interface SettingDef {
+  id: string;
+  label: string;
+  summary?: string;
+  details?: string;
+  input: InputDef;
+  when?: Cond;
+  scopes?: ("user" | "project")[];
+  apply?: "live" | "restart";
+  advanced?: boolean;
+  deprecated?: string;
+  keywords?: string[];
+}
 
-/** One plugin's config as GET /api/core/settings serves it (12.1). */
+/** A display item: stores nothing. Fields by type (heading, note, divider, link, badge, stat, meter, table, action). */
+export interface DisplayDef {
+  type: string;
+  id?: string;
+  when?: Cond;
+  from?: string;
+  args?: Args;
+  [field: string]: unknown;
+}
+
+export type ItemDef = SettingDef | DisplayDef;
+
+export interface SubsectionDef {
+  id: string;
+  label: string;
+  summary?: string;
+  order?: number;
+  items: ItemDef[];
+}
+
+export interface SectionDef {
+  icon?: string;
+  order?: number;
+  subsections: SubsectionDef[];
+}
+
+export interface SettingsDoc {
+  sections: Partial<Record<SettingsGroup, SectionDef>>;
+  types?: Record<string, { base: string; [field: string]: unknown }>;
+}
+
+export type SettingSource = "default" | "file" | "settings" | "project";
+
+/** One plugin's settings as GET /api/core/settings serves them (12.1 PluginSettings). */
 export interface CorePluginSettings {
   plugin: string;
   name?: string;
@@ -191,10 +255,42 @@ export interface CorePluginSettings {
   provides: string[];
   state: "active" | "failed" | "disabled" | "pending";
   enabled: boolean;
+  settings?: SettingsDoc;
+  types?: Record<string, { base: string; [field: string]: unknown }>;
   schema?: Record<string, unknown>;
   values: Record<string, unknown>;
-  sources: Record<string, "default" | "file" | "settings">;
+  sources: Record<string, SettingSource>;
+  layers?: {
+    file?: Record<string, unknown>;
+    user?: Record<string, unknown>;
+    project?: Record<string, unknown>;
+  };
+  liveConfig?: boolean;
+  issues?: Record<string, string>;
   restartRequired?: string;
+}
+
+/** A settings@2 runtime subsection as valet-ui's relay serves it (mirrors src/settings.ts). */
+export interface RuntimeView {
+  id: string;
+  label: string;
+  summary?: string;
+  order?: number;
+  section?: SettingsGroup;
+  items: ItemDef[];
+  refreshMs?: number;
+  values?: Record<string, unknown>;
+  editable: boolean;
+}
+
+/** One plugin's settings@2 contribution (mirrors src/settings.ts). */
+export interface ContributionView {
+  plugin: string;
+  options: string[];
+  views: string[];
+  actions: string[];
+  subsections: RuntimeView[];
+  error?: string;
 }
 
 export type SecretSource = "file" | "env" | null;

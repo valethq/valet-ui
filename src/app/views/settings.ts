@@ -1,10 +1,8 @@
-import { getSecretMeta, listCoreSettings, listModels, patchCoreSettings, putSecret } from "../api";
 import { el, leave } from "../dom";
-import { EXPERIMENTAL_KEY, experimentalEntry, saveExperimental } from "../experimental";
+import { experimentalEnabled, setExperimental } from "../experimental";
 import { icon, iconButton } from "../icons";
-import type { CorePluginSettings, SettingsEntry, SettingsGroup } from "../types";
-import { refreshInterval, renderBlocks } from "./blocks";
-import { schemaForm, type SchemaFormDeps } from "./schema-form";
+import type { ContributionView, CorePluginSettings, SettingsGroup } from "../types";
+import { configPage, type FormDeps } from "./settings-form";
 import {
   buildSettingsPages,
   GROUP_LABEL,
@@ -14,283 +12,67 @@ import {
 } from "./settings-pages";
 import { themeSection } from "./themes";
 
-export interface SettingsDeps {
-  load(): Promise<SettingsEntry[]>;
-  save(key: string, values: Record<string, unknown>): Promise<SettingsEntry>;
-  refresh(key: string): Promise<SettingsEntry>;
-  action(key: string, name: string, args: Record<string, unknown>): Promise<SettingsEntry>;
-  listCore?(): Promise<CorePluginSettings[]>;
-  patchCore?(
-    plugin: string,
-    patch: { config?: Record<string, unknown>; enabled?: boolean },
-  ): Promise<CorePluginSettings>;
+export interface SettingsDeps extends FormDeps {
+  listCore(): Promise<CorePluginSettings[]>;
+  listContributions(): Promise<ContributionView[]>;
 }
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-const formDeps: SchemaFormDeps = {
-  listModels,
-  listCatalog: listModels,
-  getSecretMeta,
-  putSecret,
-};
-
-function panelBlock(entry: SettingsEntry, deps: SettingsDeps): HTMLElement {
-  const section = el("div", { class: "settings-panel-block" });
-  const blocks = el("div", { class: "blocks" });
-  let timer: ReturnType<typeof setInterval> | undefined;
-  let latest = entry;
-
-  const showBlocks = (panel: SettingsEntry): void => {
-    latest = panel;
-    const nodes = renderBlocks(panel.blocks ?? [], {
-      run: async (name, args) => {
-        showBlocks(await deps.action(panel.key, name, args));
-      },
-    });
-    if (panel.viewError !== undefined) {
-      nodes.push(el("div", { class: "hint error", text: `Couldn't load section: ${panel.viewError}` }));
-    }
-    blocks.replaceChildren(...nodes);
-    blocks.hidden = nodes.length === 0;
-  };
-
-  const startRefresh = (ms: number): void => {
-    clearInterval(timer);
-    timer = setInterval(() => {
-      if (!section.isConnected) return clearInterval(timer);
-      const page = section.closest(".settings-section");
-      if (page instanceof HTMLElement && page.hidden) return;
-      if (document.hidden) return;
-      deps
-        .refresh(latest.key)
-        .then(showBlocks)
-        .catch(() => {});
-    }, ms);
-  };
-
-  const render = (panel: SettingsEntry): void => {
-    const form =
-      panel.schema === undefined ? undefined : schemaForm(panel.schema, panel.values ?? {}, formDeps);
-    const status = el("span", { class: "form-status" });
-    const save = el("button", { class: "primary", text: "Save" });
-    showBlocks(panel);
-    const ms = refreshInterval(panel.refreshMs);
-    if (ms !== undefined) startRefresh(ms);
-    section.replaceChildren(
-      el("h4", { class: "panel-title", text: panel.title }),
-      ...(panel.description === undefined
-        ? []
-        : [el("p", { class: "section-desc", text: panel.description })]),
-      blocks,
-      ...(form === undefined ? [] : [form.node, el("div", { class: "form-actions" }, status, save)]),
-    );
-    save.addEventListener("click", () => {
-      if (form === undefined) return;
-      status.className = "form-status";
-      status.textContent = "";
-      let values: Record<string, unknown>;
-      try {
-        values = form.read();
-      } catch (e) {
-        status.className = "form-status error";
-        status.textContent = errorText(e);
-        return;
-      }
-      save.disabled = true;
-      deps
-        .save(panel.key, values)
-        .then((next) => {
-          render({ ...next, pluginName: panel.pluginName, page: panel.page });
-          const s = section.querySelector(".form-status");
-          if (s !== null) s.textContent = "Saved";
-        })
-        .catch((e: unknown) => {
-          save.disabled = false;
-          status.className = "form-status error";
-          status.textContent = errorText(e);
-        });
-    });
-  };
-  render(entry);
-  return section;
-}
-
-function configSection(page: SettingsPage, deps: SettingsDeps): HTMLElement {
-  const section = el("section", { class: "settings-section" });
-  let current = page;
-
-  const paint = (p: SettingsPage): void => {
-    current = p;
-    const kids: Node[] = [
-      el("h3", {}, p.title, p.plugin === undefined ? "" : el("span", { class: "plugin-id", text: p.plugin })),
-    ];
-    if (p.description !== undefined) kids.push(el("p", { class: "section-desc", text: p.description }));
-    if (p.restartRequired !== undefined) {
-      kids.push(el("div", { class: "settings-banner", text: `Restart required: ${p.restartRequired}` }));
-    }
-
-    for (const panel of p.panels) kids.push(panelBlock(panel, deps));
-
-    const hasForm = p.schema !== undefined && p.fieldKeys.length > 0;
-    const enabledToggle =
-      p.plugin !== undefined && p.enabled !== undefined && p.id === p.plugin
-        ? (() => {
-            const box = el("input", {
-              type: "checkbox",
-              class: "switch",
-              id: `en-${p.id}`,
-              "aria-label": "Enabled",
-            });
-            box.checked = p.enabled !== false;
-            return el(
-              "div",
-              { class: "field toggle" },
-              el(
-                "div",
-                {},
-                el("label", { class: "field-label", for: `en-${p.id}`, text: "Enabled" }),
-                el("div", {
-                  class: "field-desc",
-                  text: "Takes effect after restart.",
-                }),
-              ),
-              box,
-            );
-          })()
-        : undefined;
-
-    if (hasForm || enabledToggle !== undefined) {
-      const form = hasForm ? schemaForm(p.schema as Record<string, unknown>, p.values, formDeps) : undefined;
-      const status = el("span", { class: "form-status" });
-      const save = el("button", { class: "primary", text: "Save" });
-      if (enabledToggle !== undefined) kids.push(enabledToggle);
-      if (form !== undefined) kids.push(form.node);
-      kids.push(el("div", { class: "form-actions" }, status, save));
-
-      save.addEventListener("click", () => {
-        if (p.plugin === undefined || deps.patchCore === undefined) return;
-        status.className = "form-status";
-        status.textContent = "";
-        let values: Record<string, unknown> = {};
-        try {
-          values = form?.read() ?? {};
-        } catch (e) {
-          status.className = "form-status error";
-          status.textContent = errorText(e);
-          return;
-        }
-        const config: Record<string, unknown> = {};
-        for (const key of p.fieldKeys) {
-          if (Object.hasOwn(values, key)) config[key] = values[key];
-          else config[key] = null;
-        }
-        const enabledBox = enabledToggle?.querySelector("input") as HTMLInputElement | null;
-        const patch: { config?: Record<string, unknown>; enabled?: boolean } = {
-          ...(p.fieldKeys.length > 0 ? { config } : {}),
-          ...(enabledBox !== null && enabledBox !== undefined ? { enabled: enabledBox.checked } : {}),
-        };
-        save.disabled = true;
-        deps
-          .patchCore(p.plugin, patch)
-          .then((next) => {
-            paint({
-              ...current,
-              values: next.values,
-              sources: next.sources,
-              enabled: next.enabled,
-              restartRequired: next.restartRequired,
-              schema: current.schema,
-            });
-            const s = section.querySelector(".form-status");
-            if (s !== null) s.textContent = "Saved";
-          })
-          .catch((e: unknown) => {
-            save.disabled = false;
-            status.className = "form-status error";
-            status.textContent = errorText(e);
-          });
-      });
-    } else if (p.panels.length === 0) {
-      kids.push(el("div", { class: "hint", text: "No settings on this page" }));
-    }
-
-    section.replaceChildren(...kids);
-  };
-
-  paint(page);
-  return section;
-}
-
-function builtinSection(page: SettingsPage, deps: SettingsDeps): HTMLElement {
-  if (page.kind === "theme") return themeSection();
-  const section = el("section", { class: "settings-section" });
-  const entry = experimentalEntry();
-  const form = schemaForm(entry.schema as Record<string, unknown>, entry.values ?? {});
+/** The Experimental page: one switch stored in this browser (a cookie), not server config. */
+function experimentalSection(): HTMLElement {
+  const box = el("input", { type: "checkbox", class: "switch", id: "ui-experimental-enabled" });
+  box.checked = experimentalEnabled();
   const status = el("span", { class: "form-status" });
   const save = el("button", { class: "primary", text: "Save" });
-  section.append(
-    el("h3", {}, entry.title),
-    el("p", { class: "section-desc", text: entry.description ?? "" }),
-    form.node,
-    el("div", { class: "form-actions" }, status, save),
-  );
   save.addEventListener("click", () => {
-    status.className = "form-status";
-    status.textContent = "";
-    let values: Record<string, unknown>;
-    try {
-      values = form.read();
-    } catch (e) {
-      status.className = "form-status error";
-      status.textContent = errorText(e);
-      return;
-    }
-    void deps.save(EXPERIMENTAL_KEY, values);
+    setExperimental(box.checked);
     status.textContent = "Saved. Reload to apply";
   });
-  return section;
+  return el(
+    "section",
+    { class: "settings-section" },
+    el("h3", {}, "Experimental"),
+    el("p", {
+      class: "section-desc",
+      text: "Early features stored in this browser only. Enables compressed responses and paged chat loading. Reload after changing.",
+    }),
+    el(
+      "div",
+      { class: "field toggle" },
+      el(
+        "div",
+        {},
+        el("label", { class: "field-label", for: box.id, text: "Enable experimental features" }),
+        el("div", { class: "field-desc", text: "Turn off if you run into issues." }),
+      ),
+      box,
+    ),
+    el("div", { class: "form-actions" }, status, save),
+  );
 }
 
-/** Saves the Experimental panel in this browser; everything else goes to the server. */
-const withLocalPanels = (deps: SettingsDeps): SettingsDeps => ({
-  ...deps,
-  save: (key, values) =>
-    key === EXPERIMENTAL_KEY ? Promise.resolve(saveExperimental(values)) : deps.save(key, values),
-  listCore: deps.listCore ?? listCoreSettings,
-  patchCore: deps.patchCore ?? patchCoreSettings,
-});
-
 function builtinPages(): SettingsPage[] {
+  const page = (id: string, title: string, order: number, kind: "theme" | "experimental"): SettingsPage => ({
+    id,
+    title,
+    group: "system",
+    order,
+    kind,
+    subsections: [],
+    runtime: [],
+    primary: false,
+  });
   return [
-    {
-      id: "ui-theme",
-      title: "Themes",
-      group: "system",
-      order: 900,
-      kind: "theme",
-      values: {},
-      sources: {},
-      fieldKeys: [],
-      panels: [],
-    },
-    {
-      id: "ui-experimental",
-      title: "Experimental",
-      group: "system",
-      order: 901,
-      kind: "experimental",
-      values: {},
-      sources: {},
-      fieldKeys: [],
-      panels: [],
-    },
+    page("ui-theme", "Themes", 900, "theme"),
+    page("ui-experimental", "Experimental", 901, "experimental"),
   ];
 }
 
 function pagePanel(page: SettingsPage, deps: SettingsDeps): HTMLElement {
-  if (page.kind === "theme" || page.kind === "experimental") return builtinSection(page, deps);
-  return configSection(page, deps);
+  if (page.kind === "theme") return themeSection();
+  if (page.kind === "experimental") return experimentalSection();
+  return configPage(page, deps);
 }
 
 interface Tab {
@@ -486,9 +268,8 @@ function drillDown(
   return { root, back };
 }
 
-/** Opens the settings dialog: core configSchema pages grouped by x-group, plus Theme / Experimental. */
-export function openSettings(serverDeps: SettingsDeps): void {
-  const deps = withLocalPanels(serverDeps);
+/** Opens the settings dialog: one page per plugin and section (settings v3), plus Themes and Experimental. */
+export function openSettings(deps: SettingsDeps): void {
   if (document.querySelector(".modal-backdrop:not(.leaving)") !== null) return;
   const opener = document.activeElement as HTMLElement | null;
   const title = el("h2", { id: "settings-title", text: "Settings" });
@@ -564,9 +345,9 @@ export function openSettings(serverDeps: SettingsDeps): void {
   dialog.focus();
   mount();
 
-  Promise.all([deps.listCore?.() ?? listCoreSettings(), deps.load()])
-    .then(([core, panels]) => {
-      pages = [...buildSettingsPages(core, panels), ...builtinPages()];
+  Promise.all([deps.listCore(), deps.listContributions().catch((): ContributionView[] => [])])
+    .then(([core, contributions]) => {
+      pages = [...buildSettingsPages(core, contributions), ...builtinPages()];
       mount();
     })
     .catch((e: unknown) => {

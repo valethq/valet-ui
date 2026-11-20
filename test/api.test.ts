@@ -11,10 +11,12 @@ import {
   listModels,
   listProjects,
   listPartTypes,
-  listSettings,
+  listContributions,
+  patchCoreSettings,
+  saveRuntime,
+  sourceOptions,
   moveSession,
   releaseBlobUrl,
-  saveSettings,
   sendMessage,
   setSessionModel,
   updateSession,
@@ -179,61 +181,65 @@ describe("attachments", () => {
 });
 
 describe("settings", () => {
-  test("saveSettings PUTs the values to valet-ui's route on core", async () => {
-    let seen: { url: string; method?: string; body?: unknown } = { url: "" };
+  const capture = () => {
+    const seen: { url: string; method?: string; body?: unknown }[] = [];
     g.fetch = ((url: string, init: RequestInit) => {
-      seen = { url, method: init.method, body: init.body };
-      return Promise.resolve(new Response('{"key":"agent","values":{"a":2}}'));
+      seen.push({ url, method: init.method, body: init.body });
+      return Promise.resolve(new Response("[]"));
     }) as unknown as typeof fetch;
-    await saveSettings("agent/main", { a: 2 });
-    expect(seen).toEqual({
-      url: "/plugins/valet-ui/settings/agent%2Fmain",
-      method: "PUT",
-      body: '{"a":2}',
+    return seen;
+  };
+
+  test("runtime saves and option sources go through valet-ui's relay", async () => {
+    const seen = capture();
+    await saveRuntime("valet-auth", "account", { a: 2 });
+    await sourceOptions("valet-agent", "models", { provider: "p/1" });
+    await listContributions();
+    expect(seen).toEqual([
+      { url: "/plugins/valet-ui/settings/valet-auth/subsections/account", method: "PUT", body: '{"a":2}' },
+      {
+        url: "/plugins/valet-ui/settings/valet-agent/options/models",
+        method: "POST",
+        body: '{"provider":"p/1"}',
+      },
+      { url: "/plugins/valet-ui/settings", method: "GET", body: undefined },
+    ]);
+  });
+
+  test("a project save PATCHes core with its scope", async () => {
+    const seen = capture();
+    await patchCoreSettings("valet-contextmanager", {
+      scope: "project",
+      project: "prj_1",
+      config: { a: null },
     });
+    expect(seen[0]).toEqual({
+      url: "/api/core/settings/valet-contextmanager",
+      method: "PATCH",
+      body: '{"scope":"project","project":"prj_1","config":{"a":null}}',
+    });
+  });
+
+  test("a save's per-path failures ride on the error", async () => {
+    stubFetch(
+      () =>
+        new Response(
+          '{"error":{"code":"bad_request","message":"x: must be at most 5","errors":{"x":"must be at most 5"}}}',
+          {
+            status: 400,
+          },
+        ),
+    );
+    const err = await patchCoreSettings("p", { config: { x: 9 } }).catch((e: unknown) => e);
+    expect((err as ApiError).status).toBe(400);
+    expect((err as ApiError).errors).toEqual({ x: "must be at most 5" });
   });
 
   test("a provider's rejection message surfaces as the error text", async () => {
     stubFetch(() => new Response('{"error":"port is taken"}', { status: 422 }));
-    const err = await listSettings().catch((e: unknown) => e);
+    const err = await listContributions().catch((e: unknown) => e);
     expect((err as ApiError).status).toBe(422);
     expect((err as ApiError).message).toBe("port is taken");
-  });
-});
-
-describe("settings panels get friendly plugin names", () => {
-  const panels = [
-    { key: "agent", plugin: "valet-agent", title: "Agent", schema: {}, values: {} },
-    { key: "ui", plugin: "valet-ui", title: "Web", schema: {}, values: {} },
-  ];
-  const stubRoutes = (plugins: () => Response) => {
-    g.fetch = ((url: string) =>
-      Promise.resolve(
-        url.startsWith("/api/core/plugins") ? plugins() : new Response(JSON.stringify(panels)),
-      )) as unknown as typeof fetch;
-  };
-
-  test("each panel gets its plugin's manifest name from core", async () => {
-    stubRoutes(
-      () =>
-        new Response(
-          JSON.stringify([
-            { id: "valet-agent", name: "Agent", state: "active" },
-            { id: "valet-ui", state: "active" },
-          ]),
-        ),
-    );
-    const [agent, ui] = await listSettings();
-    expect(agent?.pluginName).toBe("Agent");
-    expect(ui?.pluginName).toBeUndefined();
-    expect(ui?.plugin).toBe("valet-ui");
-  });
-
-  test("a failed plugin list leaves panels listed without names", async () => {
-    stubRoutes(() => new Response('{"error":"nope"}', { status: 500 }));
-    const entries = await listSettings();
-    expect(entries.map((e) => e.title)).toEqual(["Agent", "Web"]);
-    expect(entries.every((e) => e.pluginName === undefined)).toBe(true);
   });
 });
 

@@ -333,10 +333,19 @@ function sidebarProps(
     onSettings: () => {
       closeNav();
       openSettings({
-        load: api.listSettings,
-        save: api.saveSettings,
-        refresh: api.getSettings,
-        action: api.runSettingsAction,
+        listCore: () => api.listCoreSettings(),
+        listContributions: api.listContributions,
+        getCore: api.getCoreSettings,
+        patchCore: api.patchCoreSettings,
+        listProjects: async () => (await api.listProjects()).map((p) => ({ id: p.id, name: p.name })),
+        options: api.sourceOptions,
+        view: api.sourceView,
+        action: api.runAction,
+        saveRuntime: api.saveRuntime,
+        refreshRuntime: api.getContribution,
+        listSecrets: api.listSecrets,
+        putSecret: api.putSecret,
+        listCatalog: api.listModels,
       });
     },
   };

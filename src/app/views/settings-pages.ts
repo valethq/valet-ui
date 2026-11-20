@@ -1,16 +1,13 @@
-import type { CorePluginSettings, SettingsEntry, SettingsGroup } from "../types";
+import { deriveGroup, docFromSchema } from "../settings-model";
+import type {
+  ContributionView,
+  CorePluginSettings,
+  RuntimeView,
+  SettingsGroup,
+  SubsectionDef,
+} from "../types";
 
-type Prop = Record<string, unknown>;
-
-export interface SettingsPageInfo {
-  title: string;
-  description?: string;
-  group?: SettingsGroup;
-  icon?: string;
-  order?: number;
-}
-
-/** One tab in the settings UI: a plugin page, an x-pages split, or a built-in. */
+/** One page in the settings UI: a plugin in one section, or a built-in. */
 export interface SettingsPage {
   id: string;
   title: string;
@@ -20,15 +17,14 @@ export interface SettingsPage {
   icon?: string;
   kind: "config" | "theme" | "experimental";
   plugin?: string;
-  /** Filtered configSchema for this page (properties only). */
-  schema?: Record<string, unknown>;
-  values: Record<string, unknown>;
-  sources: Record<string, "default" | "file" | "settings">;
-  enabled?: boolean;
-  restartRequired?: string;
-  /** Top-level keys this page edits (for PATCH). */
-  fieldKeys: string[];
-  panels: SettingsEntry[];
+  /** The plugin's settings as core serves them; the page edits `subsections` of its doc. */
+  core?: CorePluginSettings;
+  subsections: SubsectionDef[];
+  runtime: RuntimeView[];
+  /** The plugin's settings@2 contribution, for option/view/action calls. */
+  contribution?: ContributionView;
+  /** Only the plugin's first page carries the Enabled switch. */
+  primary: boolean;
 }
 
 export const GROUP_ORDER: SettingsGroup[] = ["system", "inference", "tools"];
@@ -47,162 +43,71 @@ export function groupSubtitle(titles: string[]): string {
   return `${clean.slice(0, 3).join(", ")}…`;
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+const byOrder = <T extends { order?: number }>(list: T[]): T[] =>
+  list
+    .map((x, i) => [x, i] as const)
+    .sort(([a, i], [b, j]) => (a.order ?? 0) - (b.order ?? 0) || i - j)
+    .map(([x]) => x);
 
-/** Without `x-group`: inference → inference, tool-only → tools, else system. */
-export function deriveGroup(provides: string[], schema?: Record<string, unknown>): SettingsGroup {
-  const hinted = schema?.["x-group"];
-  if (hinted === "system" || hinted === "inference" || hinted === "tools") return hinted;
-  if (provides.some((p) => p.startsWith("inference@"))) return "inference";
-  const substantive = provides.filter((p) => !p.startsWith("settings@"));
-  if (substantive.length > 0 && substantive.every((p) => p.startsWith("tools@"))) return "tools";
-  return "system";
-}
-
-/** Top-level properties for `pageId` (null = main page: no `x-page`). */
-export function propertiesForPage(
-  schema: Record<string, unknown> | undefined,
-  pageId: string | null,
-): Record<string, Prop> {
-  if (!isRecord(schema?.properties)) return {};
-  const out: Record<string, Prop> = {};
-  for (const [key, raw] of Object.entries(schema.properties)) {
-    if (!isRecord(raw)) continue;
-    const xp = raw["x-page"];
-    if (pageId === null) {
-      if (typeof xp !== "string") out[key] = raw;
-    } else if (xp === pageId) out[key] = raw;
-  }
-  return out;
-}
-
-function pageInfoOf(raw: unknown): SettingsPageInfo | undefined {
-  if (!isRecord(raw) || typeof raw.title !== "string") return undefined;
-  const group = raw.group;
-  return {
-    title: raw.title,
-    ...(typeof raw.description === "string" ? { description: raw.description } : {}),
-    ...(group === "system" || group === "inference" || group === "tools" ? { group } : {}),
-    ...(typeof raw.icon === "string" ? { icon: raw.icon } : {}),
-    ...(typeof raw.order === "number" ? { order: raw.order } : {}),
-  };
-}
-
-function xPages(schema: Record<string, unknown> | undefined): Record<string, SettingsPageInfo> {
-  const raw = schema?.["x-pages"];
-  if (!isRecord(raw)) return {};
-  const out: Record<string, SettingsPageInfo> = {};
-  for (const [id, info] of Object.entries(raw)) {
-    const parsed = pageInfoOf(info);
-    if (parsed !== undefined) out[id] = parsed;
-  }
-  return out;
-}
-
-function schemaSlice(
-  schema: Record<string, unknown> | undefined,
-  props: Record<string, Prop>,
-): Record<string, unknown> | undefined {
-  if (schema === undefined || Object.keys(props).length === 0) return undefined;
-  return { ...schema, properties: props };
-}
-
-/**
- * Builds the settings tab list from core PluginSettings + settings@1 panels.
- * Built-ins (Theme, Experimental) are added by the caller.
- */
-export function buildSettingsPages(plugins: CorePluginSettings[], panels: SettingsEntry[]): SettingsPage[] {
+/** Pages from core's PluginSettings (v3 docs, or a generated form for raw schemas) plus settings@2 runtime subsections. */
+export function buildSettingsPages(
+  plugins: CorePluginSettings[],
+  contributions: ContributionView[],
+): SettingsPage[] {
   const pages: SettingsPage[] = [];
-  const byId = new Map<string, SettingsPage>();
+  const byPlugin = new Map(contributions.map((c) => [c.plugin, c]));
+  const seen = new Set<string>();
 
   for (const p of plugins) {
-    const schema = p.schema;
-    const extras = xPages(schema);
-    const hasSchema = schema !== undefined;
-    const pluginPanels = panels.filter((e) => e.plugin === p.plugin);
-    if (!hasSchema && pluginPanels.length === 0) continue;
-
-    const mainGroup = deriveGroup(p.provides ?? [], schema);
-    const mainOrder = typeof schema?.["x-order"] === "number" ? schema["x-order"] : 100;
-    const mainIcon = typeof schema?.["x-icon"] === "string" ? schema["x-icon"] : undefined;
-    const mainProps = propertiesForPage(schema, null);
-    const main: SettingsPage = {
-      id: p.plugin,
-      title: p.name ?? p.plugin,
-      ...(typeof p.description === "string" ? { description: p.description } : {}),
-      group: mainGroup,
-      order: mainOrder,
-      ...(mainIcon === undefined ? {} : { icon: mainIcon }),
-      kind: "config",
-      plugin: p.plugin,
-      schema: schemaSlice(schema, mainProps),
-      values: p.values ?? {},
-      sources: p.sources ?? {},
-      enabled: p.enabled,
-      ...(p.restartRequired === undefined ? {} : { restartRequired: p.restartRequired }),
-      fieldKeys: Object.keys(mainProps),
-      panels: [],
-    };
-    // Keep a main page when it has fields, no x-pages, or panels that land on it.
-    const keepMain =
-      main.fieldKeys.length > 0 || Object.keys(extras).length === 0 || pluginPanels.some((e) => !e.page);
-    if (keepMain) {
-      pages.push(main);
-      byId.set(main.id, main);
-    }
-
-    for (const [pageId, info] of Object.entries(extras)) {
-      const props = propertiesForPage(schema, pageId);
-      const page: SettingsPage = {
-        id: `${p.plugin}:${pageId}`,
-        title: info.title,
-        ...(info.description === undefined ? {} : { description: info.description }),
-        group: info.group ?? mainGroup,
-        order: info.order ?? mainOrder,
-        ...(info.icon === undefined ? {} : { icon: info.icon }),
+    seen.add(p.plugin);
+    const contribution = byPlugin.get(p.plugin);
+    const fallback = deriveGroup(p.provides ?? []);
+    const doc = p.settings ?? (p.schema === undefined ? undefined : docFromSchema(p.schema, fallback));
+    const sections = Object.entries(doc?.sections ?? {}) as [
+      SettingsGroup,
+      NonNullable<typeof doc>["sections"][SettingsGroup],
+    ][];
+    const runtime = contribution?.subsections ?? [];
+    if (sections.length === 0 && runtime.length === 0) continue;
+    const first: SettingsGroup = sections[0]?.[0] ?? fallback;
+    const names = sections.length > 0 ? sections.map(([g]) => g) : [first];
+    for (const group of names) {
+      const sec = sections.find(([g]) => g === group)?.[1];
+      const subs = sec?.subsections ?? [];
+      pages.push({
+        id: group === first ? p.plugin : `${p.plugin}:${group}`,
+        title: group !== first && subs.length === 1 ? (subs[0]?.label ?? p.plugin) : (p.name ?? p.plugin),
+        ...(p.description === undefined ? {} : { description: p.description }),
+        group,
+        order: sec?.order ?? 100,
+        ...(sec?.icon === undefined ? {} : { icon: sec.icon }),
         kind: "config",
         plugin: p.plugin,
-        schema: schemaSlice(schema, props),
-        values: p.values ?? {},
-        sources: p.sources ?? {},
-        enabled: p.enabled,
-        ...(p.restartRequired === undefined ? {} : { restartRequired: p.restartRequired }),
-        fieldKeys: Object.keys(props),
-        panels: [],
-      };
-      pages.push(page);
-      byId.set(page.id, page);
-      byId.set(`${p.plugin}#${pageId}`, page);
+        core: p,
+        subsections: byOrder(subs),
+        runtime: byOrder(runtime.filter((r) => (r.section ?? first) === group)),
+        ...(contribution === undefined ? {} : { contribution }),
+        primary: group === first,
+      });
     }
   }
 
-  for (const panel of panels) {
-    const target =
-      panel.page !== undefined
-        ? (byId.get(`${panel.plugin}:${panel.page}`) ?? byId.get(`${panel.plugin}#${panel.page}`))
-        : byId.get(panel.plugin);
-    if (target !== undefined) {
-      target.panels.push(panel);
-      continue;
-    }
-    // Panel for a plugin with no configSchema: synthesize a system page.
-    const page: SettingsPage = {
-      id: panel.plugin,
-      title: panel.pluginName ?? panel.plugin,
+  // A contribution from a plugin core didn't list (no manifest settings) still gets a system page.
+  for (const c of contributions) {
+    if (seen.has(c.plugin) || c.subsections.length === 0) continue;
+    pages.push({
+      id: c.plugin,
+      title: c.plugin,
       group: "system",
       order: 200,
       kind: "config",
-      plugin: panel.plugin,
-      values: {},
-      sources: {},
-      fieldKeys: [],
-      panels: [panel],
-    };
-    pages.push(page);
-    byId.set(page.id, page);
+      plugin: c.plugin,
+      subsections: [],
+      runtime: byOrder(c.subsections),
+      contribution: c,
+      primary: false,
+    });
   }
-
   return pages;
 }
 
