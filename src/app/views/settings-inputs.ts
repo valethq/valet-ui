@@ -1,5 +1,6 @@
 import { el } from "../dom";
 import { iconButton, selectChip } from "../icons";
+import { collapse, enter } from "../motion";
 import {
   evalCond,
   pasteName,
@@ -481,8 +482,10 @@ function listControl(f: InputDef, value: unknown, env: InputEnv, path: string): 
     const row = el("div", { class: "rows-row" }, ctl.node, remove);
     const entry = { ctl, node: row };
     remove.addEventListener("click", () => {
-      rows.splice(rows.indexOf(entry), 1);
-      row.remove();
+      const i = rows.indexOf(entry);
+      if (i < 0) return;
+      rows.splice(i, 1);
+      collapse(row);
       env.changed();
     });
     rows.push(entry);
@@ -497,6 +500,8 @@ function listControl(f: InputDef, value: unknown, env: InputEnv, path: string): 
   addBtn.addEventListener("click", () => {
     if (typeof f.max === "number" && rows.length >= f.max) return;
     add(undefined);
+    const last = rows.at(-1);
+    if (last !== undefined) enter(last.node);
     env.changed();
   });
   node.append(list, el("div", { class: "rows-add" }, addBtn));
@@ -523,8 +528,10 @@ function mapControl(f: InputDef, value: unknown, env: InputEnv, path: string): C
     const row = el("div", { class: "rows-row" }, key, ctl.node, remove);
     const entry = { key, ctl, node: row };
     remove.addEventListener("click", () => {
-      rows.splice(rows.indexOf(entry), 1);
-      row.remove();
+      const i = rows.indexOf(entry);
+      if (i < 0) return;
+      rows.splice(i, 1);
+      collapse(row);
       env.changed();
     });
     rows.push(entry);
@@ -534,7 +541,9 @@ function mapControl(f: InputDef, value: unknown, env: InputEnv, path: string): C
   const addBtn = el("button", { type: "button", class: "chip", text: "Add" });
   addBtn.addEventListener("click", () => {
     add("", undefined);
-    rows.at(-1)?.key.focus();
+    const last = rows.at(-1);
+    if (last !== undefined) enter(last.node);
+    last?.key.focus();
   });
   node.append(list, el("div", { class: "rows-add" }, addBtn));
   return {

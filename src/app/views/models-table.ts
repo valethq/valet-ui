@@ -1,5 +1,6 @@
 import { el } from "../dom";
 import { iconButton } from "../icons";
+import { collapse, enter } from "../motion";
 import type { ModelInfo, ProviderModels } from "../types";
 
 /** One row written to valet-agent's `models` config. */
@@ -185,8 +186,10 @@ export function modelsTable(
       node: line,
     };
     remove.addEventListener("click", () => {
-      rows.splice(rows.indexOf(state), 1);
-      line.remove();
+      const i = rows.indexOf(state);
+      if (i < 0) return;
+      rows.splice(i, 1);
+      collapse(line);
     });
     rows.push(state);
     body.append(line);
@@ -208,7 +211,9 @@ export function modelsTable(
       contextWindow: 128_000,
       maxOutputTokens: 32_000,
     });
-    rows[rows.length - 1]?.idInput.focus();
+    const last = rows[rows.length - 1];
+    if (last !== undefined) enter(last.node);
+    last?.idInput.focus();
   });
 
   node.append(status, head, body, footer);

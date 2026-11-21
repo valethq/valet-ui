@@ -1,5 +1,6 @@
 import { el } from "../dom";
 import { icon, iconButton } from "../icons";
+import { collapse } from "../motion";
 import type { PartInput } from "../types";
 
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
@@ -29,10 +30,29 @@ export function createAttachments(opts: AttachmentsOptions) {
   const row = el("div", { class: "attach-row" });
   row.style.display = "none";
   let items: Attached[] = [];
+  /** One chip per attachment for its lifetime, so only new chips play the entrance. */
+  const chips = new Map<Attached, HTMLElement>();
+  const hideIfEmpty = (): void => {
+    if (chips.size === 0) row.style.display = "none";
+  };
 
   function render(): void {
-    row.style.display = items.length === 0 ? "none" : "";
-    row.replaceChildren(...items.map(chip));
+    for (const [a, node] of chips) {
+      if (items.includes(a)) continue;
+      chips.delete(a);
+      collapse(node, "x", hideIfEmpty);
+    }
+    for (const a of items) {
+      let node = chips.get(a);
+      if (node === undefined) {
+        node = chip(a);
+        chips.set(a, node);
+        row.append(node);
+      }
+      if (a.done) node.classList.remove("pending");
+    }
+    if (items.length > 0) row.style.display = "";
+    else hideIfEmpty();
     opts.onChange();
   }
 
