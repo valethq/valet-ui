@@ -234,7 +234,7 @@ export function openLightbox(
   copy.addEventListener("click", () => {
     copyImage(current().file.blobId).then(
       () => flash(copy),
-      () => onError("Couldn't copy the image"),
+      () => onError("Copy failed"),
     );
   });
   save.addEventListener("click", () => {

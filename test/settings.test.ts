@@ -1,18 +1,18 @@
 import { expect, test } from "bun:test";
-import type { PluginContext, ScopeProvider, SettingsPanel } from "@valethq/sdk";
+import type { PluginContext, ScopeProvider, SettingsContribution } from "@valethq/sdk";
 import { registerSettings } from "../src/settings";
 
 type Handler = (req: Request, c: { params: Record<string, string> }) => Promise<Response>;
 
-function setup(panels: Record<string, SettingsPanel>) {
+function setup(contributions: Record<string, SettingsContribution>) {
   const routes = new Map<string, Handler>();
   const defs: unknown[] = [];
   const ctx = {
     scopes: {
       define: (d: unknown) => defs.push(d),
       all: () =>
-        Object.entries(panels).map(
-          ([key, impl]) => ({ key, plugin: `valet-${key}`, impl }) as ScopeProvider<"settings">,
+        Object.entries(contributions).map(
+          ([plugin, impl]) => ({ key: plugin, plugin, impl }) as ScopeProvider<"settings">,
         ),
     },
     http: { route: (m: string, p: string, h: Handler) => routes.set(`${m} ${p}`, h) },
@@ -25,88 +25,95 @@ function setup(panels: Record<string, SettingsPanel>) {
   return { defs, call };
 }
 
-test("defines the scope and lists panels with current values", async () => {
-  let value = { a: 1 };
+test("defines settings@2 and lists each contribution: names and runtime subsections", async () => {
   const { defs, call } = setup({
-    foo: {
-      title: "Foo",
-      schema: { type: "object" },
-      get: () => value,
-      set: (v) => {
-        value = v as typeof value;
-      },
+    "valet-x": {
+      options: { models: () => [{ value: "m" }] },
+      actions: { refresh: () => {} },
+      subsections: () => [
+        {
+          id: "usage",
+          label: "Usage",
+          refreshMs: 50,
+          items: [{ type: "meter", label: "Session", value: 44 }],
+        },
+      ],
     },
   });
-  expect(defs).toEqual([{ name: "settings", version: 1, cardinality: "many" }]);
+  expect(defs).toEqual([{ name: "settings", version: 2, cardinality: "many" }]);
   expect(await (await call("GET /settings")).json()).toEqual([
-    { key: "foo", plugin: "valet-foo", title: "Foo", schema: { type: "object" }, values: { a: 1 } },
-  ]);
-  const put = await call("PUT /settings/:key", { key: "foo" }, '{"a":2}');
-  expect(((await put.json()) as { values: unknown }).values).toEqual({ a: 2 });
-});
-
-test("rejects unknown panels, bad bodies and provider errors", async () => {
-  const { call } = setup({
-    foo: {
-      title: "Foo",
-      schema: {},
-      get: () => ({}),
-      set: () => {
-        throw new Error("nope");
-      },
+    {
+      plugin: "valet-x",
+      options: ["models"],
+      views: [],
+      actions: ["refresh"],
+      subsections: [
+        {
+          id: "usage",
+          label: "Usage",
+          refreshMs: 1000,
+          items: [{ type: "meter", label: "Session", value: 44 }],
+          editable: false,
+        },
+      ],
     },
-  });
-  expect((await call("GET /settings/:key", { key: "bar" })).status).toBe(404);
-  expect((await call("PUT /settings/:key", { key: "foo" }, "[1]")).status).toBe(400);
-  const res = await call("PUT /settings/:key", { key: "foo" }, "{}");
-  expect(res.status).toBe(422);
-  expect(await res.json()).toEqual({ error: "nope" });
-});
-
-test("a view-only panel lists its blocks and refresh hint, with no form", async () => {
-  const { call } = setup({
-    usage: {
-      title: "Usage",
-      page: "models",
-      refreshMs: 30_000,
-      view: () => [{ type: "meter", label: "Session", value: 44 }],
-    },
-  });
-  expect(await (await call("GET /settings/:key", { key: "usage" })).json()).toEqual({
-    key: "usage",
-    plugin: "valet-usage",
-    title: "Usage",
-    page: "models",
-    blocks: [{ type: "meter", label: "Session", value: 44 }],
-    refreshMs: 30_000,
-  });
-  const put = await call("PUT /settings/:key", { key: "usage" }, "{}");
-  expect(put.status).toBe(405);
-});
-
-test("a throwing view is reported on the entry without failing the list", async () => {
-  const { call } = setup({
-    bad: {
-      title: "Bad",
-      view: () => {
-        throw new Error("no data yet");
-      },
-    },
-    ok: { title: "Ok", schema: {}, get: () => ({ a: 1 }) },
-  });
-  const list = (await (await call("GET /settings")).json()) as { key: string; viewError?: string }[];
-  expect(list.map((e) => [e.key, e.viewError])).toEqual([
-    ["bad", "no data yet"],
-    ["ok", undefined],
   ]);
 });
 
-test("runs a panel action with its args, then returns the fresh panel", async () => {
+test("runtime values come back without masked fields; set() takes the real values", async () => {
+  let stored = { user: "owner", password: "hunter2" };
+  const { call } = setup({
+    "valet-auth": {
+      subsections: () => [
+        {
+          id: "account",
+          label: "Account",
+          items: [
+            { id: "user", label: "User", input: { type: "string" } },
+            { id: "password", label: "Password", input: { type: "string", masked: true } },
+          ],
+          get: () => stored,
+          set: (v) => {
+            if (v.password === "") throw new Error("password is required");
+            stored = v as typeof stored;
+          },
+        },
+      ],
+    },
+  });
+  const listed = (await (await call("GET /settings/:plugin", { plugin: "valet-auth" })).json()) as {
+    subsections: { values: unknown; editable: boolean }[];
+  };
+  expect(listed.subsections[0]).toMatchObject({ values: { user: "owner" }, editable: true });
+  const put = await call(
+    "PUT /settings/:plugin/subsections/:id",
+    { plugin: "valet-auth", id: "account" },
+    '{"user":"o","password":"new-secret"}',
+  );
+  expect(put.status).toBe(200);
+  expect(stored).toEqual({ user: "o", password: "new-secret" });
+  const bad = await call(
+    "PUT /settings/:plugin/subsections/:id",
+    { plugin: "valet-auth", id: "account" },
+    '{"password":""}',
+  );
+  expect(bad.status).toBe(422);
+  expect(await bad.json()).toEqual({ error: "password is required" });
+  expect(
+    (await call("PUT /settings/:plugin/subsections/:id", { plugin: "valet-auth", id: "nope" }, "{}")).status,
+  ).toBe(404);
+  expect(
+    (await call("PUT /settings/:plugin/subsections/:id", { plugin: "valet-auth", id: "account" }, "[1]"))
+      .status,
+  ).toBe(400);
+});
+
+test("options, views and actions run by name with args; inherited names are never handlers", async () => {
   const seen: unknown[] = [];
   const { call } = setup({
-    usage: {
-      title: "Usage",
-      view: () => [{ type: "text", text: `ran ${seen.length}` }],
+    "valet-x": {
+      options: { efforts: ({ model }) => [{ value: `${model}-low` }] },
+      views: { usage: () => ({ value: 10, display: "10% left" }) },
       actions: {
         refresh: (args) => {
           seen.push(args);
@@ -117,17 +124,40 @@ test("runs a panel action with its args, then returns the fresh panel", async ()
       },
     },
   });
-  const res = await call("POST /settings/:key/actions/:name", { key: "usage", name: "refresh" }, '{"id":7}');
+  const opts = await call(
+    "POST /settings/:plugin/options/:name",
+    { plugin: "valet-x", name: "efforts" },
+    '{"model":"m"}',
+  );
+  expect(await opts.json()).toEqual([{ value: "m-low" }]);
+  const view = await call("POST /settings/:plugin/views/:name", { plugin: "valet-x", name: "usage" });
+  expect(await view.json()).toEqual({ value: 10, display: "10% left" });
+  const act = await call(
+    "POST /settings/:plugin/actions/:name",
+    { plugin: "valet-x", name: "refresh" },
+    '{"id":7}',
+  );
+  expect(((await act.json()) as { plugin: string }).plugin).toBe("valet-x");
   expect(seen).toEqual([{ id: 7 }]);
-  expect(((await res.json()) as { blocks: unknown }).blocks).toEqual([{ type: "text", text: "ran 1" }]);
-  await call("POST /settings/:key/actions/:name", { key: "usage", name: "refresh" });
-  expect(seen[1]).toEqual({});
-  expect((await call("POST /settings/:key/actions/:name", { key: "usage", name: "fail" })).status).toBe(422);
-  expect((await call("POST /settings/:key/actions/:name", { key: "usage", name: "nope" })).status).toBe(404);
-  expect((await call("POST /settings/:key/actions/:name", { key: "usage", name: "toString" })).status).toBe(
+  expect(
+    (await call("POST /settings/:plugin/actions/:name", { plugin: "valet-x", name: "fail" })).status,
+  ).toBe(422);
+  expect(
+    (await call("POST /settings/:plugin/actions/:name", { plugin: "valet-x", name: "toString" })).status,
+  ).toBe(404);
+  expect((await call("POST /settings/:plugin/options/:name", { plugin: "nope", name: "x" })).status).toBe(
     404,
   );
-  expect(
-    (await call("POST /settings/:key/actions/:name", { key: "usage", name: "refresh" }, "[1]")).status,
-  ).toBe(400);
+});
+
+test("a throwing subsections() is reported without failing the list", async () => {
+  const { call } = setup({
+    "valet-bad": {
+      subsections: () => {
+        throw new Error("no data yet");
+      },
+    },
+  });
+  const [bad] = (await (await call("GET /settings")).json()) as { error?: string; subsections: unknown[] }[];
+  expect(bad).toMatchObject({ error: "no data yet", subsections: [] });
 });

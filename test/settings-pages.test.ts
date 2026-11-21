@@ -1,119 +1,100 @@
 import { describe, expect, test } from "bun:test";
-import type { CorePluginSettings, SettingsEntry } from "../src/app/types";
-import {
-  buildSettingsPages,
-  deriveGroup,
-  groupPages,
-  groupSubtitle,
-  propertiesForPage,
-} from "../src/app/views/settings-pages";
+import type { ContributionView, CorePluginSettings } from "../src/app/types";
+import { buildSettingsPages, groupPages, groupSubtitle } from "../src/app/views/settings-pages";
 
-describe("deriveGroup", () => {
-  test("honors x-group, else inference → providers, tools-only → tools", () => {
-    expect(deriveGroup([], { "x-group": "inference" })).toBe("inference");
-    expect(deriveGroup(["inference@1"])).toBe("inference");
-    expect(deriveGroup(["tools@1"])).toBe("tools");
-    expect(deriveGroup(["tools@1", "settings@1"])).toBe("tools");
-    expect(deriveGroup(["context@1", "tools@1"])).toBe("system");
-    expect(deriveGroup([])).toBe("system");
-  });
-});
+const agent: CorePluginSettings = {
+  plugin: "valet-agent",
+  name: "Agent",
+  provides: ["settings@2"],
+  state: "active",
+  enabled: true,
+  settings: {
+    sections: {
+      system: {
+        icon: "bot",
+        order: 0,
+        subsections: [
+          { id: "tools", label: "Tools", order: 5, items: [] },
+          { id: "chat", label: "Chat", items: [{ id: "queueMode", label: "Q", input: { type: "select" } }] },
+        ],
+      },
+      inference: {
+        order: 900,
+        subsections: [
+          { id: "models", label: "Models", items: [{ id: "models", label: "M", input: { type: "list" } }] },
+        ],
+      },
+    },
+  },
+  values: { queueMode: "queue" },
+  sources: { queueMode: "default" },
+};
 
-describe("propertiesForPage", () => {
-  const schema = {
+const raw: CorePluginSettings = {
+  plugin: "valet-raw",
+  name: "Raw",
+  provides: ["tools@1"],
+  state: "active",
+  enabled: true,
+  schema: {
     type: "object",
     properties: {
-      a: { type: "string" },
-      b: { type: "string", "x-page": "models" },
-      c: { type: "boolean", "x-page": "models" },
+      n: { type: "integer", title: "N", default: 3 },
+      tags: { type: "array", items: { type: "string" } },
     },
-  };
+  },
+  values: { n: 3 },
+  sources: { n: "default" },
+};
 
-  test("main page skips x-page fields; named page keeps only its own", () => {
-    expect(Object.keys(propertiesForPage(schema, null))).toEqual(["a"]);
-    expect(Object.keys(propertiesForPage(schema, "models"))).toEqual(["b", "c"]);
-    expect(Object.keys(propertiesForPage(schema, "other"))).toEqual([]);
-  });
+const usage = (plugin: string, section?: "system" | "inference"): ContributionView => ({
+  plugin,
+  options: [],
+  views: [],
+  actions: ["refresh"],
+  subsections: [{ id: "usage", label: "Usage", items: [], editable: false, ...(section ? { section } : {}) }],
 });
 
 describe("buildSettingsPages", () => {
-  const agent: CorePluginSettings = {
-    plugin: "valet-agent",
-    name: "Agent",
-    provides: ["context@1"],
-    state: "active",
-    enabled: true,
-    schema: {
-      type: "object",
-      "x-group": "system",
-      "x-order": 0,
-      "x-pages": {
-        models: { title: "Models", group: "inference", order: 900 },
-      },
-      properties: {
-        queueMode: { type: "string", enum: ["queue", "interrupt"] },
-        models: { type: "array", "x-widget": "models", "x-page": "models" },
-        defaultModel: { type: "object", "x-widget": "model", "x-page": "models" },
-      },
-    },
-    values: { queueMode: "queue", models: [] },
-    sources: { queueMode: "default" },
-  };
+  test("one page per plugin and section; subsections in order; the second section titled by its subsection", () => {
+    const pages = buildSettingsPages([agent], []);
+    expect(pages.map((p) => [p.id, p.group, p.title, p.primary])).toEqual([
+      ["valet-agent", "system", "Agent", true],
+      ["valet-agent:inference", "inference", "Models", false],
+    ]);
+    expect(pages[0]?.subsections.map((s) => s.id)).toEqual(["chat", "tools"]);
+    expect(pages[0]?.icon).toBe("bot");
+    expect(pages[1]?.order).toBe(900);
+  });
 
-  const provider: CorePluginSettings = {
-    plugin: "valet-modelapi",
-    name: "Model API",
-    provides: ["inference@1"],
-    state: "active",
-    enabled: true,
-    schema: {
-      type: "object",
-      "x-group": "inference",
-      "x-order": 20,
-      properties: { endpoints: { type: "array" } },
-    },
-    values: { endpoints: [] },
-    sources: {},
-  };
+  test("runtime subsections land on their section, defaulting to the doc's first", () => {
+    const pages = buildSettingsPages([agent], [usage("valet-agent", "inference")]);
+    expect(pages[0]?.runtime).toEqual([]);
+    expect(pages[1]?.runtime.map((r) => r.id)).toEqual(["usage"]);
+    const first = buildSettingsPages([agent], [usage("valet-agent")]);
+    expect(first[0]?.runtime.map((r) => r.id)).toEqual(["usage"]);
+    expect(first[0]?.contribution?.actions).toEqual(["refresh"]);
+  });
 
-  test("splits x-pages and attaches panels by plugin / page", () => {
-    const panels: SettingsEntry[] = [
-      { key: "usage", plugin: "valet-agent", title: "Usage", blocks: [] },
-      {
-        key: "models-extra",
-        plugin: "valet-agent",
-        title: "Extra",
-        page: "models",
-        blocks: [],
-      },
-    ];
-    const pages = buildSettingsPages([agent, provider], panels);
-    expect(pages.map((p) => p.id).sort()).toEqual(["valet-agent", "valet-agent:models", "valet-modelapi"]);
-    const main = pages.find((p) => p.id === "valet-agent");
-    const models = pages.find((p) => p.id === "valet-agent:models");
-    expect(main?.fieldKeys).toEqual(["queueMode"]);
-    expect(main?.panels.map((p) => p.key)).toEqual(["usage"]);
-    expect(models?.group).toBe("inference");
-    expect(models?.fieldKeys.sort()).toEqual(["defaultModel", "models"]);
-    expect(models?.panels.map((p) => p.key)).toEqual(["models-extra"]);
-    expect(pages.find((p) => p.id === "valet-modelapi")?.group).toBe("inference");
+  test("a raw configSchema gets a plain generated form, filed by provides", () => {
+    const [page] = buildSettingsPages([raw], []);
+    expect(page?.group).toBe("tools");
+    expect(page?.subsections[0]?.items).toEqual([
+      { id: "n", label: "N", input: { type: "int", default: 3 } },
+      { id: "tags", label: "tags", input: { type: "tags" } },
+    ]);
+  });
+
+  test("a plugin with neither settings nor runtime subsections has no page; a contribution alone gets one", () => {
+    const bare = { ...raw, plugin: "valet-bare", schema: undefined };
+    expect(buildSettingsPages([bare], [])).toEqual([]);
+    const pages = buildSettingsPages([], [usage("valet-auth")]);
+    expect(pages.map((p) => [p.id, p.group])).toEqual([["valet-auth", "system"]]);
   });
 
   test("groupPages sorts by group order then page order", () => {
-    const pages = buildSettingsPages([agent, provider], []);
-    const grouped = groupPages(pages);
-    expect(grouped.map((g) => g.group)).toEqual(["system", "inference"]);
-    expect(grouped[1]?.pages.map((p) => p.title)).toEqual(["Model API", "Models"]);
-  });
-
-  test("panel-only plugin gets a synthetic system page", () => {
-    const pages = buildSettingsPages(
-      [],
-      [{ key: "pwd", plugin: "valet-auth", pluginName: "Auth", title: "Password" }],
-    );
-    expect(pages).toHaveLength(1);
-    expect(pages[0]?.id).toBe("valet-auth");
-    expect(pages[0]?.panels[0]?.key).toBe("pwd");
+    const grouped = groupPages(buildSettingsPages([agent, raw], []));
+    expect(grouped.map((g) => g.group)).toEqual(["system", "inference", "tools"]);
   });
 });
 

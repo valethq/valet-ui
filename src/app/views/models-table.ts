@@ -38,7 +38,7 @@ const numOrEmpty = (s: string): number | undefined => {
   if (t === "") return undefined;
   const n = Number(t);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1)
-    throw new Error("limits must be whole numbers ≥ 1");
+    throw new Error("Token limits must be whole numbers of at least 1");
   return n;
 };
 
@@ -98,11 +98,11 @@ export function modelsTable(
     { class: "models-head" },
     el("span", { text: "Show" }),
     el("span", { text: "Provider" }),
-    el("span", { text: "Id" }),
+    el("span", { text: "ID" }),
     el("span", { text: "Name" }),
     el("span", { text: "Context" }),
-    el("span", { text: "Max out" }),
-    el("span", { text: "Efforts" }),
+    el("span", { text: "Max output" }),
+    el("span", { text: "Effort" }),
     el("span", { text: "Fast" }),
     el("span", { text: "" }),
   );
@@ -112,14 +112,14 @@ export function modelsTable(
 
   const add = (row: CatalogRow) => {
     const custom = row.custom === true;
-    const show = el("input", { type: "checkbox", class: "switch", "aria-label": "In the picker" });
+    const show = el("input", { type: "checkbox", class: "switch", "aria-label": "Show in model picker" });
     show.checked = row.show !== false;
     const idInput = el("input", {
       class: "input mono",
       type: "text",
       autocomplete: "off",
       spellcheck: "false",
-      "aria-label": "Model id",
+      "aria-label": "Model ID",
       ...(custom ? {} : { readOnly: "true" }),
     });
     idInput.value = row.id;
@@ -150,7 +150,7 @@ export function modelsTable(
       autocomplete: "off",
       spellcheck: "false",
       placeholder: "low, medium, high",
-      "aria-label": "Efforts",
+      "aria-label": "Effort",
     });
     efforts.value = (row.efforts ?? []).join(", ");
     const fast = el("input", { type: "checkbox", class: "switch", "aria-label": "Fast mode" });
@@ -195,8 +195,8 @@ export function modelsTable(
     body.append(line);
   };
 
-  const providerSelect = el("select", { "aria-label": "Provider for custom model" });
-  const addBtn = el("button", { type: "button", class: "chip", text: "Add custom" });
+  const providerSelect = el("select", { "aria-label": "Provider" });
+  const addBtn = el("button", { type: "button", class: "chip", text: "Add model" });
   const footer = el("div", { class: "models-add" }, selectChip(providerSelect), addBtn);
 
   addBtn.addEventListener("click", () => {
@@ -228,7 +228,7 @@ export function modelsTable(
       status.remove();
       for (const row of mergeModelRows(list, value)) add(row);
       if (rows.length === 0) {
-        node.insertBefore(el("div", { class: "hint", text: "No models listed yet." }), head);
+        node.insertBefore(el("div", { class: "hint", text: "No models configured" }), head);
       }
     })
     .catch((e: unknown) => {
@@ -243,7 +243,7 @@ export function modelsTable(
     read(): CatalogRow[] {
       return rows.map((r) => {
         const id = r.custom ? r.idInput.value.trim() : r.id;
-        if (id === "") throw new Error("Custom model id is required");
+        if (id === "") throw new Error("Model ID is required");
         const contextWindow = numOrEmpty(r.contextWindow.value);
         const maxOutputTokens = numOrEmpty(r.maxOutputTokens.value);
         const efforts = effortsOf(r.efforts.value);

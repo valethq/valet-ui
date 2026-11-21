@@ -68,7 +68,7 @@ function withAttrs<T extends HTMLElement>(node: T, attrs: Record<string, string>
 export function imageDeck(images: FileData[]): HTMLElement {
   const deck = el("div", {
     class: `deck${images.length === 1 ? " single" : ""}`,
-    "data-gallery": "your message",
+    "data-gallery": "Your message",
     style: `--n:${images.length}`,
   });
   images.forEach((d, i) => {
@@ -94,7 +94,7 @@ export function imageDeck(images: FileData[]): HTMLElement {
 export function imageFigures(images: FileData[]): HTMLElement {
   const group = el("div", {
     class: `figures${images.length > 1 ? " grid" : ""}`,
-    "data-gallery": "presented",
+    "data-gallery": "Assistant",
   });
   for (const d of images) {
     const save = withAttrs(iconButton("import", `Download ${d.name}`, "fig-act"), {

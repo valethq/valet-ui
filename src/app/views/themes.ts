@@ -31,21 +31,21 @@ const GROUPS: [string, Key[]][] = [
 ];
 
 const INFO: Record<Exclude<Key, "shadow">, [string, string]> = {
-  bg: ["Background", "The page behind everything"],
+  bg: ["Background", "Main page background"],
   text: ["Text", "Messages and headings"],
   accent: ["Accent", "Send button, switches, selection"],
-  panel: ["Panel", "Sidebar and side panes"],
-  surface: ["Surface", "Composer, dialogs and menus"],
-  raised: ["Raised", "Inputs and the selected row"],
+  panel: ["Panel", "Sidebar background"],
+  surface: ["Surface", "Composer, dialogs, and menus"],
+  raised: ["Raised", "Inputs and selected items"],
   code: ["Code", "Code blocks and tool output"],
-  user: ["Your messages", "Bubbles for what you send"],
+  user: ["Your messages", "Your message bubbles"],
   muted: ["Muted", "Secondary text"],
   faint: ["Faint", "Placeholders and timestamps"],
-  "on-accent": ["On accent", "Icons and text on the accent"],
+  "on-accent": ["On accent", "Text and icons on accent backgrounds"],
   border: ["Border", "Dividers and outlines"],
   strong: ["Strong border", "Focused fields, scrollbars"],
-  ok: ["Success", "Finished runs"],
-  warn: ["Warning", "Things that need a look"],
+  ok: ["Success", "Success states"],
+  warn: ["Warning", "Warnings and attention states"],
   danger: ["Danger", "Errors and delete buttons"],
 };
 const name = (k: Key): string => (k === "shadow" ? "Shadow" : INFO[k][0]);
@@ -119,7 +119,7 @@ function preview(): HTMLElement {
           spot("span", "danger", "", "0 fail"),
         ),
       ),
-      spot("div", "surface", "tp-composer", spot("span", "faint", "tp-ph", "Reply..."), send),
+      spot("div", "surface", "tp-composer", spot("span", "faint", "tp-ph", "Reply…"), send),
     ),
   );
 }
@@ -134,7 +134,7 @@ function fontField(
   const preset = choices.findIndex((c) => c.stack === current);
   const select = el("select", { "aria-label": title });
   for (const c of choices) select.append(el("option", { text: c.name }));
-  select.append(el("option", { text: "Custom..." }));
+  select.append(el("option", { text: "Custom…" }));
   select.selectedIndex = preset < 0 ? choices.length : preset;
   const input = el("input", {
     type: "text",
@@ -221,7 +221,7 @@ function pane(t: Theme, hooks: PaneHooks): HTMLElement {
   const picker = el("input", {
     type: "color",
     class: "ci-picker",
-    "aria-label": "Pick colour",
+    "aria-label": "Pick color",
     tabindex: "-1",
   });
   const ciName = el("span", { class: "ci-name" });
@@ -229,7 +229,7 @@ function pane(t: Theme, hooks: PaneHooks): HTMLElement {
   const hex = el("input", {
     type: "text",
     class: "input mono ci-hex",
-    "aria-label": "Colour value",
+    "aria-label": "Color value",
     spellcheck: "false",
   });
   hex.readOnly = !editable;
@@ -325,9 +325,9 @@ function pane(t: Theme, hooks: PaneHooks): HTMLElement {
     const derive = el("button", {
       class: "chip",
       type: "button",
-      title: "Work out every other colour from these three",
+      title: "Generate remaining colors from these three",
     });
-    derive.append(icon("sparkles"), "Fill in the rest");
+    derive.append(icon("sparkles"), "Auto-fill colors");
     derive.addEventListener("click", () => {
       const d = deriveColors(t.colors, t.scheme);
       for (const [, keys] of GROUPS) for (const k of keys) t.colors[k] = d[k];
@@ -376,7 +376,7 @@ function pane(t: Theme, hooks: PaneHooks): HTMLElement {
         "div",
         { class: "pane-title" },
         el("h3", { text: t.name }),
-        el("span", { class: "pane-sub", text: `Built in · ${t.scheme === "dark" ? "Dark" : "Light"}` }),
+        el("span", { class: "pane-sub", text: `Built-in · ${t.scheme === "dark" ? "Dark" : "Light"}` }),
       ),
       customize,
     );
@@ -409,7 +409,7 @@ function pane(t: Theme, hooks: PaneHooks): HTMLElement {
           ),
           el("p", {
             class: "field-desc",
-            text: "Fonts must be installed on this device, except Public Sans which is built in.",
+            text: "Custom fonts must be installed on this device (Public Sans is built in).",
           }),
         ),
       ]
@@ -417,14 +417,14 @@ function pane(t: Theme, hooks: PaneHooks): HTMLElement {
 
   const status = el("span", { class: "form-status" });
   const exportBtn = el("button", { class: "chip", type: "button" });
-  exportBtn.append(icon("copy"), "Copy as JSON");
+  exportBtn.append(icon("copy"), "Copy JSON");
   exportBtn.addEventListener("click", () => {
     navigator.clipboard.writeText(exportTheme(t)).then(
       () => {
         status.textContent = "Copied";
       },
       () => {
-        status.textContent = "Clipboard unavailable";
+        status.textContent = "Copy failed";
       },
     );
   });
@@ -447,8 +447,8 @@ function pane(t: Theme, hooks: PaneHooks): HTMLElement {
       "p",
       { class: "field-desc pane-hint" },
       editable
-        ? "Click any part of the preview or a swatch to change its colour."
-        : "Built-in themes can't be changed. Customize makes an editable copy.",
+        ? "Click the preview or a swatch to edit its color."
+        : "Built-in themes are read-only. Click Customize to make a copy.",
     ),
     group("Base", BASE, true, ...extras),
     ...GROUPS.map(([title, keys]) => group(title, keys)),
@@ -508,7 +508,7 @@ export function themeSection(): HTMLElement {
     lists.replaceChildren(
       ...(mine.length > 0 ? [grid("Yours", mine)] : []),
       grid(
-        "Built in",
+        "Built-in",
         allThemes().filter((t) => t.custom !== true),
       ),
     );
@@ -547,7 +547,7 @@ export function themeSection(): HTMLElement {
     choose(t.id);
   };
 
-  const newBtn = el("button", { class: "chip", type: "button", title: "New theme based on the current one" });
+  const newBtn = el("button", { class: "chip", type: "button", title: "Duplicate current theme" });
   newBtn.append(icon("plus"), "New");
   newBtn.addEventListener("click", () => {
     const base = allThemes().find((t) => t.id === currentTheme());
@@ -572,7 +572,7 @@ export function themeSection(): HTMLElement {
     const t = importTheme(paste.value);
     if (t === null) {
       importStatus.className = "form-status error";
-      importStatus.textContent = "That isn't a valid theme";
+      importStatus.textContent = "Invalid theme JSON";
       return;
     }
     paste.value = "";

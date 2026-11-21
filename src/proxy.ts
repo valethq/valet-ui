@@ -50,7 +50,7 @@ export async function proxyRequest(req: Request, coreUrl: string, compress = fal
     const res = new Response(upstream.body, { status: upstream.status, headers });
     return compress ? await compressResponse(req, res) : res;
   } catch {
-    return Response.json({ error: "core unreachable" }, { status: 502 });
+    return Response.json({ error: "Server unreachable" }, { status: 502 });
   }
 }
 
@@ -75,7 +75,7 @@ export const wsHandlers: Bun.WebSocketHandler<WsData> = {
     };
     upstream.onmessage = (ev) => ws.send(ev.data as string);
     upstream.onclose = (ev) => ws.close(ev.code === 1005 || ev.code === 1006 ? 1011 : ev.code, ev.reason);
-    upstream.onerror = () => ws.close(1011, "core unreachable");
+    upstream.onerror = () => ws.close(1011, "Server unreachable");
   },
   message(ws, frame) {
     const { upstream, pending } = ws.data;

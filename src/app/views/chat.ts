@@ -221,7 +221,10 @@ function toolBody(part: Part, input: unknown, output: string, ui: PartUi): HTMLE
       ui.showAll.set(part.id, true);
       ui.refresh();
     });
-    children.push(el("span", { class: "trunc" }, `… ${hidden} earlier lines hidden `, showAll), "\n");
+    children.push(
+      el("span", { class: "trunc" }, `${hidden} earlier ${hidden === 1 ? "line" : "lines"} hidden `, showAll),
+      "\n",
+    );
   }
   children.push(lines.slice(hidden).join("\n"));
   return [el("pre", {}, ...children)];
@@ -269,7 +272,7 @@ function customPart(part: Part, d: CustomData, ui: PartUi): HTMLElement {
     body.push(
       partRow(
         { id: `${part.id}/data` },
-        "Data",
+        "Raw data",
         "",
         "",
         false,
@@ -304,7 +307,7 @@ function subagentCard(part: Part, d: ToolData, rows: SubRow[]): HTMLElement {
         ? "failed"
         : "done";
   const tag =
-    rows.length > 1 ? `${rows.length} subagents${live ? ` · ${done}/${rows.length} done` : ""}` : "subagent";
+    rows.length > 1 ? `${rows.length} subagents${live ? ` · ${done}/${rows.length} done` : ""}` : "Subagent";
   const status = el("span", {
     class: "sub-status",
     text: live ? toolStatus(part) : quietStatus(toolStatus(part)),
@@ -363,7 +366,7 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
     case "reasoning": {
       const row = partRow(
         part,
-        "Reasoning",
+        "Thinking",
         part.status,
         quietStatus(reasoningStatus(part)),
         part.status === "streaming",
@@ -423,7 +426,7 @@ export function fileNode(d: FileData): HTMLElement {
     );
     button.addEventListener("click", () => {
       saveBlob(d.blobId, d.name).catch(() => {
-        button.title = `Download failed, click to retry: ${d.name}`;
+        button.title = "Download failed. Click to retry";
       });
     });
     return button;
@@ -562,7 +565,7 @@ function renderMessage(cm: ChatMessage, ui: PartUi, view: SessionView, anim: str
       b.append(
         el("div", {
           class: "part-notice error",
-          text: runError === undefined ? "Error" : `Error — ${runError}`,
+          text: runError === undefined ? "Reply failed" : runError,
         }),
       );
     } else if (cm.message.status === "streaming") {
@@ -643,7 +646,6 @@ function draftPick(draft: ModelSel | undefined, providers: ProviderModels[]): Mo
   return first === undefined ? undefined : selOf(first);
 }
 
-/** An icon that pops in, for a button whose glyph swaps to confirm what it did. */
 function popIcon(name: IconName): HTMLElement {
   const i = icon(name);
   i.classList.add("fx-pop");
@@ -663,11 +665,11 @@ function flashCopy(btn: HTMLButtonElement, name: "check" | "close", label: strin
 }
 
 export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
-  const navToggle = iconButton("sidebar", "Sessions", "nav-toggle");
+  const navToggle = iconButton("sidebar", "Toggle sidebar", "nav-toggle");
   const title = el("span", { class: "session-title" });
   const titleNum = el("span", { class: "suffix" });
   titleNum.style.display = "none";
-  const subTag = el("span", { class: "sub-tag", text: "subagent" });
+  const subTag = el("span", { class: "sub-tag", text: "Subagent" });
   subTag.style.display = "none";
   const crumbText = el("span", { class: "crumb-text" });
   const crumb = el(
@@ -684,7 +686,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const forkCrumbText = el("span", { class: "crumb-text" });
   const forkCrumb = el(
     "button",
-    { class: "crumb", "aria-label": "Open the session this was forked from" },
+    { class: "crumb", "aria-label": "Open original session" },
     icon("branch"),
     forkCrumbText,
   );
@@ -721,7 +723,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const send = iconButton("send", "Send", "send");
   const stop = iconButton("stop", "Stop", "stop");
   stop.style.display = "none";
-  const attachBtn = iconButton("paperclip", "Attach", "attach");
+  const attachBtn = iconButton("paperclip", "Attach file", "attach");
   const imageInput = el("input", { type: "file", accept: "image/*", multiple: "", hidden: "" });
   const fileInput = el("input", { type: "file", multiple: "", hidden: "" });
 
@@ -1249,7 +1251,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       leadKey = key;
       modelChip.lead.replaceChildren(logoMarks(logos) ?? icon("sparkles"));
     }
-    modelChip.text.textContent = f?.label ?? "No model";
+    modelChip.text.textContent = f?.label ?? "No models available";
     const on = f !== null && logos.length > 1 ? `on ${f.providerLabel}` : "";
     modelSub.textContent = on;
     modelSub.style.display = on === "" ? "none" : "";
@@ -1260,7 +1262,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     effortChip.text.textContent =
       [effort === null || f === null || f.efforts.length <= 1 ? "" : cap(effort), fastOn ? "Fast" : ""]
         .filter((t) => t !== "")
-        .join(" · ") || (showFast ? "Fast off" : "");
+        .join(" · ") || (showFast ? "Standard" : "");
   }
 
   connLine.style.display = connOpen ? "none" : "";

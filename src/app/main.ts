@@ -344,10 +344,19 @@ function sidebarProps(
     onSettings: () => {
       closeNav();
       openSettings({
-        load: api.listSettings,
-        save: api.saveSettings,
-        refresh: api.getSettings,
-        action: api.runSettingsAction,
+        listCore: () => api.listCoreSettings(),
+        listContributions: api.listContributions,
+        getCore: api.getCoreSettings,
+        patchCore: api.patchCoreSettings,
+        listProjects: async () => (await api.listProjects()).map((p) => ({ id: p.id, name: p.name })),
+        options: api.sourceOptions,
+        view: api.sourceView,
+        action: api.runAction,
+        saveRuntime: api.saveRuntime,
+        refreshRuntime: api.getContribution,
+        listSecrets: api.listSecrets,
+        putSecret: api.putSecret,
+        listCatalog: api.listModels,
       });
     },
   };
@@ -692,7 +701,7 @@ let draftModel: ModelSel | undefined;
 async function createSessionForDraft(): Promise<boolean> {
   if (app.projectId === null) return false;
   const session = await api.createSession(app.projectId).catch((e: unknown) => {
-    toast(e instanceof Error ? e.message : "could not create session");
+    toast(e instanceof Error ? e.message : "Couldn't create session");
     return undefined;
   });
   if (session === undefined) return false;
@@ -701,7 +710,7 @@ async function createSessionForDraft(): Promise<boolean> {
     pick === undefined
       ? session
       : await api.setSessionModel(session, pick).catch((e: unknown) => {
-          toast(e instanceof Error ? e.message : "could not set model");
+          toast(e instanceof Error ? e.message : "Couldn't set model");
           return session;
         });
   app.sessions = upsertSession(app.sessions, configured);
@@ -712,7 +721,7 @@ async function createSessionForDraft(): Promise<boolean> {
 
 async function forkFrom(id: string, messageId?: string): Promise<void> {
   const forked = await api.forkSession(id, messageId).catch((e: unknown) => {
-    toast(e instanceof Error ? e.message : "fork failed");
+    toast(e instanceof Error ? e.message : "Couldn't fork session");
     return undefined;
   });
   if (forked === undefined) return;
@@ -726,11 +735,11 @@ async function moveTo(id: string, projectId: string): Promise<void> {
   if (
     open !== null ? open.activeRunId !== null : app.sessions.find((s) => s.id === id)?.status === "running"
   ) {
-    toast("A turn is running; move once it finishes");
+    toast("Wait for the current reply to finish before moving");
     return;
   }
   const moved = await api.moveSession(id, projectId).catch((e: unknown) => {
-    toast(e instanceof Error ? e.message : "move failed");
+    toast(e instanceof Error ? e.message : "Couldn't move session");
     return undefined;
   });
   if (moved === undefined) return;
@@ -759,19 +768,19 @@ function compactOpen(): void {
   const view = app.view;
   if (view === null) return;
   if (view.activeRunId !== null) {
-    toast("A turn is running. Compact once it finishes.");
+    toast("Wait for the current reply to finish before compacting");
     return;
   }
-  const instructions = window.prompt("Compaction instructions (optional)", "");
+  const instructions = window.prompt("Instructions for compacting (optional)", "");
   if (instructions === null) return;
   api
     .compactSession(view.session.id, instructions.trim())
-    .catch((e: unknown) => toast(e instanceof Error ? e.message : "compact failed"));
+    .catch((e: unknown) => toast(e instanceof Error ? e.message : "Couldn't compact session"));
 }
 
 async function renameSession(id: string, title: string): Promise<void> {
   const session = await api.updateSession(id, { title }).catch((e: unknown) => {
-    toast(e instanceof Error ? e.message : "rename failed");
+    toast(e instanceof Error ? e.message : "Couldn't rename session");
     return undefined;
   });
   if (session === undefined) return;
@@ -781,11 +790,11 @@ async function renameSession(id: string, title: string): Promise<void> {
 }
 
 async function deleteSession(id: string): Promise<void> {
-  if (!window.confirm("Delete this session and its messages? This cannot be undone.")) return;
+  if (!window.confirm("Delete this session and its messages? This can't be undone.")) return;
   const deleted = await api.deleteSession(id).then(
     () => true,
     (e: unknown) => {
-      toast(e instanceof Error ? e.message : "delete failed");
+      toast(e instanceof Error ? e.message : "Couldn't delete session");
       return false;
     },
   );
@@ -950,7 +959,7 @@ async function startApp(): Promise<void> {
       const view = app.view;
       if (view === null) return false;
       if (view.loading) {
-        app.chat?.setSendError("Still loading this chat");
+        app.chat?.setSendError("Still loading this session");
         return false;
       }
       try {
@@ -968,7 +977,7 @@ async function startApp(): Promise<void> {
           app.chat?.setSendError(null);
           return true;
         }
-        const message = e instanceof Error ? e.message : "send failed";
+        const message = e instanceof Error ? e.message : "Couldn't send message";
         app.chat?.setSendError(message);
         toast(message);
         return false;
@@ -992,7 +1001,9 @@ async function startApp(): Promise<void> {
     onStop: () => {
       const runId = app.view?.activeRunId;
       if (runId == null) return;
-      api.cancelRun(runId).catch((e: unknown) => toast(e instanceof Error ? e.message : "cancel failed"));
+      api
+        .cancelRun(runId)
+        .catch((e: unknown) => toast(e instanceof Error ? e.message : "Couldn't stop reply"));
     },
     onModel: (sel) => {
       const view = app.view;
@@ -1015,7 +1026,7 @@ async function startApp(): Promise<void> {
           scheduleRender();
         })
         .catch((e: unknown) => {
-          toast(e instanceof Error ? e.message : "model change failed");
+          toast(e instanceof Error ? e.message : "Couldn't change model");
           // Re-render shows the persisted model again.
           scheduleRender();
         });
@@ -1035,7 +1046,7 @@ async function startApp(): Promise<void> {
     "aria-valuemin": String(SIDEBAR_W_MIN),
     "aria-valuemax": String(SIDEBAR_W_MAX),
     tabindex: "0",
-    title: "Drag to resize - double-click to reset",
+    title: "Drag to resize · double-click to reset",
   });
   appEl = el(
     "div",
@@ -1051,7 +1062,7 @@ async function startApp(): Promise<void> {
 
   app.socket.onEvent = onEvent;
   app.socket.onGap = onGap;
-  app.socket.onDenied = (_topic, message) => toast(`subscription denied: ${message}`);
+  app.socket.onDenied = (_topic, message) => toast(`Live updates unavailable: ${message}`);
   app.socket.onState = (open) => app.chat?.setConnection(open);
   app.socket.onUnauthorized = showLogin;
   app.socket.start();
@@ -1108,11 +1119,11 @@ async function boot(): Promise<void> {
         await startApp();
       });
     } else {
-      fatal("cannot reach valet core");
+      fatal("Can't reach valet. Check that the server is running and reload.");
     }
     return;
   }
-  await startApp().catch(() => fatal("could not load valet"));
+  await startApp().catch(() => fatal("Couldn't load valet. Try reloading the page."));
 }
 
 void boot();

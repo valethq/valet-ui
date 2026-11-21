@@ -95,7 +95,7 @@ describe("core relay", () => {
     try {
       const res = await fetch(`${dead.url}/api/core/projects`);
       expect(res.status).toBe(502);
-      expect(await res.json()).toEqual({ error: "core unreachable" });
+      expect(await res.json()).toEqual({ error: "Server unreachable" });
     } finally {
       dead.stop();
     }

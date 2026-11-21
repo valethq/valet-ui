@@ -73,7 +73,7 @@ export function createAttachments(opts: AttachmentsOptions) {
   function add(files: File[]): void {
     for (const file of files) {
       if (file.size > MAX_ATTACHMENT_BYTES) {
-        opts.onError(`${file.name} is larger than 20 MB`);
+        opts.onError(`${file.name} exceeds the 20 MB limit`);
         continue;
       }
       const a: Attached = {
@@ -89,7 +89,7 @@ export function createAttachments(opts: AttachmentsOptions) {
         },
         (e: unknown) => {
           drop([a]);
-          opts.onError(e instanceof Error ? e.message : "upload failed");
+          opts.onError(e instanceof Error ? e.message : "Upload failed");
         },
       );
       items.push(a);

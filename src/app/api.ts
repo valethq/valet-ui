@@ -10,13 +10,17 @@ import type {
   SecretMeta,
   Session,
   SessionState,
-  SettingsEntry,
+  Args,
+  ContributionView,
+  OptionDef,
 } from "./types";
 
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Failures by path (settings saves: `<path>` or `<projectId>:<path>`). */
+    readonly errors?: Record<string, string>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -50,7 +54,7 @@ async function req<T>(method: string, path: string, body?: unknown, timeout = 15
   } catch {
     // Timeout (AbortError) or dead network (TypeError) — on a dead tailnet
     // fetch hangs forever without this, and the caller never hears back.
-    throw new ApiError(0, "Network unreachable, try again");
+    throw new ApiError(0, "Network unreachable. Try again.");
   }
   let data: unknown;
   try {
@@ -60,9 +64,14 @@ async function req<T>(method: string, path: string, body?: unknown, timeout = 15
   }
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith("/plugins/valet-auth/")) hooks.onUnauthorized();
-    const err = (data as { error?: string | { message?: string; reason?: string } } | undefined)?.error;
+    const err = (
+      data as
+        | { error?: string | { message?: string; reason?: string; errors?: Record<string, string> } }
+        | undefined
+    )?.error;
     const message = typeof err === "string" ? err : (err?.reason ?? err?.message);
-    throw new ApiError(res.status, message ?? `HTTP ${res.status}`);
+    const errors = typeof err === "object" ? err?.errors : undefined;
+    throw new ApiError(res.status, message ?? `HTTP ${res.status}`, errors);
   }
   return data as T;
 }
@@ -157,7 +166,7 @@ async function uiGet(
     });
     return { res, text: await res.text() };
   } catch {
-    throw new ApiError(0, "Network unreachable, try again");
+    throw new ApiError(0, "Network unreachable. Try again.");
   }
 }
 
@@ -288,20 +297,33 @@ export const setSessionModel = (
 export const cancelRun = (runId: string): Promise<{ ok: boolean }> =>
   req("POST", `/api/core/runs/${encodeURIComponent(runId)}/cancel`);
 
-// ---- valet-ui settings panels (src/settings.ts, reached through the core relay) ----
+// ---- settings@2 contributions (src/settings.ts, reached through the core relay) ----
 
-/** Panels with each plugin's friendly manifest name. The name lookup is best-effort: without it the panels still list, labelled by id. */
-export async function listSettings(): Promise<SettingsEntry[]> {
-  const [entries, plugins] = await Promise.all([
-    get<SettingsEntry[]>("/plugins/valet-ui/settings"),
-    get<PluginStatus[]>("/api/core/plugins").catch((): PluginStatus[] => []),
-  ]);
-  const names = new Map(plugins.map((p) => [p.id, p.name]));
-  return entries.map((e) => {
-    const pluginName = names.get(e.plugin);
-    return pluginName === undefined ? e : { ...e, pluginName };
-  });
-}
+const ui = (path: string): string => `/plugins/valet-ui/settings${path}`;
+const seg = encodeURIComponent;
+
+export const listContributions = (): Promise<ContributionView[]> => get(ui(""));
+
+export const getContribution = (plugin: string): Promise<ContributionView> => get(ui(`/${seg(plugin)}`));
+
+/** Options from a source: "name" (the doc's own plugin) or "<pluginId>/name". */
+export const sourceOptions = (plugin: string, name: string, args: Args): Promise<OptionDef[]> =>
+  req("POST", ui(`/${seg(plugin)}/options/${seg(name)}`), args);
+
+export const sourceView = (
+  plugin: string,
+  name: string,
+  args: Args,
+): Promise<Record<string, unknown> | null> => req("POST", ui(`/${seg(plugin)}/views/${seg(name)}`), args);
+
+export const runAction = (plugin: string, name: string, args: Args): Promise<ContributionView> =>
+  req("POST", ui(`/${seg(plugin)}/actions/${seg(name)}`), args);
+
+export const saveRuntime = (
+  plugin: string,
+  id: string,
+  values: Record<string, unknown>,
+): Promise<ContributionView> => req("PUT", ui(`/${seg(plugin)}/subsections/${seg(id)}`), values);
 
 /** The part type registry, each entry marked loaded or not. Without core's plugin list the entries come back unmarked. */
 export async function listPartTypes(): Promise<PartType[]> {
@@ -313,23 +335,6 @@ export async function listPartTypes(): Promise<PartType[]> {
   const active = new Set(plugins.filter((p) => p.state === "active").map((p) => p.id));
   return types.map((t) => ({ ...t, loaded: active.has(t.plugin.id) }));
 }
-
-export const getSettings = (key: string): Promise<SettingsEntry> =>
-  get(`/plugins/valet-ui/settings/${encodeURIComponent(key)}`);
-
-export const runSettingsAction = (
-  key: string,
-  name: string,
-  args: Record<string, unknown>,
-): Promise<SettingsEntry> =>
-  req(
-    "POST",
-    `/plugins/valet-ui/settings/${encodeURIComponent(key)}/actions/${encodeURIComponent(name)}`,
-    args,
-  );
-
-export const saveSettings = (key: string, values: Record<string, unknown>): Promise<SettingsEntry> =>
-  req("PUT", `/plugins/valet-ui/settings/${encodeURIComponent(key)}`, values);
 
 // ---- valet-agent (11.1). Normalized like authStatus. ----
 
@@ -356,15 +361,24 @@ export async function compactSession(id: string, instructions: string): Promise<
 
 export type { CorePluginSettings };
 
-export const listCoreSettings = (): Promise<CorePluginSettings[]> => get("/api/core/settings");
+const projectQuery = (project?: string): string =>
+  project === undefined ? "" : `?project=${encodeURIComponent(project)}`;
 
-export const getCoreSettings = (plugin: string): Promise<CorePluginSettings> =>
-  get(`/api/core/settings/${encodeURIComponent(plugin)}`);
+export const listCoreSettings = (project?: string): Promise<CorePluginSettings[]> =>
+  get(`/api/core/settings${projectQuery(project)}`);
 
-export const patchCoreSettings = (
-  plugin: string,
-  patch: { config?: Record<string, unknown>; enabled?: boolean },
-): Promise<CorePluginSettings> => req("PATCH", `/api/core/settings/${encodeURIComponent(plugin)}`, patch);
+export const getCoreSettings = (plugin: string, project?: string): Promise<CorePluginSettings> =>
+  get(`/api/core/settings/${encodeURIComponent(plugin)}${projectQuery(project)}`);
+
+export interface SettingsPatch {
+  scope?: "user" | "project";
+  project?: string;
+  config?: Record<string, unknown>;
+  enabled?: boolean;
+}
+
+export const patchCoreSettings = (plugin: string, patch: SettingsPatch): Promise<CorePluginSettings> =>
+  req("PATCH", `/api/core/settings/${encodeURIComponent(plugin)}`, patch);
 
 export const listSecrets = (): Promise<SecretMeta[]> => get("/api/core/secrets");
 
