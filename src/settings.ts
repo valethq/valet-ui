@@ -169,5 +169,13 @@ export function registerSettings(ctx: PluginContext): void {
 
 /** `/settings/:plugin/...` -> `plugin:<id>`, the resource core checks the route permission on. */
 function pluginResource(req: Request) {
-  return { id: `plugin:${decodeURIComponent(new URL(req.url).pathname.split("/")[4] ?? "")}` };
+  // Split like core's router (empty segments dropped, params decoded), or a path like
+  // /plugins///valet-ui/settings/<x> authorizes one plugin and serves another.
+  const segments = new URL(req.url).pathname.split("/").filter((s) => s !== "");
+  const raw = segments[segments.indexOf("settings") + 1] ?? "";
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {}
+  return { id: `plugin:${decoded}` };
 }

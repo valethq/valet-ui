@@ -45,6 +45,13 @@ test("routes declare ui:settings.read, and ui:settings.write for actions and sav
   ).toEqual({
     id: "plugin:valet-tailscale",
   });
+  // Repeated slashes and encoding resolve to the plugin the router will serve, not another one.
+  expect(
+    resource?.(new Request("http://x/plugins///valet-ui/settings/valet-auth/subsections/exposure")),
+  ).toEqual({ id: "plugin:valet-auth" });
+  expect(
+    resource?.(new Request("http://x/plugins/valet-ui/settings/valet-%61uth/subsections/exposure")),
+  ).toEqual({ id: "plugin:valet-auth" });
 });
 
 test("defines settings@2 and lists each contribution: names and runtime subsections", async () => {

@@ -4,7 +4,7 @@
   "name": "Web UI",
   "version": "0.1.0",
   "description": "Web interface for valet (default 127.0.0.1:7418).",
-  "valet": "^0.1.0",
+  "valet": "^0.1.1",
   "main": "./src/index.ts",
   "acl": {
     "permissions": {
