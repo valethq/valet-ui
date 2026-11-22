@@ -6,6 +6,7 @@ type Handler = (req: Request, c: { params: Record<string, string> }) => Promise<
 
 function setup(contributions: Record<string, SettingsContribution>) {
   const routes = new Map<string, Handler>();
+  const acls = new Map<string, { permission?: string; resource?: (req: Request) => { id: string } }>();
   const defs: unknown[] = [];
   const ctx = {
     scopes: {
@@ -15,15 +16,36 @@ function setup(contributions: Record<string, SettingsContribution>) {
           ([plugin, impl]) => ({ key: plugin, plugin, impl }) as ScopeProvider<"settings">,
         ),
     },
-    http: { route: (m: string, p: string, h: Handler) => routes.set(`${m} ${p}`, h) },
+    http: {
+      route: (m: string, p: string, h: Handler, acl: { permission?: string }) => {
+        routes.set(`${m} ${p}`, h);
+        acls.set(`${m} ${p}`, acl);
+      },
+    },
   } as unknown as PluginContext;
   registerSettings(ctx);
   const call = (route: string, params: Record<string, string> = {}, body?: string) =>
     (routes.get(route) as Handler)(new Request("http://x/", { method: route.split(" ")[0], body }), {
       params,
     });
-  return { defs, call };
+  return { defs, call, acls };
 }
+
+test("routes declare ui:settings.read, and ui:settings.write for actions and saves, on the plugin resource", () => {
+  const { acls } = setup({});
+  expect(acls.get("GET /settings")?.permission).toBe("ui:settings.read");
+  expect(acls.get("GET /settings/:plugin")?.permission).toBe("ui:settings.read");
+  expect(acls.get("POST /settings/:plugin/options/:name")?.permission).toBe("ui:settings.read");
+  expect(acls.get("POST /settings/:plugin/views/:name")?.permission).toBe("ui:settings.read");
+  expect(acls.get("POST /settings/:plugin/actions/:name")?.permission).toBe("ui:settings.write");
+  expect(acls.get("PUT /settings/:plugin/subsections/:id")?.permission).toBe("ui:settings.write");
+  const resource = acls.get("PUT /settings/:plugin/subsections/:id")?.resource;
+  expect(
+    resource?.(new Request("http://x/plugins/valet-ui/settings/valet-tailscale/subsections/exposure")),
+  ).toEqual({
+    id: "plugin:valet-tailscale",
+  });
+});
 
 test("defines settings@2 and lists each contribution: names and runtime subsections", async () => {
   const { defs, call } = setup({
