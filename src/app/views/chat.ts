@@ -96,6 +96,11 @@ const elapsed = (createdAt: number): string => fmtDuration(Date.now() - createdA
 /** A step only shows its time once it has run for more than a second. */
 const TIMER_MIN_MS = 1000;
 
+/** A live step stays collapsed until it has run this long; quicker ones never flash open. */
+const OPEN_MIN_MS = 750;
+
+const longLive = (createdAt: number): boolean => Date.now() - createdAt > OPEN_MIN_MS;
+
 /** `running`/`thinking`, plus the elapsed time once the step is over a second old. */
 const liveLabel = (word: string, since: number): string =>
   Date.now() - since > TIMER_MIN_MS ? `${word} ${elapsed(since)}` : word;
@@ -369,7 +374,7 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
         "Thinking",
         part.status,
         quietStatus(reasoningStatus(part)),
-        part.status === "streaming",
+        part.status === "streaming" && longLive(part.createdAt),
         ui,
         el("pre", { text: d.text }),
       );
@@ -382,7 +387,7 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
         d.title ?? d.name,
         toolStatusClass(part),
         quietStatus(toolStatus(part)),
-        d.status === "running" || part.status === "streaming",
+        (d.status === "running" || part.status === "streaming") && longLive(part.createdAt),
         ui,
         ...toolBody(part, d.input, d.output ?? "", ui),
       );
@@ -1194,8 +1199,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   /** Rewrites the elapsed time on running and thinking steps in place; the messages themselves are not re-rendered. */
   function refreshTimers(): void {
     for (const n of messages.querySelectorAll<HTMLElement>("[data-live]")) {
-      const text = liveLabel(n.dataset.live ?? "", Number(n.dataset.since));
+      const since = Number(n.dataset.since);
+      const text = liveLabel(n.dataset.live ?? "", since);
       if (n.textContent !== text) n.textContent = text;
+      // A quiet step emits no updates to re-render it, so the tick opens it
+      // once it is old enough; a row the reader toggled is left alone.
+      const row = n.closest<HTMLDetailsElement>("details.part-row");
+      if (row !== null && longLive(since) && !openState.has(row.dataset.partId ?? "")) row.open = true;
     }
   }
 

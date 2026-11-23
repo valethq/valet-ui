@@ -170,8 +170,19 @@ class FakeEl {
   readonly style: Record<string, string> = {};
   textContent = "";
   value = "";
+  /** `<details>` reflection: `.open` is the `open` attribute. */
+  get open(): boolean {
+    return this.attrs.has("open");
+  }
+  set open(on: boolean) {
+    if (on) this.attrs.set("open", "");
+    else this.attrs.delete("open");
+  }
   #parent: FakeEl | null = null;
   constructor(readonly tag: string) {}
+  get parent(): FakeEl | null {
+    return this.#parent;
+  }
   setAttribute(k: string, v: string): void {
     this.attrs.set(k, v);
   }
@@ -193,8 +204,12 @@ class FakeEl {
     },
   };
   append(...kids: unknown[]): void {
-    for (const k of kids) if (k instanceof FakeEl) k.#parent = this;
-    this.children.push(...kids);
+    for (const k of kids) {
+      const node = typeof k === "string" ? new FakeText(k) : k;
+      if (node instanceof FakeEl) node.#parent = this;
+      else if (node instanceof FakeText) node.parent = this;
+      this.children.push(node);
+    }
   }
   readonly listeners = new Map<string, ((ev: unknown) => void)[]>();
   addEventListener(type: string, fn: (ev: unknown) => void): void {
@@ -212,9 +227,10 @@ class FakeEl {
     this.children.length = 0;
     this.append(...kids);
   }
-  insertBefore(node: FakeEl, ref: FakeEl | null): void {
+  insertBefore(node: FakeEl | FakeText, ref: FakeEl | FakeText | null): void {
     node.remove();
-    node.#parent = this;
+    if (node instanceof FakeEl) node.#parent = this;
+    else node.parent = this;
     const i = ref === null ? -1 : this.children.indexOf(ref);
     if (i < 0) this.children.push(node);
     else this.children.splice(i, 0, node);
@@ -241,7 +257,7 @@ class FakeEl {
   removeAttribute(k: string): void {
     this.attrs.delete(k);
   }
-  replaceWith(n: FakeEl): void {
+  replaceWith(n: FakeEl | FakeText): void {
     this.#parent?.insertBefore(n, this);
     this.remove();
   }
@@ -280,6 +296,28 @@ class FakeEl {
   }
   querySelector(sel: string): FakeEl | null {
     return this.querySelectorAll(sel)[0] ?? null;
+  }
+}
+
+/** A stand-in Text node: `el()`'s string children land in `children`, and morph patches or replaces them. */
+class FakeText {
+  readonly nodeType = 3;
+  parent: FakeEl | null = null;
+  constructor(public data: string) {}
+  appendData(s: string): void {
+    this.data += s;
+  }
+  remove(): void {
+    const i = this.parent?.children.indexOf(this) ?? -1;
+    if (i >= 0) this.parent?.children.splice(i, 1);
+    this.parent = null;
+  }
+  replaceWith(n: FakeEl | FakeText): void {
+    this.parent?.insertBefore(n, this);
+    this.remove();
+  }
+  toString(): string {
+    return this.data;
   }
 }
 
@@ -601,6 +639,48 @@ describe("render cost", () => {
     withChat((chat, root) => {
       chat.update(viewWith([toolPart()]), []);
       expect((findByClass(root, "status") as FakeEl).attrs.has("data-live")).toBe(false);
+    });
+  });
+
+  test("a live step stays collapsed until it has run 750ms, then opens on the next update", () => {
+    withChat((chat, root, tick) => {
+      const running = (output: string): Part =>
+        toolPart(
+          { status: "running", output },
+          { id: "p_run", status: "streaming", createdAt: 1_000_000, updatedAt: 1_000_000 },
+        );
+      const open = (): boolean => (findByClass(root, "part-row") as unknown as { open: boolean }).open;
+      chat.update(viewWith([running("")]), []);
+      expect(open()).toBe(false);
+      tick(700);
+      chat.update(viewWith([running("a")]), []);
+      expect(open()).toBe(false);
+      tick(100);
+      chat.update(viewWith([running("ab")]), []);
+      expect(open()).toBe(true);
+    });
+  });
+
+  test("a streaming reasoning step stays collapsed until 750ms, then opens as more text lands", () => {
+    withChat((chat, root, tick) => {
+      const thinking = (text: string): Part =>
+        toolPart(
+          {},
+          {
+            id: "p_th",
+            type: "reasoning",
+            status: "streaming",
+            data: { type: "reasoning", text },
+            createdAt: 1_000_000,
+            updatedAt: 1_000_000,
+          },
+        );
+      const open = (): boolean => (findByClass(root, "part-row") as unknown as { open: boolean }).open;
+      chat.update(viewWith([thinking("h")]), []);
+      expect(open()).toBe(false);
+      tick(800);
+      chat.update(viewWith([thinking("hmm")]), []);
+      expect(open()).toBe(true);
     });
   });
 
