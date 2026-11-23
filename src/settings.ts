@@ -104,44 +104,78 @@ export function registerSettings(ctx: PluginContext): void {
   ctx.scopes.define({ name: "settings", version: 2, cardinality: "many" });
   const find = (plugin: string) => ctx.scopes.all("settings").find((p) => p.plugin === plugin);
 
-  ctx.http.route("GET", "/settings", async () =>
-    json(await Promise.all(ctx.scopes.all("settings").map(describe))),
+  const read = { permission: "ui:settings.read", resource: pluginResource };
+  const write = { permission: "ui:settings.write", resource: pluginResource };
+  // spec-gap: the list is not filtered per plugin; it needs the unscoped ui:settings.read.
+  ctx.http.route(
+    "GET",
+    "/settings",
+    async () => json(await Promise.all(ctx.scopes.all("settings").map(describe))),
+    { permission: "ui:settings.read" },
   );
-  ctx.http.route("GET", "/settings/:plugin", async (_req, { params }) => {
-    const provider = find(params.plugin ?? "");
-    return provider ? json(await describe(provider)) : json({ error: "Unknown plugin" }, 404);
-  });
+  ctx.http.route(
+    "GET",
+    "/settings/:plugin",
+    async (_req, { params }) => {
+      const provider = find(params.plugin ?? "");
+      return provider ? json(await describe(provider)) : json({ error: "Unknown plugin" }, 404);
+    },
+    read,
+  );
 
   for (const kind of ["options", "views", "actions"] as const) {
-    ctx.http.route("POST", `/settings/:plugin/${kind}/:name`, async (req, { params }) => {
+    ctx.http.route(
+      "POST",
+      `/settings/:plugin/${kind}/:name`,
+      async (req, { params }) => {
+        const provider = find(params.plugin ?? "");
+        if (!provider) return json({ error: "Unknown plugin" }, 404);
+        const fn = handler(provider.impl, kind, params.name ?? "");
+        if (!fn) return json({ error: `Unknown ${kind.slice(0, -1)}` }, 404);
+        const args = parseObject(await req.text());
+        if (!args) return json({ error: "Request body must be a JSON object" }, 400);
+        try {
+          const result = await fn(args);
+          return kind === "actions" ? json(await describe(provider)) : json(result ?? null);
+        } catch (error) {
+          return json({ error: message(error) }, 422);
+        }
+      },
+      kind === "actions" ? write : read,
+    );
+  }
+
+  ctx.http.route(
+    "PUT",
+    "/settings/:plugin/subsections/:id",
+    async (req, { params }) => {
       const provider = find(params.plugin ?? "");
       if (!provider) return json({ error: "Unknown plugin" }, 404);
-      const fn = handler(provider.impl, kind, params.name ?? "");
-      if (!fn) return json({ error: `Unknown ${kind.slice(0, -1)}` }, 404);
-      const args = parseObject(await req.text());
-      if (!args) return json({ error: "Request body must be a JSON object" }, 400);
+      const sub = ((await provider.impl.subsections?.()) ?? []).find((s) => s.id === params.id);
+      if (!sub) return json({ error: "Unknown subsection" }, 404);
+      if (!sub.set) return json({ error: "This subsection has no editable values" }, 405);
+      const body = parseObject(await req.text());
+      if (!body) return json({ error: "Request body must be a JSON object" }, 400);
       try {
-        const result = await fn(args);
-        return kind === "actions" ? json(await describe(provider)) : json(result ?? null);
+        await sub.set(body);
       } catch (error) {
         return json({ error: message(error) }, 422);
       }
-    });
-  }
+      return json(await describe(provider));
+    },
+    write,
+  );
+}
 
-  ctx.http.route("PUT", "/settings/:plugin/subsections/:id", async (req, { params }) => {
-    const provider = find(params.plugin ?? "");
-    if (!provider) return json({ error: "Unknown plugin" }, 404);
-    const sub = ((await provider.impl.subsections?.()) ?? []).find((s) => s.id === params.id);
-    if (!sub) return json({ error: "Unknown subsection" }, 404);
-    if (!sub.set) return json({ error: "This subsection has no editable values" }, 405);
-    const body = parseObject(await req.text());
-    if (!body) return json({ error: "Request body must be a JSON object" }, 400);
-    try {
-      await sub.set(body);
-    } catch (error) {
-      return json({ error: message(error) }, 422);
-    }
-    return json(await describe(provider));
-  });
+/** `/settings/:plugin/...` -> `plugin:<id>`, the resource core checks the route permission on. */
+function pluginResource(req: Request) {
+  // Split like core's router (empty segments dropped, params decoded), or a path like
+  // /plugins///valet-ui/settings/<x> authorizes one plugin and serves another.
+  const segments = new URL(req.url).pathname.split("/").filter((s) => s !== "");
+  const raw = segments[segments.indexOf("settings") + 1] ?? "";
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {}
+  return { id: `plugin:${decoded}` };
 }

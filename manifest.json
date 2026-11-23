@@ -4,8 +4,18 @@
   "name": "Web UI",
   "version": "0.1.0",
   "description": "Web interface for valet (default 127.0.0.1:7418).",
-  "valet": "^0.1.0",
+  "valet": "^0.1.1",
   "main": "./src/index.ts",
+  "acl": {
+    "permissions": {
+      "settings.read": { "summary": "Read plugin settings pages, options and views", "resource": "plugin" },
+      "settings.write": {
+        "summary": "Run plugin settings actions and save runtime subsections",
+        "resource": "plugin",
+        "requireVerifiedLogin": true
+      }
+    }
+  },
   "settings": {
     "sections": {
       "system": {
