@@ -1068,7 +1068,8 @@ button.part-file:hover { background: var(--tint); }
 .set-sec[hidden] { display: none; }
 .set-sec-title { margin: 0 0 8px 2px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .set-sec-desc { margin: -4px 0 10px 2px; font-size: 12.5px; color: var(--faint); }
-.set-list { border-radius: var(--r-lg); background: var(--surface); box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 75%, transparent); }
+/* A border rather than an outer ring: Advanced clips its content while it animates, which cut a ring's top and bottom. */
+.set-list { border-radius: var(--r-lg); background: var(--surface); border: 1px solid color-mix(in srgb, var(--border) 75%, transparent); }
 .set-list.runtime { padding: 14px 16px; }
 .set-row { display: flex; align-items: center; gap: 12px 24px; min-height: 58px; padding: 13px 16px; }
 .set-row[hidden] { display: none; }
