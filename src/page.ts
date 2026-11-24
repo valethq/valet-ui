@@ -1532,7 +1532,8 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .fv-loading { animation: pulse 1.4s ease-in-out infinite; }
 .fv-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 14px 8px 22px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--faint); }
 .fv-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fv-acts { display: flex; gap: 2px; }
+.fv-status:empty { display: none; }
+.fv-acts { display: flex; gap: 2px; margin-left: auto; }
 @media (max-width: 1099px) {
   .app.fv-open .fv-scrim { display: block; position: fixed; inset: 0; z-index: 17; background: rgba(0, 0, 0, .35); animation: fade-in var(--dur-focus) var(--ease-focus); }
 }

@@ -90,7 +90,7 @@ function sizeLabel(bytes: number): string {
 /** "PNG", "MP4", ... from the file's extension. */
 const typeLabel = (rel: string): string => baseName(rel).split(".").pop()?.toUpperCase() ?? "";
 
-/** The read-only file panel: tabs, a highlighted source view (or rendered markdown) and the referenced lines. */
+/** The file panel: tabs, a highlighted source view (or rendered markdown) with the referenced lines, and media. */
 export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => void): FileViewer {
   const tabs: Tab[] = [];
   let active: Tab | null = null;
@@ -167,10 +167,10 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
       file === undefined
         ? (tab.error ?? "Loading…")
         : file.kind !== "text" || tab.mode === "preview" || line === undefined
-          ? "Read-only"
+          ? ""
           : end === undefined
-            ? `Line ${line} · read-only`
-            : `Lines ${line}–${end} · read-only`;
+            ? `Line ${line}`
+            : `Lines ${line}–${end}`;
     copyBtn.disabled = file === undefined;
   }
 
