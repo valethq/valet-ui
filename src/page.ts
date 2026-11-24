@@ -1212,9 +1212,9 @@ input.pane-name:focus { background: var(--raised); border-color: var(--strong); 
 .segmented button { padding: 5px 13px; border: 0; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 550; }
 .segmented button:hover { background: var(--tint); color: var(--text); }
 .segmented button[aria-checked=true] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px var(--shadow), 0 0 0 1px var(--border); }
-.pane-stick { position: relative; top: -14px; z-index: 1; display: flex; flex-direction: column; gap: 10px; margin: -14px -24px 0; padding: 14px 24px 12px; background: linear-gradient(var(--surface) 88%, transparent); }
+.pane-stick { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; margin: -14px -24px 0; padding: 14px 24px 12px; background: linear-gradient(var(--surface) 88%, transparent); }
 .pane-hint { margin: -8px 0 0; }
-@media (min-height: 820px) { .pane-stick { position: sticky; } }
+@media (min-height: 820px) { .pane-stick { position: sticky; top: -14px; } }
 
 .theme-preview {
   display: grid;
