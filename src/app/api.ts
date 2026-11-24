@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   CorePluginSettings,
+  ModelInfo,
   PartInput,
   PartType,
   PluginStatus,
@@ -419,7 +420,7 @@ function stringList(v: unknown): string[] | undefined {
   return out.length === 0 ? undefined : out;
 }
 
-function parseModel(m: Record<string, unknown>) {
+function parseModel(m: Record<string, unknown>): ModelInfo {
   const efforts = stringList(m.efforts);
   return {
     id: String(m.id ?? m.model ?? m.name ?? ""),
@@ -433,6 +434,9 @@ function parseModel(m: Record<string, unknown>) {
     ...(typeof m.hidden === "boolean" ? { hidden: m.hidden } : {}),
     ...(typeof m.show === "boolean" ? { show: m.show } : {}),
     ...(typeof m.custom === "boolean" ? { custom: m.custom } : {}),
+    ...(typeof m.base === "object" && m.base !== null
+      ? { base: parseModel(m.base as Record<string, unknown>) }
+      : {}),
   };
 }
 

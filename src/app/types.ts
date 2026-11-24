@@ -132,6 +132,8 @@ export interface ModelInfo {
   show?: boolean;
   /** Added by hand in valet-agent's models config. */
   custom?: boolean;
+  /** Catalog: what the provider lists, before overrides; absent for custom models. */
+  base?: ModelInfo;
 }
 
 export interface ProviderModels {
