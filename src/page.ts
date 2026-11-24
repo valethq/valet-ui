@@ -490,6 +490,8 @@ button.chip:active:not(:disabled) { transform: none; }
 @keyframes dot-pop { from { opacity: .3; transform: scale(.3); } 55% { transform: scale(1.2); } }
 .session-row .text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .session-row .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); }
+.session-row .meta .pin { display: inline-flex; flex: none; color: var(--muted); }
+.session-row .meta .pin .icon { width: 11px; height: 11px; }
 .session-row .meta-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-row .meta .subs { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--muted); }
 .session-row .meta .subs::before { content: "·"; color: var(--faint); margin-right: 2px; }

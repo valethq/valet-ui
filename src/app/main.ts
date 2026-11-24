@@ -28,6 +28,7 @@ import {
   type SessionView,
   needsUser,
   sessionIndicator,
+  isPinned,
   sortSessions,
   titleSuffixes,
   topLevel,
@@ -331,6 +332,11 @@ function sidebarProps(
       closeNav();
       void openSession(id);
     },
+    isPinned: (id) => {
+      const session = app.sessions.find((s) => s.id === id);
+      return session !== undefined && isPinned(session);
+    },
+    onPin: (id) => void pinSession(id),
     onRename: (id) => {
       const session = app.sessions.find((s) => s.id === id);
       if (session !== undefined) promptRename(session);
@@ -784,6 +790,19 @@ function compactOpen(): void {
 async function renameSession(id: string, title: string): Promise<void> {
   const session = await api.updateSession(id, { title }).catch((e: unknown) => {
     toast(e instanceof Error ? e.message : "Couldn't rename session");
+    return undefined;
+  });
+  if (session === undefined) return;
+  app.sessions = upsertSession(app.sessions, session);
+  if (app.view?.session.id === id) app.view.session = session;
+  scheduleRender();
+}
+
+async function pinSession(id: string): Promise<void> {
+  const current = app.sessions.find((s) => s.id === id);
+  if (current === undefined) return;
+  const session = await api.setSessionPinned(current, !isPinned(current)).catch((e: unknown) => {
+    toast(e instanceof Error ? e.message : "Couldn't pin session");
     return undefined;
   });
   if (session === undefined) return;

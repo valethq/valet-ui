@@ -63,8 +63,15 @@ export function newSessionView(session: Session, messages: ChatMessage[], loadin
 /** When a chat last had activity; falls back to creation for chats with no messages yet (same order core lists them in). */
 export const sessionActivityAt = (s: Session): number => s.lastMessageAt ?? s.createdAt;
 
+// spec-gap: sessions have no pinned field, so the flag is kept in the free-form settings.ui.pinned.
+export const isPinned = (s: Session): boolean =>
+  (s.settings.ui as { pinned?: unknown } | undefined)?.pinned === true;
+
+/** Pinned sessions first, then each group by latest activity. */
 export function sortSessions(list: Session[]): Session[] {
-  return [...list].sort((a, b) => sessionActivityAt(b) - sessionActivityAt(a));
+  return [...list].sort(
+    (a, b) => Number(isPinned(b)) - Number(isPinned(a)) || sessionActivityAt(b) - sessionActivityAt(a),
+  );
 }
 
 /** Sessions that appear in the sidebar: subagent children show up in their parent's chat instead. */

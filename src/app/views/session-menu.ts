@@ -6,6 +6,8 @@ export interface SessionMenuActions {
   projects: Project[];
   /** The project the listed sessions are in; it is not offered as a move target. */
   projectId: string | null;
+  isPinned(id: string): boolean;
+  onPin(id: string): void;
   onRename(id: string): void;
   onFork(id: string): void;
   onMove(id: string, projectId: string): void;
@@ -53,6 +55,7 @@ function show(id: string, trigger: HTMLElement, actions: SessionMenuActions): vo
   const menu = el(
     "div",
     { class: "menu session-menu", role: "menu" },
+    menuItem(actions.isPinned(id) ? "Unpin" : "Pin", "pin", () => pick((a) => a.onPin(id))),
     menuItem("Rename", "pencil", () => pick((a) => a.onRename(id))),
     menuItem("Fork", "branch", () => pick((a) => a.onFork(id))),
     ...moveItems(id, actions),

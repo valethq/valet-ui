@@ -295,6 +295,13 @@ export const setSessionModel = (
   });
 };
 
+export const setSessionPinned = (session: Session, pinned: boolean): Promise<Session> => {
+  const { pinned: _, ...ui } = (session.settings.ui ?? {}) as { pinned?: unknown };
+  return updateSession(session.id, {
+    settings: { ...session.settings, ui: pinned ? { ...ui, pinned: true } : ui },
+  });
+};
+
 export const cancelRun = (runId: string): Promise<{ ok: boolean }> =>
   req("POST", `/api/core/runs/${encodeURIComponent(runId)}/cancel`);
 

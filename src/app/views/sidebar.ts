@@ -25,6 +25,8 @@ export interface SidebarProps {
   onProject(id: string): void;
   onProjectsChanged(select: string | null): void;
   onSession(id: string): void;
+  isPinned(id: string): boolean;
+  onPin(id: string): void;
   onRename(id: string): void;
   onFork(id: string): void;
   onMove(id: string, projectId: string): void;
@@ -222,6 +224,7 @@ export function renderSidebar(node: HTMLElement, p: SidebarProps): void {
         el(
           "span",
           { class: "meta" },
+          ...(p.isPinned(session.id) ? [el("span", { class: "pin" }, icon("pin"))] : []),
           el("span", { class: `dot ${dot}${was !== undefined && was.dot !== dot ? " pop" : ""}` }),
           el("span", { class: "meta-text", text: rowLabel(session, dot, suffixes.get(session.id), now) }),
           ...(subs.length === 0

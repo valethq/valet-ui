@@ -12,6 +12,8 @@ import {
   EventBuffer,
   forkSource,
   hasPartial,
+  isPinned,
+  sortSessions,
   newSessionView,
   replaceMessages,
   searchSessions,
@@ -641,4 +643,19 @@ describe("searchSessions", () => {
   test("matches every word, case-insensitive", () => expect(ids("LOGIN fix")).toEqual(["a"]));
   test("untitled sessions match 'untitled'", () => expect(ids("untit")).toEqual(["c"]));
   test("a subagent title surfaces its parent", () => expect(ids("oauth")).toEqual(["b"]));
+});
+
+describe("pinned sessions", () => {
+  const at = (id: string, lastMessageAt: number, pinned = false) =>
+    session({ id, lastMessageAt, settings: pinned ? { ui: { pinned: true } } : {} });
+
+  test("pinned sessions sort first, each group by activity", () => {
+    const sorted = sortSessions([at("a", 3), at("b", 1, true), at("c", 2), at("d", 5, true)]);
+    expect(sorted.map((s) => s.id)).toEqual(["d", "b", "a", "c"]);
+  });
+
+  test("isPinned reads settings.ui.pinned", () => {
+    expect(isPinned(at("a", 1, true))).toBe(true);
+    expect(isPinned(at("a", 1))).toBe(false);
+  });
 });
