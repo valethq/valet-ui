@@ -35,7 +35,7 @@ export function upstreamHeaders(req: Request): Headers {
   return headers;
 }
 
-export async function proxyRequest(req: Request, coreUrl: string, compress = false): Promise<Response> {
+export async function proxyRequest(req: Request, coreUrl: string): Promise<Response> {
   const url = new URL(req.url);
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   try {
@@ -48,7 +48,7 @@ export async function proxyRequest(req: Request, coreUrl: string, compress = fal
     const headers = new Headers(upstream.headers);
     for (const name of HOP_BY_HOP) headers.delete(name);
     const res = new Response(upstream.body, { status: upstream.status, headers });
-    return compress ? await compressResponse(req, res) : res;
+    return await compressResponse(req, res);
   } catch {
     return Response.json({ error: "Server unreachable" }, { status: 502 });
   }

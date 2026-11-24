@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import { brotliCompress, constants, gzip } from "node:zlib";
-import { hasExperimentalCookie } from "./experimental";
 
 const brotli = promisify(brotliCompress);
 const deflate = promisify(gzip);
@@ -10,9 +9,6 @@ export type Encoding = "br" | "gzip";
 
 const MIN_BYTES = 1024;
 const TYPES = /^(application\/json|application\/javascript|image\/svg\+xml|text\/(?!event-stream))/i;
-
-export const experimentalOn = (req: Request): boolean =>
-  hasExperimentalCookie(req.headers.get("cookie") ?? "");
 
 /** Best encoding the client accepts (br over gzip), honouring `q=0` refusals and `*`. */
 export function pickEncoding(acceptEncoding: string | null): Encoding | null {

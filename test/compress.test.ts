@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
-import { asset, compressResponse, experimentalOn, pickEncoding, serveAsset } from "../src/compress";
-import { cookieFor } from "../src/app/experimental";
-import { hasExperimentalCookie } from "../src/experimental";
+import { asset, compressResponse, pickEncoding, serveAsset } from "../src/compress";
 import { startUiServer, type UiServer } from "../src/server";
 
 const big = JSON.stringify(
@@ -22,24 +20,6 @@ describe("pickEncoding", () => {
     expect(pickEncoding("identity")).toBeNull();
     expect(pickEncoding("gzip;q=0")).toBeNull();
     expect(pickEncoding(null)).toBeNull();
-  });
-});
-
-describe("experimental cookie", () => {
-  test("only an exact on value counts, wherever it sits in the header", () => {
-    expect(hasExperimentalCookie("valet-ui-experimental=1")).toBe(true);
-    expect(hasExperimentalCookie("a=b; valet-ui-experimental=1; c=d")).toBe(true);
-    expect(hasExperimentalCookie("valet-ui-experimental=0")).toBe(false);
-    expect(hasExperimentalCookie("x-valet-ui-experimental=1")).toBe(false);
-    expect(hasExperimentalCookie("")).toBe(false);
-    expect(experimentalOn(req({ cookie: "valet-ui-experimental=1" }))).toBe(true);
-  });
-
-  test("the client writes a year-long strict cookie and clears it when turned off", () => {
-    expect(cookieFor(true, false)).toBe("valet-ui-experimental=1; Path=/; Max-Age=31536000; SameSite=Strict");
-    expect(cookieFor(true, true)).toEndWith("; Secure");
-    expect(cookieFor(false, false)).toContain("Max-Age=0");
-    expect(hasExperimentalCookie(cookieFor(true, false).split(";")[0] as string)).toBe(true);
   });
 });
 
@@ -121,32 +101,23 @@ describe("ui server compression", () => {
 
   const raw = (path: string, headers: Record<string, string>) =>
     fetch(`${server.url}${path}`, { headers: { "accept-encoding": "br, gzip", ...headers } });
-  const on = { cookie: "valet-ui-experimental=1" };
 
-  test("without the cookie nothing changes", async () => {
-    for (const path of ["/", "/app.js", "/api/core/x"]) {
-      const res = await raw(path, {});
-      expect(res.headers.get("etag")).toBeNull();
-      expect(res.headers.get("vary")).toBeNull();
-    }
-  });
-
-  test("with the cookie the page, bundle and API come back compressed and intact", async () => {
+  test("the page, bundle and API come back compressed and intact", async () => {
     const plain = await (await fetch(`${server.url}/app.js`)).text();
-    const bundle = await raw("/app.js", on);
+    const bundle = await raw("/app.js", {});
     expect(bundle.headers.get("etag")).not.toBeNull();
     expect(await bundle.text()).toBe(plain);
-    const html = await raw("/", on);
+    const html = await raw("/", {});
     expect(html.headers.get("content-security-policy")).toContain("default-src 'none'");
     expect(await html.text()).toContain('src="/app.js"');
-    const api = await raw("/api/core/x", on);
+    const api = await raw("/api/core/x", {});
     expect(api.headers.get("vary")).toBe("accept-encoding");
     expect(await api.text()).toBe(big);
   });
 
   test("a conditional request for the bundle is a 304", async () => {
-    const first = await raw("/app.js", on);
-    const second = await raw("/app.js", { ...on, "if-none-match": first.headers.get("etag") as string });
+    const first = await raw("/app.js", {});
+    const second = await raw("/app.js", { "if-none-match": first.headers.get("etag") as string });
     expect(second.status).toBe(304);
   });
 });
