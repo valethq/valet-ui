@@ -1617,12 +1617,36 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   .font-fields { grid-template-columns: 1fr; }
   .part-row summary { min-height: 32px; }
   .sub-row { min-height: 40px; }
-  .file-viewer {
-    top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none; height: 86dvh;
-    border-radius: var(--r-xl) var(--r-xl) 0 0; border-bottom: none;
-    padding-bottom: env(safe-area-inset-bottom);
-    --fx-from: translateY(56px);
+  /* The sidebar's drawer, mirrored: it slides in from the right over a backdrop, and back out when hidden. */
+  .file-viewer, .file-viewer[hidden] {
+    display: flex;
+    top: max(10px, env(safe-area-inset-top));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    right: max(10px, env(safe-area-inset-right));
+    width: min(calc(100vw - 58px), 560px);
+    max-width: none;
+    animation: none;
+    transition: transform var(--dur-focus) var(--ease-focus), filter var(--dur-focus) var(--ease-focus), opacity var(--dur-focus) var(--ease-focus), visibility var(--dur-focus) linear;
   }
+  .file-viewer[hidden] {
+    transform: translateX(calc(100% + 24px));
+    filter: blur(var(--blur-lg));
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .fv-scrim, .app.fv-open .fv-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 17;
+    background: rgba(0, 0, 0, .45);
+    opacity: 0;
+    visibility: hidden;
+    animation: none;
+    transition: opacity var(--dur-focus) var(--ease-focus), visibility 0s linear var(--dur-focus);
+  }
+  .app.fv-open .fv-scrim { opacity: 1; visibility: visible; transition-delay: 0s; }
   .fv-resizer { display: none; }
   .fv-code { font-size: 11.5px; }
   .fv-n { padding: 0 10px 0 12px; }
