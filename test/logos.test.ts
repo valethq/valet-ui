@@ -52,7 +52,7 @@ describe("logoFor", () => {
     ["opencode/beam-free", "reflection"],
     ["Flint 40B Free", "flint"],
     ["opencode/flint-40b-free", "flint"],
-    ["Big Pickle", undefined],
+    ["Big Pickle", "opencode"],
     ["Polo 2", undefined],
     ["Sweetwater 7B", undefined],
   ];

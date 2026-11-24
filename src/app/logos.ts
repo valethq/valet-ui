@@ -84,6 +84,7 @@ const RULES: [RegExp, LogoId][] = [
   [/grok|\bx-?ai\b/i, "grok"],
   [/gemini|gemma|google|vertex/i, "gemini"],
   [/llama|\bmuse\b|\bmeta\b/i, "meta"],
+  [/big pickle/i, "opencode"],
 ];
 
 const match = (s: string): LogoId | undefined => RULES.find(([re]) => re.test(s))?.[1];
