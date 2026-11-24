@@ -16,6 +16,8 @@ export interface FileViewer {
   /** Resolves false when the file does not exist. */
   open(target: FileTarget): Promise<boolean>;
   close(): void;
+  /** Shows only the tabs opened in this session, and the panel only if it was open there. */
+  setSession(sessionId: string | null): void;
 }
 
 interface Tab {
@@ -93,6 +95,15 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
   const tabs: Tab[] = [];
   let active: Tab | null = null;
   let isOpen = false;
+  let session: string | null = null;
+  /** Per session: whether the panel was left open, and on which tab. */
+  const sessions = new Map<string, { open: boolean; active?: string }>();
+  const stateOf = (id: string) => {
+    const st = sessions.get(id) ?? { open: false };
+    sessions.set(id, st);
+    return st;
+  };
+  const here = (): Tab[] => tabs.filter((t) => t.target.sessionId === session);
 
   const tablist = el("div", { class: "fv-tablist", role: "tablist" });
   const closeBtn = iconButton("close", "Close file viewer", "fv-close");
@@ -227,6 +238,7 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
 
   function show(tab: Tab, fresh = false): void {
     active = tab;
+    stateOf(tab.target.sessionId).active = tab.key;
     for (const t of tabs) {
       t.button.classList.toggle("on", t === tab);
       t.button.setAttribute("aria-selected", String(t === tab));
@@ -245,11 +257,12 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     if (at < 0) return;
     tabs.splice(at, 1);
     tab.button.remove();
-    if (!settle) return;
-    if (tabs.length === 0) {
+    if (!settle || tab.target.sessionId !== session) return;
+    const left = here();
+    if (left.length === 0) {
       active = null;
       close();
-    } else if (active === tab) show(tabs[Math.min(at, tabs.length - 1)] as Tab);
+    } else if (active === tab) show(left.find((t) => tabs.indexOf(t) >= at) ?? (left.at(-1) as Tab));
   }
 
   function addTab(target: FileTarget): Tab {
@@ -290,14 +303,37 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     panel.focus({ preventScroll: true });
   }
 
-  function close(): void {
+  function hide(): void {
     if (!isOpen) return;
     isOpen = false;
     panel.hidden = true;
     setOpen(false);
   }
 
+  function close(): void {
+    if (session !== null) stateOf(session).open = false;
+    hide();
+  }
+
+  function setSession(id: string | null): void {
+    if (id === session) return;
+    session = id;
+    for (const t of tabs) t.button.hidden = t.target.sessionId !== id;
+    const st = id === null ? undefined : sessions.get(id);
+    const mine = here();
+    const tab = mine.find((t) => t.key === st?.active) ?? mine[0];
+    if (st?.open !== true || tab === undefined) {
+      active = null;
+      hide();
+      return;
+    }
+    reveal();
+    show(tab);
+  }
+
   async function open(target: FileTarget): Promise<boolean> {
+    setSession(target.sessionId);
+    stateOf(target.sessionId).open = true;
     reveal();
     const stale = tabs.find((t) => t.key === keyOf(target) && t.error !== undefined);
     if (stale !== undefined) removeTab(stale, false);
@@ -315,7 +351,9 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     show(tab);
     try {
       const file = await api.readFile(target.sessionId, target.path);
-      const same = tabs.find((t) => t !== tab && t.file?.path === file.path);
+      const same = tabs.find(
+        (t) => t !== tab && t.target.sessionId === target.sessionId && t.file?.path === file.path,
+      );
       if (same !== undefined) {
         removeTab(tab);
         same.target = { ...target, path: same.target.path };
@@ -391,7 +429,7 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
   });
 
   bindResize(resizer, app);
-  return { nodes: [scrim, panel], open, close };
+  return { nodes: [scrim, panel], open, close, setSession };
 }
 
 /** `--fv-w` on the app root sizes the panel and the chat's right margin. */

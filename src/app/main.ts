@@ -406,6 +406,7 @@ function scheduleRender(): void {
             })),
           };
     app.chat?.update(app.view, app.providers, suffix, draftModel, links);
+    viewer?.setSession(app.view?.session.id ?? null);
   });
 }
 

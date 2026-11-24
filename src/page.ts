@@ -1479,6 +1479,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .fv-tab { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 30px; max-width: 220px; padding: 0 5px 0 11px; border: none; background: none; color: var(--muted); font-size: 12.5px; }
 .fv-tab:hover { background: var(--tint); color: var(--text); }
 .fv-tab.on { background: var(--tint-strong); color: var(--text); }
+.fv-tab[hidden] { display: none; }
 .fv-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fv-tab-x { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 99px; color: var(--faint); opacity: 0; transition: opacity .15s; }
 .fv-tab-x .icon { width: 12px; height: 12px; }
