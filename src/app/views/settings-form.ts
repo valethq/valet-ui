@@ -397,9 +397,10 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
       const ctlBox = wrap.lastElementChild as HTMLElement;
       ctlBox.addEventListener("input", touch);
       ctlBox.addEventListener("change", touch);
-      ctlBox.addEventListener("click", (ev) => {
-        if ((ev.target as Element).closest("button") !== null) touch();
-      });
+      if (!models)
+        ctlBox.addEventListener("click", (ev) => {
+          if ((ev.target as Element).closest("button") !== null) touch();
+        });
       reset.addEventListener("click", () => {
         field.touched = true;
         field.reset = true;

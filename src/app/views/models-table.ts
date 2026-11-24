@@ -1,276 +1,135 @@
 import { el } from "../dom";
-import { iconButton } from "../icons";
+import { selectChip } from "../icons";
+import { logoMarks, logosFor } from "../logos";
+import { CUSTOM_FIELDS, type CatalogRow, type ModelEntry, mergeModelRows, rowFor } from "../model-rows";
 import { collapse, enter } from "../motion";
-import type { ModelInfo, ProviderModels } from "../types";
-
-/** One row written to valet-agent's `models` config. */
-export interface CatalogRow {
-  provider: string;
-  id: string;
-  show?: boolean;
-  name?: string;
-  contextWindow?: number;
-  maxOutputTokens?: number;
-  efforts?: string[];
-  defaultEffort?: string;
-  fast?: boolean;
-  custom?: boolean;
-}
+import type { ProviderModels } from "../types";
+import { type ModelItem, modelItem } from "./models-item";
 
 export type CatalogLoader = () => Promise<ProviderModels[]>;
 
-type RowState = {
-  provider: string;
-  id: string;
-  custom: boolean;
-  show: HTMLInputElement;
-  idInput: HTMLInputElement;
-  name: HTMLInputElement;
-  contextWindow: HTMLInputElement;
-  maxOutputTokens: HTMLInputElement;
-  efforts: HTMLInputElement;
-  fast: HTMLInputElement;
+interface Group {
   node: HTMLElement;
-};
-
-const numOrEmpty = (s: string): number | undefined => {
-  const t = s.trim();
-  if (t === "") return undefined;
-  const n = Number(t);
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1)
-    throw new Error("Token limits must be whole numbers of at least 1");
-  return n;
-};
-
-const effortsOf = (s: string): string[] | undefined => {
-  const items = s
-    .split(",")
-    .map((x) => x.trim())
-    .filter((x) => x !== "");
-  return items.length === 0 ? undefined : items;
-};
-
-function rowFromModel(provider: string, m: ModelInfo): CatalogRow {
-  return {
-    provider,
-    id: m.id,
-    show: m.show !== false,
-    name: m.name,
-    ...(typeof m.contextWindow === "number" ? { contextWindow: m.contextWindow } : {}),
-    ...(typeof m.maxOutputTokens === "number" ? { maxOutputTokens: m.maxOutputTokens } : {}),
-    ...(m.efforts !== undefined ? { efforts: m.efforts } : {}),
-    ...(m.defaultEffort !== undefined ? { defaultEffort: m.defaultEffort } : {}),
-    ...(typeof m.fast === "boolean" ? { fast: m.fast } : {}),
-    ...(m.custom === true ? { custom: true } : {}),
-  };
+  count: HTMLElement;
 }
 
-/** Merge provider listings with saved `values.models` rows (custom-only extras). */
-export function mergeModelRows(providers: ProviderModels[], saved: unknown): CatalogRow[] {
-  const savedRows = Array.isArray(saved)
-    ? saved.filter((r): r is CatalogRow => typeof r === "object" && r !== null && !Array.isArray(r))
-    : [];
-  const listed = new Set<string>();
-  const out: CatalogRow[] = [];
-  for (const p of providers) {
-    for (const m of p.models) {
-      if (m.id === "") continue;
-      listed.add(`${p.provider}\0${m.id}`);
-      out.push(rowFromModel(p.provider, m));
-    }
-  }
-  for (const r of savedRows) {
-    if (r.custom !== true || typeof r.provider !== "string" || typeof r.id !== "string") continue;
-    if (listed.has(`${r.provider}\0${r.id}`)) continue;
-    out.push({ ...r, custom: true, show: r.show !== false });
-  }
-  return out;
-}
-
-/** Editable catalog table for x-widget "models". */
+/** valet-agent's model list: models grouped by provider, each opening an editor under its row. */
 export function modelsTable(
   value: unknown,
   load: CatalogLoader,
 ): { node: HTMLElement; read(): CatalogRow[]; ready: Promise<void> } {
   const node = el("div", { class: "models-table" });
-  const head = el(
-    "div",
-    { class: "models-head" },
-    el("span", { text: "Show" }),
-    el("span", { text: "Provider" }),
-    el("span", { text: "ID" }),
-    el("span", { text: "Name" }),
-    el("span", { text: "Context" }),
-    el("span", { text: "Max output" }),
-    el("span", { text: "Effort" }),
-    el("span", { text: "Fast" }),
-    el("span", { text: "" }),
-  );
-  const body = el("div", { class: "models-body" });
   const status = el("div", { class: "hint", text: "Loading models…" });
-  const rows: RowState[] = [];
+  const items: ModelItem[] = [];
+  const groups = new Map<string, Group>();
+  let providers: ProviderModels[] = [];
+  let kept: CatalogRow[] = [];
 
-  const add = (row: CatalogRow) => {
-    const custom = row.custom === true;
-    const show = el("input", { type: "checkbox", class: "switch", "aria-label": "Show in model picker" });
-    show.checked = row.show !== false;
-    const idInput = el("input", {
-      class: "input mono",
-      type: "text",
-      autocomplete: "off",
-      spellcheck: "false",
-      "aria-label": "Model ID",
-      ...(custom ? {} : { readOnly: "true" }),
-    });
-    idInput.value = row.id;
-    const name = el("input", {
-      class: "input",
-      type: "text",
-      autocomplete: "off",
-      "aria-label": "Name",
-    });
-    name.value = row.name ?? "";
-    const contextWindow = el("input", {
-      class: "input",
-      type: "number",
-      autocomplete: "off",
-      "aria-label": "Context window",
-    });
-    contextWindow.value = row.contextWindow === undefined ? "" : String(row.contextWindow);
-    const maxOutputTokens = el("input", {
-      class: "input",
-      type: "number",
-      autocomplete: "off",
-      "aria-label": "Max output",
-    });
-    maxOutputTokens.value = row.maxOutputTokens === undefined ? "" : String(row.maxOutputTokens);
-    const efforts = el("input", {
-      class: "input",
-      type: "text",
-      autocomplete: "off",
-      spellcheck: "false",
-      placeholder: "low, medium, high",
-      "aria-label": "Effort",
-    });
-    efforts.value = (row.efforts ?? []).join(", ");
-    const fast = el("input", { type: "checkbox", class: "switch", "aria-label": "Fast mode" });
-    fast.checked = row.fast === true;
-    const providerLabel = el("span", { class: "models-provider mono", text: row.provider });
-    const remove = iconButton("trash", "Remove custom model");
-    remove.type = "button";
-    remove.hidden = !custom;
-    const line = el(
-      "div",
-      { class: `models-row${custom ? " custom" : ""}` },
-      show,
-      providerLabel,
-      idInput,
-      name,
-      contextWindow,
-      maxOutputTokens,
-      efforts,
-      fast,
-      remove,
-    );
-    const state: RowState = {
-      provider: row.provider,
-      id: row.id,
-      custom,
-      show,
-      idInput,
-      name,
-      contextWindow,
-      maxOutputTokens,
-      efforts,
-      fast,
-      node: line,
+  const changed = () => node.dispatchEvent(new Event("change", { bubbles: true }));
+
+  const recount = () => {
+    for (const [provider, g] of groups) {
+      const own = items.filter((i) => i.provider === provider);
+      g.count.textContent = `${own.filter((i) => i.shown()).length} of ${own.length} in picker`;
+      g.node.hidden = own.length === 0;
+    }
+  };
+
+  const group = (provider: string): Group => {
+    const known = groups.get(provider);
+    if (known !== undefined) return known;
+    const p = providers.find((x) => x.provider === provider);
+    const label = p?.label || provider;
+    const count = el("span", { class: "models-count" });
+    const g = {
+      node: el(
+        "section",
+        { class: "models-group", "aria-label": label },
+        el(
+          "div",
+          { class: "models-group-head" },
+          ...[logoMarks(logosFor(label, provider, p?.icon))].filter((x) => x !== undefined),
+          el("span", { text: label }),
+          count,
+        ),
+      ),
+      count,
     };
-    remove.addEventListener("click", () => {
-      const i = rows.indexOf(state);
-      if (i < 0) return;
-      rows.splice(i, 1);
-      collapse(line);
-    });
-    rows.push(state);
-    body.append(line);
+    groups.set(provider, g);
+    node.insertBefore(g.node, footer);
+    return g;
+  };
+
+  const hooks = {
+    opened(item: ModelItem) {
+      for (const other of items) if (other !== item) other.setOpen(false);
+    },
+    remove(item: ModelItem) {
+      items.splice(items.indexOf(item), 1);
+      collapse(item.node);
+      recount();
+      changed();
+    },
+    changed,
+  };
+
+  const add = (entry: ModelEntry): ModelItem => {
+    const item = modelItem(entry, hooks);
+    item.node.addEventListener("change", recount);
+    items.push(item);
+    group(entry.provider).node.append(item.node);
+    return item;
   };
 
   const providerSelect = el("select", { "aria-label": "Provider" });
   const addBtn = el("button", { type: "button", class: "chip", text: "Add model" });
-  const footer = el("div", { class: "models-add" }, selectChip(providerSelect), addBtn);
-
+  const footer = el("div", { class: "models-add" }, selectChip(providerSelect, "field-select"), addBtn);
+  footer.hidden = true;
   addBtn.addEventListener("click", () => {
     const provider = providerSelect.value;
     if (provider === "") return;
-    add({
+    const item = add({
       provider,
       id: "",
-      name: "",
-      show: true,
       custom: true,
-      contextWindow: 128_000,
-      maxOutputTokens: 32_000,
+      show: true,
+      defaultShow: true,
+      fields: { name: "", ...CUSTOM_FIELDS },
     });
-    const last = rows[rows.length - 1];
-    if (last !== undefined) enter(last.node);
-    last?.idInput.focus();
+    recount();
+    enter(item.node);
+    item.setOpen(true);
+    hooks.opened(item);
+    changed();
   });
 
-  node.append(status, head, body, footer);
+  node.append(status, footer);
 
   const ready = load()
     .then((list) => {
-      providerSelect.replaceChildren();
-      for (const p of list) {
-        providerSelect.append(el("option", { value: p.provider, text: p.label || p.provider }));
-      }
+      providers = list;
+      providerSelect.replaceChildren(
+        ...list.map((p) => el("option", { value: p.provider, text: p.label || p.provider })),
+      );
       footer.hidden = list.length === 0;
-      status.remove();
-      for (const row of mergeModelRows(list, value)) add(row);
-      if (rows.length === 0) {
-        node.insertBefore(el("div", { class: "hint", text: "No models configured" }), head);
-      }
+      const merged = mergeModelRows(list, value);
+      kept = merged.kept;
+      for (const entry of merged.entries) add(entry);
+      recount();
+      if (items.length === 0) status.textContent = "No models yet";
+      else status.remove();
     })
     .catch((e: unknown) => {
       status.className = "hint error";
       status.textContent = e instanceof Error ? e.message : String(e);
-      footer.hidden = true;
     });
 
   return {
     node,
     ready,
-    read(): CatalogRow[] {
-      return rows.map((r) => {
-        const id = r.custom ? r.idInput.value.trim() : r.id;
-        if (id === "") throw new Error("Model ID is required");
-        const contextWindow = numOrEmpty(r.contextWindow.value);
-        const maxOutputTokens = numOrEmpty(r.maxOutputTokens.value);
-        const efforts = effortsOf(r.efforts.value);
-        const name = r.name.value.trim();
-        const out: CatalogRow = {
-          provider: r.provider,
-          id,
-          show: r.show.checked,
-          ...(name === "" ? {} : { name }),
-          ...(contextWindow === undefined ? {} : { contextWindow }),
-          ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
-          ...(efforts === undefined ? {} : { efforts }),
-          ...(r.fast.checked ? { fast: true } : r.custom ? { fast: false } : {}),
-          ...(r.custom ? { custom: true } : {}),
-        };
-        // Non-custom: always persist show + overrides so the catalog round-trips.
-        if (!r.custom && !r.fast.checked) {
-          // omit fast when false for listed models (default)
-        }
-        return out;
-      });
-    },
+    read: () => [
+      ...kept,
+      ...items.map((i) => rowFor(i.read())).filter((r): r is CatalogRow => r !== undefined),
+    ],
   };
-}
-
-function selectChip(select: HTMLSelectElement): HTMLElement {
-  const wrap = el("label", { class: "chip field-select" });
-  wrap.append(select);
-  return wrap;
 }
