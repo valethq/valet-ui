@@ -284,7 +284,7 @@ button.chip:active:not(:disabled) { transform: none; }
   color: var(--faint);
   background: var(--surface);
 }
-.menu-title .logo { width: 14px; height: 14px; filter: grayscale(1); }
+.menu-title .logo { width: 11px; height: 11px; filter: grayscale(1); }
 .menu-item {
   display: flex;
   align-items: center;

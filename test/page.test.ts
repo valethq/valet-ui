@@ -77,6 +77,6 @@ describe("page css", () => {
     expect(title).toContain("display: flex");
     expect(title).toContain("align-items: center");
     expect(title).toContain("gap: 6px");
-    expect(html).toContain(".menu-title .logo { width: 14px; height: 14px; filter: grayscale(1); }");
+    expect(html).toContain(".menu-title .logo { width: 11px; height: 11px; filter: grayscale(1); }");
   });
 });
