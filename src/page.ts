@@ -1294,6 +1294,26 @@ input.pane-name:focus { background: var(--raised); border-color: var(--strong); 
 .set-ctl .input-group { max-width: 560px; }
 .rows-list .input-group.stack { padding: 14px; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--border); }
 .rows-list { display: flex; flex-direction: column; gap: 8px; }
+/* Multiselects: the real checkbox stays for keyboard and screen readers; its label draws the box or the chip. */
+.checklist { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 16px; }
+.checklist > .field-desc { grid-column: 1 / -1; }
+.check { position: relative; display: flex; min-width: 0; cursor: pointer; font-size: 13px; color: var(--muted); }
+.check > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.check > span { position: relative; display: inline-flex; align-items: center; gap: 9px; min-width: 0; min-height: 30px; overflow-wrap: anywhere; transition: color .15s ease, background-color .15s ease, box-shadow .15s ease; }
+.check:hover > span, .check > input:checked + span { color: var(--text); }
+.check > input:focus-visible + span { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; border-radius: 6px; }
+.check > input:disabled, .check > input:disabled + span { cursor: default; opacity: .5; }
+.checklist:not(.chips) .check > span::before { content: ""; flex: none; width: 16px; height: 16px; border-radius: 5px; background: var(--raised); box-shadow: inset 0 0 0 1.5px var(--strong); transition: background-color .15s ease, box-shadow .15s ease; }
+.checklist:not(.chips) .check:hover > span::before { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text) 45%, var(--strong)); }
+.checklist:not(.chips) .check > input:checked + span::before { background: var(--accent); box-shadow: none; }
+.checklist:not(.chips) .check > span::after { content: ""; position: absolute; left: 3px; top: 50%; width: 10px; height: 10px; margin-top: -5px; background: var(--on-accent); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat; opacity: 0; transform: scale(.6); transition: opacity .15s ease, transform .2s var(--ease-focus); }
+.checklist:not(.chips) .check > input:checked + span::after { opacity: 1; transform: none; }
+.checklist.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.checklist.chips .check > span { gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 999px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--border); font-family: var(--mono); font-size: 12px; }
+.checklist.chips .check:hover > span { box-shadow: inset 0 0 0 1px var(--strong); }
+.checklist.chips .check > input:checked + span { padding-left: 9px; background: color-mix(in srgb, var(--accent) 16%, var(--raised)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+.checklist.chips .check > input:checked + span::before { content: ""; flex: none; width: 12px; height: 12px; background: var(--accent); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat; }
+.checklist.chips .check > input:focus-visible + span { border-radius: 999px; }
 .rows-row { display: flex; align-items: center; gap: 8px; }
 .rows-row .input { flex: 1; min-width: 0; }
 .rows-row .icon-btn { flex: none; }
