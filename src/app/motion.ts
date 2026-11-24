@@ -42,6 +42,18 @@ export function enter(node: Element, way: Way = "rise"): void {
   if (way !== "rise") node.classList.add(way);
 }
 
+/** Fades a block that streamed into a live message up into place. Runs outside the class list, so a later patch of the node's attributes cannot cut it short. */
+export function streamIn(node: Element): void {
+  if (reducedMotion() || typeof node.animate !== "function") return;
+  node.animate(
+    [
+      { opacity: 0, filter: "blur(3px)", transform: "translateY(4px)" },
+      { opacity: 1, filter: "blur(0)", transform: "none" },
+    ],
+    { duration: focusDuration() * 0.7, easing: focusEasing() },
+  );
+}
+
 const glides = new WeakMap<Element, Animation>();
 
 /** A FLIP: `node` has just moved in the layout; it starts from `fromTop` (its old viewport top) and eases into place. */

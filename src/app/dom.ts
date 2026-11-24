@@ -36,8 +36,9 @@ export function reconcile(parent: HTMLElement, nodes: HTMLElement[]): void {
 /** Patches `from` in place to match `to`. Same-tag elements and text nodes are
  * kept, so hover, focus, scroll, selection and listeners on them survive. An
  * image is kept while it shows the same `data-blob` (its src is filled in
- * asynchronously, so a fresh node would flash empty and decode again). */
-export function morph(from: Element, to: Element): void {
+ * asynchronously, so a fresh node would flash empty and decode again).
+ * `onInsert` sees each element that was added or swapped in, after it is connected. */
+export function morph(from: Element, to: Element, onInsert?: (n: Element) => void): void {
   for (const name of from.getAttributeNames()) if (!to.hasAttribute(name)) from.removeAttribute(name);
   for (const { name, value } of Array.from(to.attributes))
     if (from.getAttribute(name) !== value) from.setAttribute(name, value);
@@ -46,10 +47,14 @@ export function morph(from: Element, to: Element): void {
   next.forEach((n, i) => {
     const old = prev[i];
     if (old === undefined) from.append(n);
-    else if (old.nodeType === 3 && n.nodeType === 3) patchText(old as Text, n as Text);
-    else if (sameElement(old, n)) {
-      if ((old as Element).tagName !== "IMG") morph(old as Element, n as Element);
+    else if (old.nodeType === 3 && n.nodeType === 3) {
+      patchText(old as Text, n as Text);
+      return;
+    } else if (sameElement(old, n)) {
+      if ((old as Element).tagName !== "IMG") morph(old as Element, n as Element, onInsert);
+      return;
     } else old.replaceWith(n);
+    if (n.nodeType === 1) onInsert?.(n as Element);
   });
   for (const extra of prev.slice(next.length)) extra.remove();
 }

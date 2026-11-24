@@ -3,7 +3,7 @@ import { chipButton, icon, iconButton, type IconName } from "../icons";
 import { logoFor, logoMark, logoMarks, logosFor } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import { renderMarkdown } from "../markdown";
-import { enter, focusDuration, glide } from "../motion";
+import { enter, focusDuration, glide, streamIn } from "../motion";
 import { groupModels, type ModelFamily, pickEffort } from "../models";
 import type { SessionView } from "../state";
 import {
@@ -1153,12 +1153,13 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         const fresh = renderMessage(cm, ui, view, anim);
         if (hit !== undefined) readBodyScroll(hit.nodes, scrollTops);
         if (hit !== undefined && hit.nodes.length === fresh.length) {
+          const streaming = cm.message.status === "streaming";
           // Same shape: patch the live nodes so hover, focus and scroll survive. The running
           // animation keeps the delay that resumed it; a patch that dropped it would restart it.
           hit.nodes.forEach((n, i) => {
             const next = fresh[i] as HTMLElement;
             if (n.style.animationDelay !== "") next.style.animationDelay = n.style.animationDelay;
-            morph(n, next);
+            morph(n, next, streaming ? streamIn : undefined);
           });
           hit = { ...hit, sig, anim };
           touched.push(...hit.nodes);
