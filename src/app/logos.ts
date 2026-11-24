@@ -5,12 +5,17 @@ import deepseek from "./logos/deepseek.svg" with { type: "text" };
 import devin from "./logos/devin.svg" with { type: "text" };
 import gemini from "./logos/gemini.svg" with { type: "text" };
 import grok from "./logos/grok.svg" with { type: "text" };
+import hunyuan from "./logos/hunyuan.svg" with { type: "text" };
 import meta from "./logos/meta.svg" with { type: "text" };
+import minimax from "./logos/minimax.svg" with { type: "text" };
 import mistral from "./logos/mistral.svg" with { type: "text" };
 import moonshot from "./logos/moonshot.svg" with { type: "text" };
 import opencode from "./logos/opencode.svg" with { type: "text" };
+import nvidia from "./logos/nvidia.svg" with { type: "text" };
 import openai from "./logos/openai.svg" with { type: "text" };
 import qwen from "./logos/qwen.svg" with { type: "text" };
+import reflection from "./logos/reflection.svg" with { type: "text" };
+import xiaomi from "./logos/xiaomi.svg" with { type: "text" };
 import zai from "./logos/zai.svg" with { type: "text" };
 
 export type LogoId =
@@ -26,7 +31,12 @@ export type LogoId =
   | "mistral"
   | "devin"
   | "cursor"
-  | "opencode";
+  | "opencode"
+  | "hunyuan"
+  | "minimax"
+  | "nvidia"
+  | "reflection"
+  | "xiaomi";
 
 /** Black-on-transparent marks render through a mask in the text colour. */
 const LOGOS: Record<LogoId, { svg: string; mono: boolean }> = {
@@ -43,6 +53,11 @@ const LOGOS: Record<LogoId, { svg: string; mono: boolean }> = {
   devin: { svg: devin, mono: true },
   cursor: { svg: cursor, mono: true },
   opencode: { svg: opencode, mono: true },
+  hunyuan: { svg: hunyuan, mono: false },
+  minimax: { svg: minimax, mono: false },
+  nvidia: { svg: nvidia, mono: false },
+  reflection: { svg: reflection, mono: true },
+  xiaomi: { svg: xiaomi, mono: false },
 };
 
 // First hit wins: open-weight labs come first so distills like
@@ -51,6 +66,11 @@ const RULES: [RegExp, LogoId][] = [
   [/\bswe\b|devin|cognition/i, "devin"],
   [/\bcomposer\b|\bcursor\b/i, "cursor"],
   [/deepseek/i, "deepseek"],
+  [/hunyuan|tencent|\bhy\d/i, "hunyuan"],
+  [/minimax/i, "minimax"],
+  [/mimo|xiaomi/i, "xiaomi"],
+  [/nemotron|nvidia/i, "nvidia"],
+  [/\bbeam\b|reflection/i, "reflection"],
   [/qwen|qwq|tongyi|alibaba|dashscope/i, "qwen"],
   [/kimi|moonshot/i, "moonshot"],
   [/glm|zhipu|\bz[.-]?ai\b/i, "zai"],
