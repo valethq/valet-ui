@@ -3,6 +3,7 @@ import claude from "./logos/claude.svg" with { type: "text" };
 import cursor from "./logos/cursor.svg" with { type: "text" };
 import deepseek from "./logos/deepseek.svg" with { type: "text" };
 import devin from "./logos/devin.svg" with { type: "text" };
+import flint from "./logos/flint.svg" with { type: "text" };
 import gemini from "./logos/gemini.svg" with { type: "text" };
 import grok from "./logos/grok.svg" with { type: "text" };
 import hunyuan from "./logos/hunyuan.svg" with { type: "text" };
@@ -36,7 +37,8 @@ export type LogoId =
   | "minimax"
   | "nvidia"
   | "reflection"
-  | "xiaomi";
+  | "xiaomi"
+  | "flint";
 
 /** Black-on-transparent marks render through a mask in the text colour. */
 const LOGOS: Record<LogoId, { svg: string; mono: boolean }> = {
@@ -58,6 +60,7 @@ const LOGOS: Record<LogoId, { svg: string; mono: boolean }> = {
   nvidia: { svg: nvidia, mono: false },
   reflection: { svg: reflection, mono: true },
   xiaomi: { svg: xiaomi, mono: false },
+  flint: { svg: flint, mono: true },
 };
 
 // First hit wins: open-weight labs come first so distills like
@@ -71,6 +74,7 @@ const RULES: [RegExp, LogoId][] = [
   [/mimo|xiaomi/i, "xiaomi"],
   [/nemotron|nvidia/i, "nvidia"],
   [/\bbeam\b|reflection/i, "reflection"],
+  [/\bflint\b|recursive/i, "flint"],
   [/qwen|qwq|tongyi|alibaba|dashscope/i, "qwen"],
   [/kimi|moonshot/i, "moonshot"],
   [/glm|zhipu|\bz[.-]?ai\b/i, "zai"],

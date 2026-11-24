@@ -50,6 +50,8 @@ describe("logoFor", () => {
     ["opencode/nemotron-3.5-lightning-free", "nvidia"],
     ["Beam Free", "reflection"],
     ["opencode/beam-free", "reflection"],
+    ["Flint 40B Free", "flint"],
+    ["opencode/flint-40b-free", "flint"],
     ["Big Pickle", undefined],
     ["Polo 2", undefined],
     ["Sweetwater 7B", undefined],
