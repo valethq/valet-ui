@@ -8,6 +8,7 @@ import grok from "./logos/grok.svg" with { type: "text" };
 import meta from "./logos/meta.svg" with { type: "text" };
 import mistral from "./logos/mistral.svg" with { type: "text" };
 import moonshot from "./logos/moonshot.svg" with { type: "text" };
+import opencode from "./logos/opencode.svg" with { type: "text" };
 import openai from "./logos/openai.svg" with { type: "text" };
 import qwen from "./logos/qwen.svg" with { type: "text" };
 import zai from "./logos/zai.svg" with { type: "text" };
@@ -24,7 +25,8 @@ export type LogoId =
   | "zai"
   | "mistral"
   | "devin"
-  | "cursor";
+  | "cursor"
+  | "opencode";
 
 /** Black-on-transparent marks render through a mask in the text colour. */
 const LOGOS: Record<LogoId, { svg: string; mono: boolean }> = {
@@ -40,6 +42,7 @@ const LOGOS: Record<LogoId, { svg: string; mono: boolean }> = {
   mistral: { svg: mistral, mono: false },
   devin: { svg: devin, mono: true },
   cursor: { svg: cursor, mono: true },
+  opencode: { svg: opencode, mono: true },
 };
 
 // First hit wins: open-weight labs come first so distills like

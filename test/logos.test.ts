@@ -62,6 +62,8 @@ describe("logosFor", () => {
     expect(logosFor("Claude Opus 5.5", "claude-code", "claude")).toEqual(["claude"]);
     expect(logosFor("gpt-6-codex", "codex", "openai")).toEqual(["openai"]);
     expect(logosFor("Composer 2.5", "cursor", "cursor")).toEqual(["cursor"]);
+    expect(logosFor("GLM 5.3", "opencode", "opencode")).toEqual(["opencode", "zai"]);
+    expect(logosFor("big-pickle", "opencode", "opencode")).toEqual(["opencode"]);
   });
 
   test("without a harness logo only the model's shows, as before", () => {
