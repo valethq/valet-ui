@@ -27,6 +27,8 @@ interface Tab {
   missing?: boolean;
   body?: HTMLElement;
   mode: "source" | "preview";
+  /** An image's natural size, once it has loaded. */
+  dims?: string;
 }
 
 const WIDTH_KEY = "valet-ui.viewer-width";
@@ -56,7 +58,7 @@ function store(key: string, value: string): void {
 /** The file as numbered, coloured lines. */
 function sourceView(file: api.ProjectFile): HTMLElement {
   const code = el("div", { class: "fv-code" });
-  const lines = highlightLines(file.text, langFor(file.rel));
+  const lines = highlightLines(file.text ?? "", langFor(file.rel));
   lines.forEach((tokens, i) => {
     const text = el("span", { class: "fv-t" });
     for (const tok of tokens) {
@@ -76,6 +78,15 @@ function sourceView(file: api.ProjectFile): HTMLElement {
 }
 
 const lineCount = (text: string): number => (text === "" ? 0 : text.replace(/\n$/, "").split("\n").length);
+
+function sizeLabel(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const [n, unit] = bytes < 1024 * 1024 ? [bytes / 1024, "KB"] : [bytes / 1024 / 1024, "MB"];
+  return `${n < 10 ? n.toFixed(1) : Math.round(n)} ${unit}`;
+}
+
+/** "PNG", "MP4", ... from the file's extension. */
+const typeLabel = (rel: string): string => baseName(rel).split(".").pop()?.toUpperCase() ?? "";
 
 /** The read-only file panel: tabs, a highlighted source view (or rendered markdown) and the referenced lines. */
 export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => void): FileViewer {
@@ -131,15 +142,20 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     );
     path.title = file?.path ?? tab.target.path;
     meta.textContent =
-      file === undefined ? "" : `${lineCount(file.text)} lines · ${langFor(file.rel)?.name ?? "Plain text"}`;
-    seg.hidden = file === undefined || !isMarkdown(file.rel);
+      file === undefined
+        ? ""
+        : file.kind === "text"
+          ? `${lineCount(file.text ?? "")} lines · ${langFor(file.rel)?.name ?? "Plain text"}`
+          : [tab.dims, typeLabel(file.rel), sizeLabel(file.size)].filter(Boolean).join(" · ");
+    seg.hidden = file === undefined || file.kind !== "text" || !isMarkdown(file.rel);
+    wrapBtn.hidden = file !== undefined && file.kind !== "text";
     preview.classList.toggle("on", tab.mode === "preview");
     source.classList.toggle("on", tab.mode === "source");
     const { line, end } = tab.target;
     status.textContent =
       file === undefined
         ? (tab.error ?? "Loading…")
-        : tab.mode === "preview" || line === undefined
+        : file.kind !== "text" || tab.mode === "preview" || line === undefined
           ? "Read-only"
           : end === undefined
             ? `Line ${line} · read-only`
@@ -157,18 +173,48 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
           : el("div", {}, el("b", { text: "Can't open this file" }), el("span", { text: tab.error })),
       );
     }
+    if (tab.file.kind !== "text") return mediaView(tab);
     if (tab.mode === "preview") {
-      const md = renderMarkdown(tab.file.text);
+      const md = renderMarkdown(tab.file.text ?? "");
       md.className = "bubble";
       return el("div", { class: "fv-md msg assistant" }, md);
     }
     return sourceView(tab.file);
   }
 
+  /** An image fitted to the panel (click for its natural size), or a player for audio and video. */
+  function mediaView(tab: Tab): HTMLElement {
+    const file = tab.file as api.ProjectFile;
+    const src = api.fileUrl(tab.target.sessionId, file.rel);
+    const failed = (): void => {
+      tab.error = "The file couldn't be loaded";
+      tab.file = undefined;
+      show(tab, true);
+    };
+    if (file.kind === "image") {
+      const img = el("img", { class: "fv-img", src, alt: baseName(file.rel), draggable: "false" });
+      const wrap = el("div", { class: "fv-media image", title: "Click for actual size" }, img);
+      img.addEventListener("load", () => {
+        tab.dims = `${img.naturalWidth} × ${img.naturalHeight}`;
+        if (active === tab) renderHead(tab);
+      });
+      img.addEventListener("error", failed);
+      wrap.addEventListener("click", () => {
+        const actual = wrap.classList.toggle("actual");
+        wrap.title = actual ? "Click to fit" : "Click for actual size";
+      });
+      return wrap;
+    }
+    const kind = file.kind === "audio" ? "audio" : "video";
+    const player = el(kind, { class: `fv-${kind}`, src, controls: "", preload: "metadata" });
+    player.addEventListener("error", failed);
+    return el("div", { class: `fv-media ${file.kind}` }, player);
+  }
+
   /** Marks the target lines and scrolls the first into the upper third. */
   function markLines(tab: Tab): void {
     const view = tab.body;
-    if (view === undefined || tab.mode !== "source") return;
+    if (view === undefined || tab.mode !== "source" || tab.file?.kind !== "text") return;
     for (const hl of view.querySelectorAll(".fv-l.hl")) hl.classList.remove("hl");
     const { line, end } = tab.target;
     if (line === undefined) return;

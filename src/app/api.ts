@@ -304,11 +304,20 @@ export interface ProjectFile {
   rel: string;
   root: string;
   size: number;
-  text: string;
+  kind: "text" | "image" | "audio" | "video";
+  mime?: string;
+  text?: string;
 }
 
+const fileQuery = (sessionId: string, path: string): string =>
+  `session=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`;
+
 export const readFile = (sessionId: string, path: string): Promise<ProjectFile> =>
-  get(`/plugins/valet-ui/file?session=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`);
+  get(`/plugins/valet-ui/file?${fileQuery(sessionId, path)}`);
+
+/** Where the bytes of an image, audio or video file are served; the session cookie authorises it. */
+export const fileUrl = (sessionId: string, path: string): string =>
+  `/plugins/valet-ui/file/raw?${fileQuery(sessionId, path)}`;
 
 // ---- settings@2 contributions (src/settings.ts, reached through the core relay) ----
 

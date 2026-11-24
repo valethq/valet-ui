@@ -1489,6 +1489,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .file-viewer .icon-btn:hover { background: var(--tint); color: var(--text); }
 .file-viewer .icon-btn .icon { width: 16px; height: 16px; }
 .file-viewer .icon-btn.on { color: var(--text); background: var(--tint-strong); }
+.file-viewer .icon-btn[hidden] { display: none; }
 .fv-head { display: flex; align-items: center; gap: 10px; padding: 4px 18px 12px 22px; border-bottom: 1px solid var(--border); }
 .fv-path { flex: 1; min-width: 0; display: flex; font-family: var(--mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
 .fv-dir { min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
@@ -1514,6 +1515,17 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .tk-f { color: color-mix(in srgb, var(--warn) 45%, var(--text)); }
 .tk-t { color: color-mix(in srgb, #60a5fa 65%, var(--text)); }
 .fv-md { padding: 22px; background: var(--panel); min-height: 100%; }
+.fv-media { display: grid; place-items: center; min-height: 100%; padding: 22px; background: var(--panel); }
+.fv-media.image {
+  cursor: zoom-in;
+  background: repeating-conic-gradient(var(--panel) 0 25%, var(--surface) 0 50%) 0 0 / 20px 20px;
+}
+.fv-media.image.actual { display: block; place-items: initial; cursor: zoom-out; }
+.fv-img { display: block; max-width: 100%; max-height: calc(100cqh - 44px); object-fit: contain; border-radius: 6px; box-shadow: 0 0 0 1px var(--border); }
+.fv-media.image.actual .fv-img { max-width: none; max-height: none; margin: auto; }
+.fv-body:has(> .fv-media) { container-type: size; }
+.fv-video { display: block; max-width: 100%; max-height: calc(100cqh - 44px); border-radius: 10px; background: #000; }
+.fv-audio { width: min(100%, 420px); }
 .fv-empty { display: grid; place-items: center; height: 100%; padding: 30px; text-align: center; color: var(--faint); font-size: 13px; }
 .fv-empty b { display: block; margin-bottom: 4px; color: var(--text); font-weight: 600; }
 .fv-loading { animation: pulse 1.4s ease-in-out infinite; }

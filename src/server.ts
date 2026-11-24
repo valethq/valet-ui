@@ -36,6 +36,7 @@ function csp(): string {
     "font-src 'self'",
     "connect-src 'self'",
     "img-src 'self' blob: data:",
+    "media-src 'self'",
     "base-uri 'none'",
     "form-action 'none'",
   ].join("; ");
