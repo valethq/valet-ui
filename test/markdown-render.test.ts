@@ -37,6 +37,9 @@ function ser(n: FakeEl | FakeText): string {
     n.title && ` title=${n.title}`,
     n.type === "checkbox" && (n.checked ? " [x]" : " [ ]"),
     n.attrs.start && ` start=${n.attrs.start}`,
+    n.attrs["data-path"] && ` path=${n.attrs["data-path"]}`,
+    n.attrs["data-line"] && ` line=${n.attrs["data-line"]}`,
+    n.attrs["data-end"] && ` end=${n.attrs["data-end"]}`,
     n.style.listStyle && " bare",
   ];
   return `<${n.tag}${flags.filter(Boolean).join("")}>${n.children.map(ser).join("")}</${n.tag}>`;
@@ -85,6 +88,13 @@ describe("renderMarkdown", () => {
   test("links carry titles and open safely; images never become <img>", () => {
     expect(html('[a](https://x.com "t") ![i](https://x.com/i.png)')).toBe(
       "<div><p><a href=https://x.com title=t>a</a> <a href=https://x.com/i.png>i</a></p></div>",
+    );
+  });
+
+  test("file links render as chips carrying their path and lines", () => {
+    expect(html("[src/a.ts:3](src/a.ts:3) [the tests](test/x.ts#L1-L4)")).toBe(
+      "<div><p><a.file-link mono title=src/a.ts:3 path=src/a.ts line=3><span></span><span>a.ts</span><span.ln>:3</span></a> " +
+        "<a.file-link title=test/x.ts:1-4 path=test/x.ts line=1 end=4><span></span><span>the tests</span></a></p></div>",
     );
   });
 

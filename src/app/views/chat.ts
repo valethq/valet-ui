@@ -2,6 +2,7 @@ import { clear, el, morph, reconcile, sameChildren, setShown } from "../dom";
 import { chipButton, icon, iconButton, type IconName } from "../icons";
 import { logoFor, logoMark, logoMarks, logosFor } from "../logos";
 import { type MenuSection, popover } from "../menu";
+import type { FileRef } from "../file-ref";
 import { renderMarkdown } from "../markdown";
 import { enter, focusDuration, glide, streamIn } from "../motion";
 import { groupModels, type ModelFamily, pickEffort } from "../models";
@@ -44,6 +45,8 @@ export interface ChatCallbacks {
   onOpenSession(id: string): void;
   /** The reader is nearing the top of what is loaded and the chat has older pages. */
   onLoadOlder(): void;
+  /** A file chip was clicked; resolves false when the file does not exist. */
+  onOpenFile(ref: FileRef): Promise<boolean>;
 }
 
 export interface ChatHandle {
@@ -917,7 +920,26 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   );
   // Delegated: morph() keeps the old button node on re-render, so the text is
   // looked up from the current view at click time rather than captured.
+  const fileClick = (ev: Event): boolean => {
+    const chip = (ev.target as Element | null)?.closest<HTMLElement>(".file-link");
+    if (chip === null || chip === undefined || chip.closest(".msg") === null) return false;
+    ev.preventDefault();
+    const line = Number(chip.dataset.line) || undefined;
+    const end = Number(chip.dataset.end) || undefined;
+    void cb
+      .onOpenFile({
+        path: chip.dataset.path ?? "",
+        ...(line === undefined ? {} : { line }),
+        ...(end === undefined ? {} : { end }),
+      })
+      .then((found) => chip.classList.toggle("missing", !found));
+    return true;
+  };
+  messages.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") fileClick(ev);
+  });
   messages.addEventListener("click", (ev) => {
+    if (fileClick(ev)) return;
     const open = (ev.target as Element | null)?.closest<HTMLElement>(".sub-row")?.dataset.openSession;
     if (open !== undefined) {
       cb.onOpenSession(open);

@@ -297,6 +297,19 @@ export const setSessionModel = (
 export const cancelRun = (runId: string): Promise<{ ok: boolean }> =>
   req("POST", `/api/core/runs/${encodeURIComponent(runId)}/cancel`);
 
+// ---- valet-ui file viewer (src/files.ts) ----
+
+export interface ProjectFile {
+  path: string;
+  rel: string;
+  root: string;
+  size: number;
+  text: string;
+}
+
+export const readFile = (sessionId: string, path: string): Promise<ProjectFile> =>
+  get(`/plugins/valet-ui/file?session=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`);
+
 // ---- settings@2 contributions (src/settings.ts, reached through the core relay) ----
 
 const ui = (path: string): string => `/plugins/valet-ui/settings${path}`;

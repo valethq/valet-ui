@@ -3,8 +3,46 @@
 
 import type { Block, ListItem } from "./md-blocks";
 import type { Inline } from "./md-inline";
+import { baseName, lineLabel } from "./file-ref";
 import { icon, iconButton } from "./icons";
 import { parseMarkdown } from "./md-blocks";
+
+const plainText = (inlines: Inline[]): string | null =>
+  inlines.every((n) => n.type === "text" || n.type === "code")
+    ? inlines.map((n) => (n as { text: string }).text).join("")
+    : null;
+
+/** A file chip; the chat and the viewer open it from `data-path` / `data-line` / `data-end`. */
+function renderFile(inline: Extract<Inline, { type: "file" }>, parent: HTMLElement): void {
+  const { ref } = inline;
+  const a = document.createElement("a");
+  a.setAttribute("role", "button");
+  a.setAttribute("tabindex", "0");
+  a.setAttribute("data-path", ref.path);
+  if (ref.line !== undefined) a.setAttribute("data-line", String(ref.line));
+  if (ref.end !== undefined) a.setAttribute("data-end", String(ref.end));
+  a.title = `${ref.path}${lineLabel(ref)}`;
+  a.append(icon("file"));
+  const plain = plainText(inline.children);
+  if (inline.auto || plain !== null) {
+    a.className = inline.auto || !/\s/.test(plain as string) ? "file-link mono" : "file-link";
+    const label = document.createElement("span");
+    label.textContent = inline.auto ? baseName(ref.path) : (plain as string);
+    a.append(label);
+    if (inline.auto && ref.line !== undefined) {
+      const ln = document.createElement("span");
+      ln.className = "ln";
+      ln.textContent = lineLabel(ref);
+      a.append(ln);
+    }
+  } else {
+    a.className = "file-link";
+    const label = document.createElement("span");
+    renderInlines(inline.children, label);
+    a.append(label);
+  }
+  parent.append(a);
+}
 
 function renderInlines(inlines: Inline[], parent: HTMLElement): void {
   for (const inline of inlines) {
@@ -29,6 +67,9 @@ function renderInlines(inlines: Inline[], parent: HTMLElement): void {
         parent.append(a);
         break;
       }
+      case "file":
+        renderFile(inline, parent);
+        break;
       case "footnote": {
         const sup = document.createElement("sup");
         sup.textContent = String(inline.n);

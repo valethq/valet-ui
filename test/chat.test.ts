@@ -363,6 +363,7 @@ describe("send error line", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const errNode = findByClass(root, "send-error") as FakeEl;
       const connNode = findByClass(root, "conn") as FakeEl;
@@ -464,6 +465,7 @@ describe("tool output rendering", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const part = toolPart({
         input: { command: "ls" },
@@ -502,6 +504,7 @@ describe("loading placeholder", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const loading = { ...viewWith([]), messages: [], loading: true };
       chat.update(loading, []);
@@ -541,6 +544,7 @@ describe("message entrance", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const note = (id: string, text: string): ChatMessage => ({
         message: { ...message, id },
@@ -603,6 +607,7 @@ describe("render cost", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       fn(chat, root, (ms) => {
         t += ms;
@@ -746,6 +751,7 @@ describe("load animation reach", () => {
       onToggleNav() {},
       onOpenSession() {},
       onLoadOlder() {},
+      onOpenFile: async () => true,
     });
     const note = (id: string): ChatMessage => ({
       message: { ...message, id },
@@ -855,6 +861,7 @@ describe("streaming updates", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const reasoning = (text: string): Part => ({
         id: "prt_r",
@@ -914,6 +921,7 @@ describe("composer attachments", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       const row = findByClass(root, "attach-row") as FakeEl;
@@ -961,6 +969,7 @@ describe("composer attachments", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       const file = new File(["x"], "x.bin");
@@ -990,6 +999,7 @@ describe("composer attachments", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       textarea.dispatch("paste", {
@@ -1023,6 +1033,7 @@ describe("composer attachments", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const big = { name: "big.bin", size: 21 * 1024 * 1024, type: "" } as unknown as File;
       (findTag(root, "textarea") as FakeEl).dispatch("paste", {
@@ -1051,6 +1062,7 @@ describe("composer attachments", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       let prevented = false;
       (findTag(root, "textarea") as FakeEl).dispatch("paste", {
@@ -1170,6 +1182,7 @@ describe("message images", () => {
       onToggleNav() {},
       onOpenSession() {},
       onLoadOlder() {},
+      onOpenFile: async () => true,
     });
     chat.update({ ...viewWith(parts), messages: [{ message: { ...message, role }, parts }] }, []);
     return findByClass(root, "messages") as FakeEl;
@@ -1246,6 +1259,7 @@ describe("subagent sessions", () => {
         onToggleNav() {},
         onOpenSession: (id) => opened.push(id),
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       fn(root, chat, opened);
     } finally {
@@ -1382,6 +1396,7 @@ describe("session actions", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       fn(root, chat, forks);
     } finally {
@@ -1467,6 +1482,7 @@ describe("custom parts", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       fn(root, chat);
     } finally {
@@ -1614,6 +1630,7 @@ describe("model chip logos", () => {
         onToggleNav() {},
         onOpenSession() {},
         onLoadOlder() {},
+        onOpenFile: async () => true,
       });
       const view = viewWith([]);
       chat.update({ ...view, session: { ...session, settings: { model: { provider, model } } } }, providers);

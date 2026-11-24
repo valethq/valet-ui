@@ -145,9 +145,36 @@ describe("parseMarkdown", () => {
   });
 
   test("unsafe link schemes render literally", () => {
-    for (const s of ["[x](javascript:alert(1))", "[x](file:///etc/passwd)"]) {
+    for (const s of ["[x](javascript:alert(1))", "[x](JavaScript:alert(1))", "[x](//evil.com)"]) {
       expect(parseMarkdown(s)).toEqual([{ type: "p", children: [{ type: "text", text: s }] }]);
     }
+  });
+
+  test("local destinations become file links with their line references", () => {
+    const file = (s: string) => (parseMarkdown(s)[0] as { children: unknown[] }).children[0];
+    expect(file("[x](file:///etc/passwd)")).toEqual({
+      type: "file",
+      ref: { path: "/etc/passwd" },
+      auto: false,
+      children: [{ type: "text", text: "x" }],
+    });
+    expect(file("[src/a.ts:12](src/a.ts:12)")).toEqual({
+      type: "file",
+      ref: { path: "src/a.ts", line: 12 },
+      auto: true,
+      children: [{ type: "text", text: "src/a.ts:12" }],
+    });
+    expect(file("[`a.ts`](a.ts#L3-L9)")).toMatchObject({
+      ref: { path: "a.ts", line: 3, end: 9 },
+      auto: false,
+    });
+    expect(file("[md-render.ts:10-20](src/app/md-render.ts)")).toMatchObject({
+      ref: { path: "src/app/md-render.ts", line: 10, end: 20 },
+    });
+    expect(file("![shot](img/a.png)")).toMatchObject({ type: "file", ref: { path: "img/a.png" } });
+    expect(parseMarkdown("[x](#top)")).toEqual([
+      { type: "p", children: [{ type: "text", text: "[x](#top)" }] },
+    ]);
   });
 
   test("bare https URLs autolink", () => {

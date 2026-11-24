@@ -2,6 +2,8 @@
 // images (rendered as links, never loaded), footnote refs, escapes, entities
 // and CommonMark-style emphasis. Pure: it returns a tree and builds no markup.
 
+import { type FileRef, fileRef, withLabelLines } from "./file-ref";
+
 export type Inline =
   | { type: "text"; text: string }
   | { type: "code"; text: string }
@@ -9,6 +11,8 @@ export type Inline =
   | { type: "em"; children: Inline[] }
   | { type: "del"; children: Inline[] }
   | { type: "link"; href: string; title?: string; children: Inline[] }
+  /** A link to a local file; `auto` when its text just repeats the destination. */
+  | { type: "file"; ref: FileRef; auto: boolean; children: Inline[] }
   | { type: "footnote"; n: number };
 
 export interface LinkDef {
@@ -447,15 +451,22 @@ export function parseInline(s: string, ctx: MdContext, noLinks = false, depth = 
       const open = image ? i + 1 : i;
       const link = matchLink(s, open, bracketPairs().get(open), ctx);
       if (link !== null) {
-        if (SAFE_HREF.test(link.href.trim())) {
-          const kids = parseInline(s.slice(open + 1, link.close), ctx, true, depth + 1);
-          if (image) {
-            const alt: Inline[] = kids.length > 0 ? kids : [{ type: "text", text: "image" }];
-            if (noLinks) push(...alt);
-            else push(linkNode(link.href.trim(), link.title, alt));
-          } else {
-            push(linkNode(link.href.trim(), link.title, kids));
-          }
+        const href = link.href.trim();
+        const file = SAFE_HREF.test(href) ? null : fileRef(href);
+        if (SAFE_HREF.test(href) || file !== null) {
+          const label = s.slice(open + 1, link.close);
+          const kids = parseInline(label, ctx, true, depth + 1);
+          const shown: Inline[] = kids.length > 0 || !image ? kids : [{ type: "text", text: "image" }];
+          if (image && noLinks) push(...shown);
+          else if (file !== null) {
+            const bare = label.trim().replace(/^`+|`+$/g, "");
+            push({
+              type: "file",
+              ref: withLabelLines(file, bare),
+              auto: bare === "" || bare === href,
+              children: shown,
+            });
+          } else push(linkNode(href, link.title, shown));
         } else {
           buf.push(s.slice(i, link.end));
         }

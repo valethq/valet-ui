@@ -602,6 +602,20 @@ button.chip:active:not(:disabled) { transform: none; }
 .md-h { font-family: var(--font-head); font-weight: 650; margin: 6px 0 8px; letter-spacing: -0.01em; }
 .md-h1, .md-h2 { font-size: 1.15em; }
 .msg .bubble a { color: var(--accent); text-underline-offset: 3px; }
+.file-link {
+  display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; vertical-align: baseline;
+  padding: 0 7px 0 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--raised);
+  color: var(--text); text-decoration: none; font-size: .95em; line-height: 1.5; cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+.msg .bubble a.file-link { color: var(--text); }
+.file-link.mono { font-family: var(--mono); font-size: .86em; }
+.file-link .icon { width: 12px; height: 12px; align-self: center; color: var(--faint); }
+.file-link > span:not(.icon) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-link .ln { flex: none; color: var(--faint); }
+.file-link:hover { background: var(--tint-strong); border-color: var(--strong); }
+.file-link:focus-visible { outline-offset: 1px; }
+.msg .bubble a.file-link.missing { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--strong); }
 .msg .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); margin: 5px 4px 0; }
 .msg .meta .logo { width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
@@ -1442,6 +1456,74 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 @keyframes vt-out { to { opacity: 0; filter: blur(6px); } }
 @keyframes vt-in { from { opacity: 0; filter: blur(6px); } }
 
+/* File viewer: a floating panel docked right, sized by --fv-w; the chat column makes room on wide screens. */
+.app { --fv-w: 560px; }
+@media (min-width: 1100px) { .app.fv-open .main { margin-right: calc(var(--fv-w) + 22px); } }
+.file-viewer {
+  position: fixed; z-index: 18; top: 10px; bottom: 10px; right: 10px; width: var(--fv-w); max-width: calc(100vw - 20px);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 30px;
+  box-shadow: 0 24px 64px -28px var(--shadow);
+  --fx-from: translateX(40px); --fx-blur: var(--blur-md);
+  animation: focus-in var(--dur-focus) var(--ease-focus);
+}
+.file-viewer[hidden] { display: none; }
+.file-viewer:focus { outline: none; }
+.fv-scrim { display: none; }
+.fv-resizer { position: absolute; z-index: 2; top: 30px; bottom: 30px; left: 0; width: 8px; cursor: col-resize; touch-action: none; }
+.fv-resizer::after { content: ""; position: absolute; top: 50%; left: 3px; width: 2px; height: 40px; transform: translateY(-50%); border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity .15s ease; }
+.fv-resizer:hover::after, .fv-resizer:focus-visible::after, .app.resizing .fv-resizer::after { opacity: .5; }
+.fv-tabs { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px 14px; }
+.fv-tablist { flex: 1; min-width: 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.fv-tablist::-webkit-scrollbar { display: none; }
+.fv-tab { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 30px; max-width: 220px; padding: 0 5px 0 11px; border: none; background: none; color: var(--muted); font-size: 12.5px; }
+.fv-tab:hover { background: var(--tint); color: var(--text); }
+.fv-tab.on { background: var(--tint-strong); color: var(--text); }
+.fv-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fv-tab-x { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 99px; color: var(--faint); opacity: 0; transition: opacity .15s; }
+.fv-tab-x .icon { width: 12px; height: 12px; }
+.fv-tab-x:hover { background: var(--tint-strong); color: var(--text); }
+.fv-tab.on .fv-tab-x, .fv-tab:hover .fv-tab-x, .fv-tab:focus-visible .fv-tab-x { opacity: 1; }
+@media (hover: none) { .fv-tab-x { opacity: 1; } }
+.file-viewer .icon-btn { width: 32px; height: 32px; background: none; border: none; color: var(--muted); }
+.file-viewer .icon-btn:hover { background: var(--tint); color: var(--text); }
+.file-viewer .icon-btn .icon { width: 16px; height: 16px; }
+.file-viewer .icon-btn.on { color: var(--text); background: var(--tint-strong); }
+.fv-head { display: flex; align-items: center; gap: 10px; padding: 4px 18px 12px 22px; border-bottom: 1px solid var(--border); }
+.fv-path { flex: 1; min-width: 0; display: flex; font-family: var(--mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
+.fv-dir { min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.fv-dir::after { content: "\\200E"; }
+.fv-path b { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 500; }
+.fv-meta { flex: none; font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+.fv-seg { flex: none; display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 99px; background: var(--raised); }
+.fv-seg[hidden] { display: none; }
+.fv-seg .fv-seg-btn { padding: 2px 10px; border: none; background: none; font-size: 11.5px; color: var(--faint); }
+.fv-seg .fv-seg-btn.on { background: var(--tint-strong); color: var(--text); }
+.fv-body { position: relative; flex: 1; min-height: 0; overflow: auto; background: var(--code); }
+.fv-code { display: table; min-width: 100%; padding: 22px 0; font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+.fv-l { display: table-row; }
+.fv-n { display: table-cell; width: 1%; padding: 0 16px 0 18px; text-align: right; color: color-mix(in srgb, var(--faint) 60%, transparent); user-select: none; white-space: nowrap; }
+.fv-t { display: table-cell; padding-right: 18px; white-space: pre; tab-size: 4; }
+.file-viewer.wrap .fv-t { white-space: pre-wrap; overflow-wrap: anywhere; }
+.fv-l.hl { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.fv-l.hl .fv-n { color: var(--muted); box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+.tk-c { color: var(--faint); font-style: italic; }
+.tk-s { color: color-mix(in srgb, var(--ok) 65%, var(--text)); }
+.tk-n { color: color-mix(in srgb, var(--warn) 70%, var(--text)); }
+.tk-k { color: color-mix(in srgb, #a78bfa 70%, var(--text)); }
+.tk-f { color: color-mix(in srgb, var(--warn) 45%, var(--text)); }
+.tk-t { color: color-mix(in srgb, #60a5fa 65%, var(--text)); }
+.fv-md { padding: 22px; background: var(--panel); min-height: 100%; }
+.fv-empty { display: grid; place-items: center; height: 100%; padding: 30px; text-align: center; color: var(--faint); font-size: 13px; }
+.fv-empty b { display: block; margin-bottom: 4px; color: var(--text); font-weight: 600; }
+.fv-loading { animation: pulse 1.4s ease-in-out infinite; }
+.fv-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 14px 8px 22px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--faint); }
+.fv-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fv-acts { display: flex; gap: 2px; }
+@media (max-width: 1099px) {
+  .app.fv-open .fv-scrim { display: block; position: fixed; inset: 0; z-index: 17; background: rgba(0, 0, 0, .35); animation: fade-in var(--dur-focus) var(--ease-focus); }
+}
+
 @media (max-width: 900px), (max-height: 500px) and (pointer: coarse) {
   .main, .app.collapsed .main { margin-left: 0; }
   .sidebar, .app.collapsed .sidebar {
@@ -1522,6 +1604,15 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   .font-fields { grid-template-columns: 1fr; }
   .part-row summary { min-height: 32px; }
   .sub-row { min-height: 40px; }
+  .file-viewer {
+    top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none; height: 86dvh;
+    border-radius: var(--r-xl) var(--r-xl) 0 0; border-bottom: none;
+    padding-bottom: env(safe-area-inset-bottom);
+    --fx-from: translateY(56px);
+  }
+  .fv-resizer { display: none; }
+  .fv-code { font-size: 11.5px; }
+  .fv-n { padding: 0 10px 0 12px; }
 }
 
 /* Reduced motion keeps fades and colour changes, so state changes still read, but nothing travels, scales or blurs. */

@@ -38,6 +38,7 @@ import type { Message, MessageDelta, Part, Project, ProviderModels, Run, RunStat
 import { syncCustom } from "./themes";
 import { renderAuth } from "./views/auth";
 import { createChat, type ChatHandle, type ModelSel } from "./views/chat";
+import { createFileViewer, type FileViewer } from "./views/file-viewer";
 import { openSettings } from "./views/settings";
 import { refreshTimes, renderSidebar, type SidebarProps } from "./views/sidebar";
 import { CoreSocket } from "./ws";
@@ -94,6 +95,7 @@ const app: App = {
 };
 
 let appEl: HTMLElement | null = null;
+let viewer: FileViewer | null = null;
 const NARROW = "(max-width: 900px), (max-height: 500px) and (pointer: coarse)";
 const SIDEBAR_KEY = "valet-ui.sidebar";
 const sidebarCollapsed = (): boolean => {
@@ -1041,6 +1043,10 @@ async function startApp(): Promise<void> {
     onToggleNav: toggleNav,
     onOpenSession: (id) => void openSession(id),
     onLoadOlder: () => void loadOlder(),
+    onOpenFile: async (ref) => {
+      const sessionId = app.view?.session.id;
+      return sessionId === undefined ? true : (viewer?.open({ sessionId, ...ref }) ?? true);
+    },
   });
 
   const backdrop = el("div", { class: "nav-backdrop" });
@@ -1065,6 +1071,11 @@ async function startApp(): Promise<void> {
     backdrop,
   );
   bindSidebarResize(resizer, appEl);
+  const shell = appEl;
+  viewer = createFileViewer(shell, (open) =>
+    slideColumn(shell, () => shell.classList.toggle("fv-open", open)),
+  );
+  shell.append(...viewer.nodes);
   root.replaceChildren(appEl);
 
   app.socket.onEvent = onEvent;
