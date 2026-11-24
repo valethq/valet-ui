@@ -256,6 +256,8 @@ function unreadSessions(): Set<string> {
 
 // Sessions whose run said it is waiting on the user (approval, question).
 const attention = new Set<string>();
+// Sessions with a run in flight, for every session, so the dot survives switching away.
+const inFlight = new Set<string>();
 
 function indicatorFor(s: Session): Indicator {
   const open = app.view?.session.id === s.id ? app.view : null;
@@ -264,7 +266,10 @@ function indicatorFor(s: Session): Indicator {
   );
   return sessionIndicator(
     s,
-    { attention: attention.has(s.id) || pending === true, running: open?.activeRunId != null },
+    {
+      attention: attention.has(s.id) || pending === true,
+      running: inFlight.has(s.id) || open?.activeRunId != null,
+    },
     Date.now(),
   );
 }
@@ -852,6 +857,8 @@ function onEvent(topic: string, name: string, data: unknown): void {
   } else if (name === "run.end" || name === "run.start" || name === "message.create") {
     attention.delete(id);
   }
+  if (name === "run.start") inFlight.add(id);
+  else if (name === "run.end") inFlight.delete(id);
   const view = app.view;
   if (view !== null && view.session.id === id) {
     switch (name) {
