@@ -1097,7 +1097,8 @@ button.part-file:hover { background: var(--tint); }
 .models-row .input { min-width: 0; padding: 6px 8px; font-size: 12.5px; height: 32px; }
 .models-row .switch { transform: scale(0.9); transform-origin: left center; }
 .models-add { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.models-add .field-select { width: auto; min-width: 140px; height: 34px; }
+.models-add .chip.field-select { flex: 0 1 260px; width: auto; min-width: 140px; height: 34px; }
+.models-add .chip { flex: none; white-space: nowrap; }
 .section-desc { margin: -6px 0 14px; font-size: 13px; color: var(--muted); }
 .form-actions.start { justify-content: flex-start; flex-wrap: wrap; }
 .input[aria-invalid=true] { border-color: var(--danger); }
@@ -1234,6 +1235,12 @@ input.pane-name:focus { background: var(--raised); border-color: var(--strong); 
 .form { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field.toggle { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.input-group { display: flex; flex-direction: column; gap: 12px; }
+.input-group.row { flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+.input-group.row > .field { flex: 1 1 160px; min-width: 0; }
+.input-group.row > .field.toggle { flex: 0 0 auto; align-self: center; }
+.input-group .field-label { font-size: 12px; font-weight: 500; color: var(--muted); }
+.rows-list .input-group.stack { padding: 14px; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--border); }
 .rows-list { display: flex; flex-direction: column; gap: 8px; }
 .rows-row { display: flex; align-items: center; gap: 8px; }
 .rows-row .input { flex: 1; min-width: 0; }
