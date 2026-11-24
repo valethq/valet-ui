@@ -8,6 +8,7 @@ import type {
   OptionDef,
   SettingDef,
   SettingsDoc,
+  SubsectionDef,
 } from "./types";
 
 /** Input types this UI renders itself; anything else falls back along its base chain (12.1 Fallback). */
@@ -211,4 +212,25 @@ export function settingsOf(doc: SettingsDoc | undefined): SettingDef[] {
   return Object.values(doc?.sections ?? {}).flatMap((s) =>
     (s?.subsections ?? []).flatMap((ss) => ss.items.filter(isSetting)),
   );
+}
+
+/** Controls that need the row's full width sit under their label; the rest sit beside it. */
+const WIDE = new Set(["list", "map", "group", "variant", "code", "text", "tags", "multiselect", "secret"]);
+
+export function stacksBelow(input: InputDef, types: Recipes = {}): boolean {
+  const { type, f } = renderAs(input, types);
+  if (WIDE.has(type)) return true;
+  const options = staticOptions(f);
+  return (f.style === "segmented" || f.style === "cards") && options !== undefined && options.length > 3;
+}
+
+/**
+ * A page's subsections split into what shows on the page and what goes under its one Advanced
+ * disclosure. A subsection left with nothing in either part is dropped from it.
+ */
+export function splitAdvanced(subs: SubsectionDef[]): { main: SubsectionDef[]; advanced: SubsectionDef[] } {
+  const isAdvanced = (item: ItemDef): boolean => isSetting(item) && item.advanced === true;
+  const part = (keep: (item: ItemDef) => boolean) =>
+    subs.map((sub) => ({ ...sub, items: sub.items.filter(keep) })).filter((sub) => sub.items.length > 0);
+  return { main: part((i) => !isAdvanced(i)), advanced: part(isAdvanced) };
 }

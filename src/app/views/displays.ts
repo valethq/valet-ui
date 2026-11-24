@@ -233,10 +233,19 @@ export function displayNode(b: Display, deps: DisplayDeps): HTMLElement {
   }
 }
 
-/** Badges, stats and actions that sit next to each other share a row, as v2 row groups did. */
+/**
+ * Badges, stats and actions that sit next to each other share a row, as v2 row groups did. A note
+ * between them does not break the row: it shows under it.
+ */
 export function renderDisplays(raw: unknown[], deps: DisplayDeps): HTMLElement[] {
   const out: HTMLElement[] = [];
   let row: HTMLElement | undefined;
+  let held: HTMLElement[] = [];
+  const endRow = (): void => {
+    out.push(...held);
+    held = [];
+    row = undefined;
+  };
   for (const r of raw) {
     const d = cleanDisplay(r);
     const node = displayNode(d, deps);
@@ -246,10 +255,12 @@ export function renderDisplays(raw: unknown[], deps: DisplayDeps): HTMLElement[]
         out.push(row);
       }
       row.append(node);
-    } else {
-      row = undefined;
+    } else if (d.type === "note" && row !== undefined) held.push(node);
+    else {
+      endRow();
       out.push(node);
     }
   }
+  endRow();
   return out;
 }

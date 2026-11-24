@@ -10,6 +10,8 @@ import {
   secretNameOf,
   shown,
   sourceRef,
+  splitAdvanced,
+  stacksBelow,
 } from "../src/app/settings-model";
 
 describe("renderAs: a type this UI doesn't know renders its base", () => {
@@ -81,5 +83,40 @@ describe("saves", () => {
     expect(deriveGroup(["inference@1"])).toBe("inference");
     expect(deriveGroup(["tools@1", "settings@2"])).toBe("tools");
     expect(deriveGroup(["context@1", "tools@1"])).toBe("system");
+  });
+});
+
+describe("settings layout", () => {
+  test("lists, groups, long text and secrets stack under their label; short controls sit beside it", () => {
+    for (const type of ["list", "map", "group", "code", "text", "tags", "multiselect", "secret"])
+      expect(stacksBelow({ type })).toBe(true);
+    for (const type of ["bool", "number", "int", "duration", "string", "path", "select", "ref"])
+      expect(stacksBelow({ type })).toBe(false);
+    const opts = (n: number) => Array.from({ length: n }, (_, i) => ({ value: `v${i}` }));
+    expect(stacksBelow({ type: "select", style: "segmented", options: opts(2) })).toBe(false);
+    expect(stacksBelow({ type: "select", style: "cards", options: opts(4) })).toBe(true);
+    expect(stacksBelow({ type: "model" }, { model: { base: "group" } })).toBe(true);
+  });
+
+  test("advanced settings move to one group; subsections left empty disappear", () => {
+    const set = (id: string, advanced?: boolean) => ({
+      id,
+      label: id,
+      input: { type: "bool" },
+      ...(advanced === undefined ? {} : { advanced }),
+    });
+    const { main, advanced } = splitAdvanced([
+      { id: "tools", label: "Tools", items: [set("a"), set("b", true), { type: "note", text: "n" }] },
+      { id: "models", label: "Models", items: [set("c", true)] },
+      { id: "runtime", label: "Runtime", items: [set("d")] },
+    ]);
+    expect(main.map((s) => [s.id, s.items.length])).toEqual([
+      ["tools", 2],
+      ["runtime", 1],
+    ]);
+    expect(advanced.map((s) => [s.id, s.items.map((i) => (i as { id: string }).id)])).toEqual([
+      ["tools", ["b"]],
+      ["models", ["c"]],
+    ]);
   });
 });

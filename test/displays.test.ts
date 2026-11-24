@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { cleanDisplay, clampPercent, refreshInterval, safeHref } from "../src/app/views/displays";
+import {
+  cleanDisplay,
+  clampPercent,
+  refreshInterval,
+  renderDisplays,
+  safeHref,
+} from "../src/app/views/displays";
 
 describe("cleanDisplay", () => {
   test("a meter keeps its fields, clamps to 0-100 and defaults the tone", () => {
@@ -97,4 +103,53 @@ test("refreshInterval is off unless a positive number, and never under a second"
   expect(refreshInterval(-5)).toBeUndefined();
   expect(refreshInterval(50)).toBe(1000);
   expect(refreshInterval(30_000)).toBe(30_000);
+});
+
+describe("renderDisplays", () => {
+  class Node {
+    attrs: Record<string, string> = {};
+    children: Node[] = [];
+    textContent = "";
+    style: Record<string, string> = {};
+    constructor(readonly tag: string) {}
+    setAttribute(k: string, v: string) {
+      this.attrs[k] = v;
+    }
+    append(...kids: (Node | string)[]) {
+      for (const k of kids) if (typeof k !== "string") this.children.push(k);
+    }
+    addEventListener() {}
+  }
+  const shape = (n: Node): string =>
+    n.attrs.class === "blk-group row"
+      ? `row(${n.children.map(shape).join(",")})`
+      : ((n.attrs.class ?? n.tag).split(" ")[0] as string);
+
+  test("a note between status items goes under their row instead of splitting it", () => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = g.document;
+    g.document = { createElement: (tag: string) => new Node(tag) };
+    try {
+      const nodes = renderDisplays(
+        [
+          { type: "badge", text: "Public", tone: "warning" },
+          { type: "stat", label: "Serving", value: "x" },
+          { type: "note", text: "Anyone can reach it", tone: "warning" },
+          { type: "stat", label: "URL", value: "y" },
+          { type: "action", text: "Refresh", action: "refresh" },
+          { type: "heading", text: "Usage" },
+          { type: "note", text: "Plain note" },
+        ],
+        { run: async () => {} },
+      ) as unknown as Node[];
+      expect(nodes.map(shape)).toEqual([
+        "row(blk-badge,blk-stat,blk-stat,blk-action)",
+        "blk-text",
+        "panel-title",
+        "blk-text",
+      ]);
+    } finally {
+      g.document = saved;
+    }
+  });
 });

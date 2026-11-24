@@ -24,32 +24,48 @@ const errorText = (e: unknown): string => (e instanceof Error ? e.message : Stri
 function experimentalSection(): HTMLElement {
   const box = el("input", { type: "checkbox", class: "switch", id: "ui-experimental-enabled" });
   box.checked = experimentalEnabled();
-  const status = el("span", { class: "form-status" });
-  const save = el("button", { class: "primary", text: "Save" });
-  save.addEventListener("click", () => {
+  const note = el("div", { class: "set-note warning", text: "Reload the page to apply" });
+  note.hidden = true;
+  box.addEventListener("change", () => {
     setExperimental(box.checked);
-    status.textContent = "Saved. Reload to apply";
+    note.hidden = false;
   });
   return el(
     "section",
     { class: "settings-section" },
-    el("h3", {}, "Experimental"),
-    el("p", {
-      class: "section-desc",
-      text: "Early features stored in this browser only. Enables compressed responses and paged chat loading. Reload after changing.",
-    }),
     el(
       "div",
-      { class: "field toggle" },
+      { class: "set-head" },
       el(
         "div",
-        {},
-        el("label", { class: "field-label", for: box.id, text: "Enable experimental features" }),
-        el("div", { class: "field-desc", text: "Turn off if you run into issues." }),
+        { class: "set-head-text" },
+        el("h3", {}, "Experimental"),
+        el("p", {
+          class: "set-head-desc",
+          text: "Early features stored in this browser only. Enables compressed responses and paged chat loading.",
+        }),
       ),
-      box,
     ),
-    el("div", { class: "form-actions" }, status, save),
+    el(
+      "div",
+      { class: "set-list" },
+      el(
+        "div",
+        { class: "set-row toggle" },
+        el(
+          "div",
+          { class: "set-text" },
+          el(
+            "div",
+            { class: "set-title" },
+            el("label", { class: "set-label", for: box.id, text: "Enable experimental features" }),
+          ),
+          el("p", { class: "set-desc", text: "Turn off if you run into issues." }),
+          note,
+        ),
+        el("div", { class: "set-ctl" }, box),
+      ),
+    ),
   );
 }
 

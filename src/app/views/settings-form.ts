@@ -1,6 +1,16 @@
 import { ApiError } from "../api";
 import { el } from "../dom";
-import { evalCond, isSetting, patchFor, resolveArgs, shown, sourceRef } from "../settings-model";
+import { iconButton, selectChip } from "../icons";
+import {
+  evalCond,
+  isSetting,
+  patchFor,
+  resolveArgs,
+  shown,
+  sourceRef,
+  splitAdvanced,
+  stacksBelow,
+} from "../settings-model";
 import type {
   Args,
   ContributionView,
@@ -41,13 +51,6 @@ export interface FormDeps {
 }
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
-const SOURCE_TEXT: Record<string, string> = {
-  default: "Default",
-  file: "From the config file",
-  settings: "Saved",
-  project: "Set for this project",
-};
 
 /** The hand-written models table stays for valet-agent's model list (12.1). */
 const isModelsTable = (plugin: string | undefined, s: SettingDef) =>
@@ -137,13 +140,8 @@ function runtimeNode(
     );
   }
   flush();
-  const node = el(
-    "div",
-    { class: "settings-panel-block" },
-    el("h4", { class: "panel-title", text: rs.label }),
-    ...(rs.summary === undefined ? [] : [el("p", { class: "section-desc", text: rs.summary })]),
-    el("div", { class: "blocks" }, ...body),
-  );
+  const list = el("div", { class: "set-list runtime" }, el("div", { class: "blocks" }, ...body));
+  const node = sectionNode(rs.label, rs.summary, list);
   if (rs.editable && fields.length > 0) {
     const status = el("span", { class: "form-status" });
     const save = el("button", { class: "primary", text: "Save" });
@@ -176,12 +174,29 @@ function runtimeNode(
           save.disabled = false;
         });
     });
-    node.append(el("div", { class: "form-actions" }, status, save));
+    list.append(el("div", { class: "form-actions" }, status, save));
   }
   return node;
 }
 
-/** A plugin's settings page: its doc's subsections in one section, runtime subsections, and the Enabled switch. */
+/** A titled group of settings: a heading (omitted when null) over one panel. */
+function sectionNode(label: string | null, summary: string | undefined, list: HTMLElement): HTMLElement {
+  return el(
+    "section",
+    { class: "set-sec" },
+    ...(label === null ? [] : [el("h4", { class: "set-sec-title", text: label })]),
+    ...(label === null || summary === undefined ? [] : [el("p", { class: "set-sec-desc", text: summary })]),
+    list,
+  );
+}
+
+const plural = (n: number, one: string, many: string): string =>
+  n === 1 ? one : many.replace("#", String(n));
+
+/**
+ * A plugin's settings page: a header with the Enabled switch, one panel of rows per subsection, runtime
+ * subsections, every advanced setting under one disclosure, and a save bar that shows while anything changed.
+ */
 export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
   const section = el("section", { class: "settings-section" });
   const plugin = page.plugin ?? page.id;
@@ -189,6 +204,7 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
   let runtime = page.runtime;
   let project: string | undefined;
   let projects: { id: string; name: string }[] | undefined;
+  let advancedOpen = false;
   const runtimeSlots = new Map<string, HTMLElement>();
   let timer: ReturnType<typeof setInterval> | undefined;
 
@@ -218,10 +234,11 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
     }, ms);
   };
 
-  const paint = (): void => {
+  const paint = (saved = false): void => {
     const fields = new Map<string, Field>();
     const layer = (project === undefined ? core?.layers?.user : core?.layers?.project) ?? {};
     const effective = core?.values ?? {};
+    const types = core?.types ?? {};
     const root = (): Record<string, unknown> => {
       const out = { ...effective };
       for (const [id, f] of fields) {
@@ -236,16 +253,22 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
       }
       return out;
     };
+    const lists: HTMLElement[] = [];
     const refresh = () => {
       const values = root();
       for (const f of fields.values()) {
         f.wrap.hidden = !evalCond(f.setting.when, values) || !shown(f.setting, core?.layers);
         f.ctl.refresh();
       }
+      // A panel whose rows are all hidden by their conditions hides with its heading.
+      for (const list of lists) {
+        const sec = list.closest<HTMLElement>(".set-sec");
+        if (sec !== null) sec.hidden = list.querySelector(":scope > .set-row:not([hidden])") === null;
+      }
     };
     const run = async (action: string, args: Args) => updateRuntime(await deps.action(plugin, action, args));
     const env: InputEnv = {
-      types: core?.types ?? {},
+      types,
       root,
       options: (from, args) => {
         const ref = sourceRef(from, plugin);
@@ -258,118 +281,187 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
       plugin,
     };
 
+    const enabledBox =
+      page.primary && core !== undefined && project === undefined
+        ? el("input", { type: "checkbox", class: "switch", id: `en-${page.id}`, "aria-label": "Enabled" })
+        : undefined;
+    if (enabledBox !== undefined) enabledBox.checked = core?.enabled !== false;
+    const enabledChanged = () => enabledBox !== undefined && enabledBox.checked !== (core?.enabled !== false);
+
+    const barText = el("span", { class: "set-bar-text" });
+    const discard = el("button", { class: "set-discard", type: "button", text: "Discard" });
+    const save = el("button", { class: "primary", type: "button", text: "Save changes" });
+    const bar = el("div", { class: "set-bar", role: "status" }, barText, discard, save);
+    const pending = (): number =>
+      [...fields.values()].filter((f) => f.touched).length + (enabledChanged() ? 1 : 0);
+    const syncBar = (message?: { text: string; error?: boolean }): void => {
+      const n = pending();
+      const on = n > 0 || message !== undefined;
+      bar.classList.toggle("on", on);
+      bar.classList.toggle("error", message?.error === true);
+      section.classList.toggle("has-bar", on);
+      barText.textContent = message?.text ?? plural(n, "1 unsaved change", "# unsaved changes");
+      discard.hidden = save.hidden = n === 0;
+    };
+
     const fieldNode = (s: SettingDef): HTMLElement => {
       const stored = Object.hasOwn(layer, s.id);
       const value = stored ? layer[s.id] : effective[s.id];
       const id = nextId();
       const projectLocked = project !== undefined && !s.scopes?.includes("project");
+      const models = isModelsTable(page.plugin, s);
       let ctl: Control;
-      if (isModelsTable(page.plugin, s)) {
+      if (models) {
         const table = modelsTable(value, deps.listCatalog);
         ctl = { node: table.node, read: () => table.read(), refresh() {} };
       } else ctl = inputControl(s.input, value, env, id, s.id);
-      const error = el("div", { class: "field-desc error" });
+      const isToggle = ctl.node instanceof HTMLInputElement && ctl.node.type === "checkbox";
+      const error = el("div", { class: "set-note error" });
       error.hidden = true;
-      const source = core?.sources?.[s.id];
-      const meta = el("div", { class: "field-source" });
-      const reset = el("button", { type: "button", class: "chip", text: "Reset" });
-      const showReset = (on: boolean) => {
-        reset.style.display = on ? "" : "none";
-      };
-      showReset(stored);
-      reset.title =
-        project === undefined ? "Go back to the file or default value" : "Use the value from your settings";
-      const issue = core?.issues?.[s.id];
-      const sourceText = stored
-        ? project === undefined
-          ? "Saved"
-          : "Set for this project"
-        : source === undefined
-          ? "Not set"
-          : `Inherited: ${SOURCE_TEXT[source] ?? source}`;
-      meta.append(
-        el("span", { text: sourceText }),
-        ...(s.apply === "restart" || core?.liveConfig === false
-          ? [el("span", { class: "hint", text: "Applies after a restart" })]
-          : []),
-        reset,
-      );
-      const bool = el("div", {});
-      const label = el("label", {
-        class: "field-label",
-        for: id,
-        text: s.label + (s.input.required === true ? " *" : ""),
+      const resetNote = el("div", { class: "set-note", text: "Goes back to the default when you save" });
+      resetNote.hidden = true;
+      const dot = el("span", {
+        class: "set-dot",
+        title: project === undefined ? "Changed from the default" : "Set for this project",
       });
-      const desc = s.summary === undefined ? [] : [el("div", { class: "field-desc", text: s.summary })];
-      const details =
-        s.details === undefined
+      const reset = iconButton(
+        "undo",
+        project === undefined ? `Reset ${s.label} to the default` : `Use your setting for ${s.label}`,
+        "set-reset",
+      );
+      reset.type = "button";
+      const marks = (on: boolean) => {
+        dot.hidden = !on;
+        reset.hidden = !on || !stored || projectLocked;
+      };
+      marks(stored);
+      const issue = core?.issues?.[s.id];
+      const notes = [
+        ...(s.details === undefined
           ? []
           : [
               el(
                 "details",
                 { class: "field-details" },
                 el("summary", { text: "More" }),
-                el("div", { class: "field-desc", text: s.details }),
+                el("div", { class: "set-desc", text: s.details }),
               ),
-            ];
-      const deprecated =
-        s.deprecated === undefined
+            ]),
+        ...(s.deprecated === undefined
           ? []
-          : [el("div", { class: "field-desc warning", text: `Deprecated: ${s.deprecated}` })];
-      const issueNode = issue === undefined ? [] : [el("div", { class: "field-desc warning", text: issue })];
-      const isToggle = ctl.node instanceof HTMLInputElement && ctl.node.type === "checkbox";
-      bool.append(label, ...desc);
-      const wrap = isToggle
-        ? el("div", { class: `field toggle${stored ? "" : " inherited"}` }, bool, ctl.node)
-        : el("div", { class: `field${stored ? "" : " inherited"}` }, label, ...desc, ctl.node);
-      (isToggle ? bool : wrap).append(...details, ...deprecated, ...issueNode, meta, error);
+          : [el("div", { class: "set-note warning", text: `Deprecated: ${s.deprecated}` })]),
+        ...(issue === undefined ? [] : [el("div", { class: "set-note warning", text: issue })]),
+        ...(s.apply === "restart" && core?.liveConfig !== false
+          ? [el("div", { class: "set-note", text: "Applies after a restart" })]
+          : []),
+        ...(projectLocked ? [el("div", { class: "set-note", text: "Not per project" })] : []),
+        resetNote,
+        error,
+      ];
+      const stack = models || stacksBelow(s.input, types);
+      const wrap = el(
+        "div",
+        { class: `set-row${stack ? " stack" : ""}${isToggle ? " toggle" : ""}` },
+        el(
+          "div",
+          { class: "set-text" },
+          el(
+            "div",
+            { class: "set-title" },
+            el("label", {
+              class: "set-label",
+              for: id,
+              text: s.label + (s.input.required === true ? " *" : ""),
+            }),
+            dot,
+            reset,
+          ),
+          ...(s.summary === undefined ? [] : [el("p", { class: "set-desc", text: s.summary })]),
+          ...notes,
+        ),
+        el("div", { class: "set-ctl" }, ctl.node),
+      );
       if (projectLocked) {
         wrap.classList.add("locked");
-        for (const c of wrap.querySelectorAll("input, select, textarea, button"))
+        for (const c of wrap.querySelectorAll(".set-ctl :is(input, select, textarea, button)"))
           (c as HTMLInputElement).disabled = true;
-        meta.replaceChildren(el("span", { class: "hint", text: "Not per project" }));
       }
       const field: Field = { setting: s, ctl, wrap, error, touched: false, reset: false };
       const touch = () => {
         field.touched = true;
         field.reset = false;
-        wrap.classList.remove("inherited");
-        showReset(true);
+        resetNote.hidden = true;
+        marks(true);
+        syncBar();
       };
-      wrap.addEventListener("input", touch);
-      wrap.addEventListener("change", touch);
-      wrap.addEventListener("click", (ev) => {
-        const b = (ev.target as Element).closest("button");
-        if (b !== null && b !== reset && wrap.contains(b)) touch();
+      const ctlBox = wrap.lastElementChild as HTMLElement;
+      ctlBox.addEventListener("input", touch);
+      ctlBox.addEventListener("change", touch);
+      ctlBox.addEventListener("click", (ev) => {
+        if ((ev.target as Element).closest("button") !== null) touch();
       });
       reset.addEventListener("click", () => {
         field.touched = true;
         field.reset = true;
-        wrap.classList.add("inherited");
-        showReset(false);
-        meta.firstElementChild?.replaceWith(el("span", { text: "Resets to the inherited value on save" }));
+        marks(false);
+        resetNote.hidden = false;
         refresh();
+        syncBar();
       });
       fields.set(s.id, field);
       return wrap;
     };
 
-    const itemsNode = (items: ItemDef[]): HTMLElement[] => {
-      const main: HTMLElement[] = [];
-      const advanced: HTMLElement[] = [];
-      for (const item of items) {
-        if (isSetting(item)) (item.advanced === true ? advanced : main).push(fieldNode(item));
-        else main.push(env.display(item as DisplayDef));
-      }
-      if (advanced.length === 0) return main;
-      const details = el("details", { class: "form-advanced" }, el("summary", { text: "Advanced" }));
-      details.append(el("div", { class: "form-advanced-body" }, ...advanced));
-      return [...main, details];
+    const listOf = (items: ItemDef[]): HTMLElement => {
+      const list = el(
+        "div",
+        { class: "set-list" },
+        ...items.map((item) =>
+          isSetting(item)
+            ? fieldNode(item)
+            : el("div", { class: "set-row display" }, env.display(item as DisplayDef)),
+        ),
+      );
+      lists.push(list);
+      return list;
     };
 
-    const kids: Node[] = [el("h3", {}, page.title, el("span", { class: "plugin-id", text: plugin }))];
-    if (page.primary && page.description !== undefined)
-      kids.push(el("p", { class: "section-desc", text: page.description }));
+    const head = el(
+      "div",
+      { class: "set-head" },
+      el(
+        "div",
+        { class: "set-head-text" },
+        el("h3", {}, page.title, el("span", { class: "plugin-id", text: plugin })),
+        ...(page.primary && page.description !== undefined
+          ? [el("p", { class: "set-head-desc", text: page.description })]
+          : []),
+        ...(core?.liveConfig === false
+          ? [el("p", { class: "set-note", text: "Changes apply after a restart" })]
+          : []),
+      ),
+    );
+    if (enabledBox !== undefined) {
+      const hint = el("span", { class: "set-enabled-hint", text: "After a restart" });
+      const sync = () => {
+        hint.hidden = !enabledChanged();
+      };
+      sync();
+      enabledBox.addEventListener("change", () => {
+        sync();
+        syncBar();
+      });
+      head.append(
+        el(
+          "div",
+          { class: "set-enabled" },
+          hint,
+          el("label", { for: enabledBox.id, text: "Enabled" }),
+          enabledBox,
+        ),
+      );
+    }
+    const kids: Node[] = [head];
     if (core?.restartRequired !== undefined)
       kids.push(el("div", { class: "settings-banner", text: `Restart required: ${core.restartRequired}` }));
 
@@ -397,24 +489,23 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
           for (const p of list) scope.append(el("option", { value: p.id, text: `Project: ${p.name}` }));
         });
       kids.push(
-        el("div", { class: "field scope" }, el("label", { class: "field-label", text: "Editing" }), scope),
+        el(
+          "div",
+          { class: "set-scope" },
+          el("span", { text: "Editing" }),
+          selectChip(scope, "set-scope-select"),
+        ),
       );
     }
 
+    const { main, advanced } = splitAdvanced(page.subsections);
     type Block = { order: number; node: HTMLElement };
     const blocks: Block[] = [];
-    const many = page.subsections.length + runtime.length > 1;
-    for (const [i, sub] of page.subsections.entries()) {
-      const body = itemsNode(sub.items);
+    const titled = main.length + runtime.length > 1;
+    for (const [i, sub] of main.entries()) {
       blocks.push({
         order: (sub.order ?? 0) + i / 1000,
-        node: el(
-          "div",
-          { class: "form-section" },
-          ...(many ? [el("h4", { class: "form-section-title", text: sub.label })] : []),
-          ...(sub.summary === undefined ? [] : [el("p", { class: "section-desc", text: sub.summary })]),
-          ...body,
-        ),
+        node: sectionNode(titled ? sub.label : null, sub.summary, listOf(sub.items)),
       });
     }
     runtimeSlots.clear();
@@ -424,38 +515,29 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
       blocks.push({ order: (rs.order ?? 0) + i / 1000, node: slot });
     }
     blocks.sort((a, b) => a.order - b.order);
+    kids.push(...blocks.map((b) => b.node));
 
-    const form = el("div", { class: "form" }, ...blocks.map((b) => b.node));
-    kids.push(form);
-
-    const enabledBox =
-      page.primary && core !== undefined && project === undefined
-        ? el("input", { type: "checkbox", class: "switch", id: `en-${page.id}`, "aria-label": "Enabled" })
-        : undefined;
-    if (enabledBox !== undefined) {
-      enabledBox.checked = core?.enabled !== false;
-      kids.push(
-        el(
-          "div",
-          { class: "field toggle" },
-          el(
-            "div",
-            {},
-            el("label", { class: "field-label", for: enabledBox.id, text: "Enabled" }),
-            el("div", { class: "field-desc", text: "Takes effect after restart." }),
-          ),
-          enabledBox,
+    if (advanced.length > 0) {
+      const count = advanced.reduce((n, sub) => n + sub.items.length, 0);
+      const details = el(
+        "details",
+        { class: "set-adv" },
+        el("summary", {}, "Advanced", el("span", { class: "set-adv-count", text: String(count) })),
+        ...advanced.map((sub) =>
+          sectionNode(advanced.length > 1 ? sub.label : null, sub.summary, listOf(sub.items)),
         ),
       );
+      details.open = advancedOpen;
+      details.addEventListener("toggle", () => {
+        advancedOpen = details.open;
+      });
+      kids.push(details);
     }
 
     if (fields.size > 0 || enabledBox !== undefined) {
-      const status = el("span", { class: "form-status" });
-      const save = el("button", { class: "primary", text: "Save" });
-      kids.push(el("div", { class: "form-actions" }, status, save));
+      kids.push(bar);
+      discard.addEventListener("click", () => paint());
       save.addEventListener("click", () => {
-        status.className = "form-status";
-        status.textContent = "";
         for (const f of fields.values()) f.error.hidden = true;
         const touched = [...fields.values()].filter((f) => f.touched).map((f) => f.setting.id);
         let config: Record<string, unknown>;
@@ -465,32 +547,25 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
             return f.reset ? undefined : f.ctl.read();
           });
         } catch (e) {
-          status.className = "form-status error";
-          status.textContent = errorText(e);
+          syncBar({ text: errorText(e), error: true });
           return;
         }
-        const enabledChanged = enabledBox !== undefined && enabledBox.checked !== (core?.enabled !== false);
-        if (touched.length === 0 && !enabledChanged) {
-          status.textContent = "Nothing to save";
-          return;
-        }
-        save.disabled = true;
+        const enabled = enabledChanged();
+        if (touched.length === 0 && !enabled) return syncBar();
+        save.disabled = discard.disabled = true;
         deps
           .patchCore(plugin, {
             ...(project === undefined ? {} : { scope: "project" as const, project }),
             ...(touched.length > 0 ? { config } : {}),
-            ...(enabledChanged ? { enabled: enabledBox?.checked === true } : {}),
+            ...(enabled ? { enabled: enabledBox?.checked === true } : {}),
           })
           .then((next) => {
             core = next;
-            paint();
-            const s = section.querySelector(".form-status");
-            if (s !== null) s.textContent = "Saved";
+            paint(true);
           })
           .catch((e: unknown) => {
-            save.disabled = false;
-            status.className = "form-status error";
-            status.textContent = errorText(e);
+            save.disabled = discard.disabled = false;
+            syncBar({ text: errorText(e), error: true });
             if (e instanceof ApiError && e.errors !== undefined) {
               for (const [path, msg] of Object.entries(e.errors)) {
                 const local = path.includes(":") ? path.slice(path.indexOf(":") + 1) : path;
@@ -509,6 +584,8 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
 
     section.replaceChildren(...kids);
     refresh();
+    syncBar(saved ? { text: "Saved" } : undefined);
+    if (saved) setTimeout(() => bar.isConnected && pending() === 0 && syncBar(), 1600);
     startRefresh();
   };
 
