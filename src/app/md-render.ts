@@ -3,6 +3,7 @@
 
 import type { Block, ListItem } from "./md-blocks";
 import type { Inline } from "./md-inline";
+import { icon, iconButton } from "./icons";
 import { parseMarkdown } from "./md-blocks";
 
 function renderInlines(inlines: Inline[], parent: HTMLElement): void {
@@ -104,6 +105,23 @@ function renderTable(block: Extract<Block, { type: "table" }>, parent: HTMLEleme
   parent.append(wrap);
 }
 
+function copyCode(btn: HTMLButtonElement, text: string): void {
+  const flash = (name: "check" | "close", label: string): void => {
+    btn.replaceChildren(icon(name));
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
+    setTimeout(() => {
+      btn.replaceChildren(icon("copy"));
+      btn.title = "Copy code";
+      btn.setAttribute("aria-label", "Copy code");
+    }, 1500);
+  };
+  navigator.clipboard.writeText(text).then(
+    () => flash("check", "Copied"),
+    () => flash("close", "Copy failed"),
+  );
+}
+
 function renderBlocks(blocks: Block[], parent: HTMLElement): void {
   for (const block of blocks) {
     switch (block.type) {
@@ -112,7 +130,12 @@ function renderBlocks(blocks: Block[], parent: HTMLElement): void {
         const code = document.createElement("code");
         code.textContent = block.text;
         pre.append(code);
-        parent.append(pre);
+        const wrap = document.createElement("div");
+        wrap.className = "code-block";
+        const btn = iconButton("copy", "Copy code", "code-copy");
+        btn.addEventListener("click", () => copyCode(btn, block.text));
+        wrap.append(pre, btn);
+        parent.append(wrap);
         break;
       }
       case "h": {

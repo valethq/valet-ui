@@ -579,6 +579,13 @@ button.chip:active:not(:disabled) { transform: none; }
   font-size: 12.5px;
   line-height: 1.6;
 }
+.msg .bubble .code-block { position: relative; margin: 0 0 10px; }
+.msg .bubble .code-block pre { margin: 0; }
+.msg .bubble .code-copy { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; color: var(--faint); opacity: 0; transition: opacity .15s; }
+.msg .bubble .code-copy .icon { width: 14px; height: 14px; }
+.msg .bubble .code-block:hover .code-copy, .msg .bubble .code-copy:focus-visible { opacity: 1; }
+.msg .bubble .code-copy:hover { color: var(--text); }
+@media (hover: none) { .msg .bubble .code-copy { opacity: 1; } }
 .msg .bubble code { font-family: var(--mono); font-size: 0.9em; }
 .msg .bubble p > code, .msg .bubble code.inline { background: var(--raised); border-radius: 6px; padding: 2px 6px; }
 .msg .bubble p { margin: 0 0 10px; white-space: pre-wrap; }

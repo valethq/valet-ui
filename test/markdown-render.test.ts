@@ -25,6 +25,8 @@ class FakeEl {
   setAttribute(name: string, value: string): void {
     this.attrs[name] = value;
   }
+  addEventListener(): void {}
+  set innerHTML(_: string) {}
 }
 
 function ser(n: FakeEl | FakeText): string {
@@ -59,7 +61,7 @@ describe("renderMarkdown", () => {
   test("tight lists inline their first paragraph; nested lists and code go inside the li", () => {
     expect(html("- a\n  - b\n- c")).toBe("<div><ul><li>a<ul><li>b</li></ul></li><li>c</li></ul></div>");
     expect(html("1. a\n\n   ```\n   x\n   ```")).toBe(
-      "<div><ol><li>a<pre><code>x</code></pre></li></ol></div>",
+      "<div><ol><li>a<div.code-block><pre><code>x</code></pre><button><span></span></button></div></li></ol></div>",
     );
     expect(html("3. a")).toBe("<div><ol start=3><li>a</li></ol></div>");
   });
