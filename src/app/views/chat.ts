@@ -19,8 +19,16 @@ import {
 } from "../subagents";
 import type { ChatMessage, Part, PartData, PartInput, PartType, Project, ProviderModels } from "../types";
 import { createAttachments, filePart } from "./attachments";
-import { galleryItems, openLightbox } from "./lightbox";
-import { copyImage, type FileData, imageDeck, imageFigures, isImage, releaseBlobs, saveBlob } from "./media";
+import {
+  copyImage,
+  type FileData,
+  galleryItems,
+  imageDeck,
+  imageFigures,
+  isImage,
+  releaseBlobs,
+  saveBlob,
+} from "./media";
 
 export interface ModelSel {
   provider: string;
@@ -48,6 +56,8 @@ export interface ChatCallbacks {
   onLoadOlder(): void;
   /** A file chip was clicked; resolves false when the file does not exist. */
   onOpenFile(ref: FileRef): Promise<boolean>;
+  /** An image was clicked: show it, with the rest of its message's images. */
+  onOpenImages(items: FileData[], index: number, source: string): void;
 }
 
 export interface ChatHandle {
@@ -973,7 +983,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       () => flashCopy(btn, "close", "Copy failed"),
     );
   });
-  /** Image clicks: open the lightbox, download, or copy. True when handled. */
+  /** Image clicks: open in the viewer, download, or copy. True when handled. */
   function mediaClick(target: Element | null): boolean {
     const save = target?.closest<HTMLElement>("[data-save]");
     if (save) {
@@ -992,8 +1002,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     const gallery = view?.closest<HTMLElement>("[data-gallery]");
     if (!view || !gallery) return false;
     const items = galleryItems(gallery.closest(".msg") ?? gallery);
-    const at = items.findIndex((it) => it.file.blobId === view.dataset.view);
-    openLightbox(items, Math.max(0, at), gallery.dataset.gallery ?? "", setSendError);
+    const at = items.findIndex((it) => it.blobId === view.dataset.view);
+    cb.onOpenImages(items, Math.max(0, at), gallery.dataset.gallery ?? "");
     return true;
   }
   messages.addEventListener("scroll", () => {

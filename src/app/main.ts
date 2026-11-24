@@ -1048,6 +1048,12 @@ async function startApp(): Promise<void> {
       const sessionId = app.view?.session.id;
       return sessionId === undefined ? true : (viewer?.open({ sessionId, ...ref }) ?? true);
     },
+    onOpenImages: (items, index, source) => {
+      const sessionId = app.view?.session.id;
+      const item = items[index];
+      if (sessionId === undefined || item === undefined) return;
+      void viewer?.open({ sessionId, path: item.name, gallery: { items, index, source } });
+    },
   });
 
   const backdrop = el("div", { class: "nav-backdrop" });

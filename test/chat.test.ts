@@ -19,7 +19,7 @@ import {
   toolStatus,
   toolStatusClass,
 } from "../src/app/views/chat";
-import { galleryItems } from "../src/app/views/lightbox";
+import { galleryItems } from "../src/app/views/media";
 
 type ToolData = Extract<PartData, { type: "tool-call" }>;
 
@@ -364,6 +364,7 @@ describe("send error line", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const errNode = findByClass(root, "send-error") as FakeEl;
       const connNode = findByClass(root, "conn") as FakeEl;
@@ -466,6 +467,7 @@ describe("tool output rendering", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const part = toolPart({
         input: { command: "ls" },
@@ -505,6 +507,7 @@ describe("loading placeholder", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const loading = { ...viewWith([]), messages: [], loading: true };
       chat.update(loading, []);
@@ -545,6 +548,7 @@ describe("message entrance", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const note = (id: string, text: string): ChatMessage => ({
         message: { ...message, id },
@@ -608,6 +612,7 @@ describe("render cost", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       fn(chat, root, (ms) => {
         t += ms;
@@ -752,6 +757,7 @@ describe("load animation reach", () => {
       onOpenSession() {},
       onLoadOlder() {},
       onOpenFile: async () => true,
+      onOpenImages() {},
     });
     const note = (id: string): ChatMessage => ({
       message: { ...message, id },
@@ -862,6 +868,7 @@ describe("streaming updates", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const reasoning = (text: string): Part => ({
         id: "prt_r",
@@ -922,6 +929,7 @@ describe("composer attachments", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       const row = findByClass(root, "attach-row") as FakeEl;
@@ -970,6 +978,7 @@ describe("composer attachments", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       const file = new File(["x"], "x.bin");
@@ -1000,6 +1009,7 @@ describe("composer attachments", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const textarea = findTag(root, "textarea") as FakeEl;
       textarea.dispatch("paste", {
@@ -1034,6 +1044,7 @@ describe("composer attachments", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const big = { name: "big.bin", size: 21 * 1024 * 1024, type: "" } as unknown as File;
       (findTag(root, "textarea") as FakeEl).dispatch("paste", {
@@ -1063,6 +1074,7 @@ describe("composer attachments", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       let prevented = false;
       (findTag(root, "textarea") as FakeEl).dispatch("paste", {
@@ -1183,6 +1195,7 @@ describe("message images", () => {
       onOpenSession() {},
       onLoadOlder() {},
       onOpenFile: async () => true,
+      onOpenImages() {},
     });
     chat.update({ ...viewWith(parts), messages: [{ message: { ...message, role }, parts }] }, []);
     return findByClass(root, "messages") as FakeEl;
@@ -1260,6 +1273,7 @@ describe("subagent sessions", () => {
         onOpenSession: (id) => opened.push(id),
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       fn(root, chat, opened);
     } finally {
@@ -1397,6 +1411,7 @@ describe("session actions", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       fn(root, chat, forks);
     } finally {
@@ -1483,6 +1498,7 @@ describe("custom parts", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       fn(root, chat);
     } finally {
@@ -1578,12 +1594,14 @@ describe("custom parts", () => {
 });
 
 describe("galleryItems", () => {
-  test("lists each image once, in order, with the node it opened from", () => {
+  test("lists each image once, in order", () => {
     const node = (view: string, name: string) => ({ dataset: { view, name, mime: "image/png" } });
     const nodes = [node("blb_a", "a.png"), node("blb_b", "b.png"), node("blb_a", "a.png")];
     const items = galleryItems({ querySelectorAll: () => nodes } as unknown as Element);
-    expect(items.map((i) => i.file.blobId)).toEqual(["blb_a", "blb_b"]);
-    expect(items[1]?.thumb).toBe(nodes[1] as unknown as HTMLElement);
+    expect(items).toEqual([
+      { type: "file", blobId: "blb_a", name: "a.png", mime: "image/png" },
+      { type: "file", blobId: "blb_b", name: "b.png", mime: "image/png" },
+    ]);
   });
 });
 
@@ -1631,6 +1649,7 @@ describe("model chip logos", () => {
         onOpenSession() {},
         onLoadOlder() {},
         onOpenFile: async () => true,
+        onOpenImages() {},
       });
       const view = viewWith([]);
       chat.update({ ...view, session: { ...session, settings: { model: { provider, model } } } }, providers);
@@ -1722,6 +1741,7 @@ describe("composer drafts", () => {
       onOpenSession() {},
       onLoadOlder() {},
       onOpenFile: async () => true,
+      onOpenImages() {},
     });
     const textarea = findTag(root, "textarea") as FakeEl;
     const type = (text: string) => {

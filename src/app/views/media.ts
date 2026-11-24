@@ -7,6 +7,19 @@ export type FileData = Extract<PartData, { type: "file" }>;
 
 export const isImage = (d: PartData): d is FileData => d.type === "file" && d.mime.startsWith("image/");
 
+/** The images under `root` (a message, or one gallery), in order, one per blob. */
+export function galleryItems(root: Element): FileData[] {
+  const seen = new Set<string>();
+  const out: FileData[] = [];
+  for (const n of root.querySelectorAll<HTMLElement>("[data-view]:not(.fig-act)")) {
+    const { view, name, mime } = n.dataset;
+    if (view === undefined || seen.has(view)) continue;
+    seen.add(view);
+    out.push({ type: "file", blobId: view, name: name ?? "", mime: mime ?? "image/*" });
+  }
+  return out;
+}
+
 // Resolved object URLs and natural sizes, so a re-render can build an image
 // that is already loaded: morph() replaces <img> nodes, and a fresh node
 // without a src would flash empty.
@@ -125,14 +138,20 @@ export function imageFigures(images: FileData[]): HTMLElement {
   return group;
 }
 
+export const saveUrl = (href: string, name: string): void => el("a", { href, download: name }).click();
+
 export async function saveBlob(blobId: string, name: string): Promise<void> {
-  el("a", { href: await blobUrl(blobId), download: name }).click();
+  saveUrl(await blobUrl(blobId), name);
+}
+
+export async function copyImage(blobId: string): Promise<void> {
+  await copyImageUrl(await blobUrl(blobId));
 }
 
 /** Puts an image on the clipboard; non-PNGs are redrawn as PNG, the one type
  * every browser's clipboard accepts. */
-export async function copyImage(blobId: string): Promise<void> {
-  const blob = await (await fetch(await blobUrl(blobId))).blob();
+export async function copyImageUrl(url: string): Promise<void> {
+  const blob = await (await fetch(url, { credentials: "include" })).blob();
   const png =
     blob.type === "image/png"
       ? blob
