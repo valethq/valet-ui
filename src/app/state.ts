@@ -33,7 +33,7 @@ export interface SessionView {
   queued: number;
   /** Placeholder shown while the session's messages are still being fetched. */
   loading: boolean;
-  /** Set when the chat loads in pages (experimental); `null` when `messages` is the whole window. */
+  /** Set when the chat loads in pages ; `null` when `messages` is the whole window. */
   paging: Paging | null;
 }
 

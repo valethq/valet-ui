@@ -15,7 +15,7 @@ export interface SettingsPage {
   group: SettingsGroup;
   order: number;
   icon?: string;
-  kind: "config" | "theme" | "experimental";
+  kind: "config" | "theme";
   plugin?: string;
   /** The plugin's settings as core serves them; the page edits `subsections` of its doc. */
   core?: CorePluginSettings;

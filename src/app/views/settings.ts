@@ -1,5 +1,4 @@
 import { el, leave } from "../dom";
-import { experimentalEnabled, setExperimental } from "../experimental";
 import { icon, iconButton } from "../icons";
 import { enter } from "../motion";
 import type { ContributionView, CorePluginSettings, SettingsGroup } from "../types";
@@ -20,57 +19,8 @@ export interface SettingsDeps extends FormDeps {
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-/** The Experimental page: one switch stored in this browser (a cookie), not server config. */
-function experimentalSection(): HTMLElement {
-  const box = el("input", { type: "checkbox", class: "switch", id: "ui-experimental-enabled" });
-  box.checked = experimentalEnabled();
-  const note = el("div", { class: "set-note warning", text: "Reload the page to apply" });
-  note.hidden = true;
-  box.addEventListener("change", () => {
-    setExperimental(box.checked);
-    note.hidden = false;
-  });
-  return el(
-    "section",
-    { class: "settings-section" },
-    el(
-      "div",
-      { class: "set-head" },
-      el(
-        "div",
-        { class: "set-head-text" },
-        el("h3", {}, "Experimental"),
-        el("p", {
-          class: "set-head-desc",
-          text: "Early features stored in this browser only. Enables compressed responses and paged chat loading.",
-        }),
-      ),
-    ),
-    el(
-      "div",
-      { class: "set-list" },
-      el(
-        "div",
-        { class: "set-row toggle" },
-        el(
-          "div",
-          { class: "set-text" },
-          el(
-            "div",
-            { class: "set-title" },
-            el("label", { class: "set-label", for: box.id, text: "Enable experimental features" }),
-          ),
-          el("p", { class: "set-desc", text: "Turn off if you run into issues." }),
-          note,
-        ),
-        el("div", { class: "set-ctl" }, box),
-      ),
-    ),
-  );
-}
-
 function builtinPages(): SettingsPage[] {
-  const page = (id: string, title: string, order: number, kind: "theme" | "experimental"): SettingsPage => ({
+  const page = (id: string, title: string, order: number, kind: "theme"): SettingsPage => ({
     id,
     title,
     group: "system",
@@ -80,15 +30,11 @@ function builtinPages(): SettingsPage[] {
     runtime: [],
     primary: false,
   });
-  return [
-    page("ui-theme", "Themes", 900, "theme"),
-    page("ui-experimental", "Experimental", 901, "experimental"),
-  ];
+  return [page("ui-theme", "Themes", 900, "theme")];
 }
 
 function pagePanel(page: SettingsPage, deps: SettingsDeps): HTMLElement {
   if (page.kind === "theme") return themeSection();
-  if (page.kind === "experimental") return experimentalSection();
   return configPage(page, deps);
 }
 
@@ -307,7 +253,7 @@ function drillDown(
   return { root, back };
 }
 
-/** Opens the settings dialog: one page per plugin and section (settings v3), plus Themes and Experimental. */
+/** Opens the settings dialog: one page per plugin and section (settings v3), plus Themes. */
 export function openSettings(deps: SettingsDeps): void {
   if (document.querySelector(".modal-backdrop:not(.leaving)") !== null) return;
   const opener = document.activeElement as HTMLElement | null;

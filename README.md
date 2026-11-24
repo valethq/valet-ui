@@ -6,9 +6,9 @@ A [valet](https://github.com/valethq/valet-core) plugin. Imports `@valethq/sdk` 
 
 The browser only ever talks to this plugin's port. The plugin relays `/api/*`, `/plugins/*` and `/ws` to core (`coreUrl`, default `http://127.0.0.1:7417`), so core's port needn't be reachable from the device and the UI's origin needn't be in `server.allowedOrigins`.
 
-## Experimental features
+## Compression and paged chats
 
-Settings has an **Experimental** tab, per browser. It sets the `valet-ui-experimental` cookie, which the server reads on every request, page loads included. While it is on:
+Both are always on.
 
 - The page, the bundle and relayed API responses are brotli or gzip compressed when the client accepts it. Only finite text bodies of 1 KB or more are compressed; ranges, event streams and binaries pass through. The page and bundle carry a content-hash ETag and revalidate with a 304.
 
@@ -20,8 +20,6 @@ Settings has an **Experimental** tab, per browser. It sets the `valet-ui-experim
 - Long parts arrive in pieces. A page's first response gives every part of what the model said (text, reasoning) and of tool output at most `partChars` characters, and marks a short one with its full length (`partial`). The page paints at once; the browser then pulls the rest in rounds (`?page=n&round=k&v=<etag>`), each round spending up to `chunkMessages x partChars` characters, what the model said before tool output and the newest message first. The page is stored in the device cache whole once the last piece lands. A round answers 409 if the page changed since its ETag, and the chat refetches. Messages and parts still streaming are never cut.
 
 Both knobs are config only, under `plugins["valet-ui"].config`: `chunkMessages` (messages per page, default 25, 5 to 100) and `partChars` (default 8000, 500 to 200000). They apply when the plugin restarts, and cached pages from the old values simply revalidate.
-
-With it off, nothing is compressed, no cache headers are added, and chats load the way they always did.
 
 ## Settings panels
 

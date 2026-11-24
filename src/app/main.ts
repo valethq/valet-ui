@@ -2,7 +2,6 @@
 import * as api from "./api";
 import { createPageLoader, type Loaded } from "./chat-pages";
 import { el, leave } from "./dom";
-import { experimentalEnabled } from "./experimental";
 import { focusDuration, focusEasing, glide, reducedMotion } from "./motion";
 import { defaultStore } from "./page-cache";
 import {
@@ -621,23 +620,19 @@ async function openSession(id: string): Promise<void> {
   const stillOpening = (): boolean => seq === openSeq && app.sessions.some((s) => s.id === id);
   const shownView = (): SessionView | undefined =>
     app.view?.session.id === id && !app.view.loading ? app.view : undefined;
-  let view: SessionView | undefined;
-  let tail: Loaded | undefined;
-  if (experimentalEnabled()) {
-    const fresh = await pages
-      .load(id, "tail", (cached) => {
-        if (!stillOpening() || app.view?.session.id !== id || !app.view.loading) return;
-        app.view = pagedView(session, cached);
-        scheduleRender();
-      })
-      .catch(() => undefined);
-    if (!stillOpening()) return;
-    const shown = shownView();
-    // Paging failed: keep a cached paint, otherwise fall back to the whole-window fetch below.
-    view =
-      fresh === undefined ? (shown?.paging == null ? undefined : shown) : mergeTail(shown, fresh, session);
-    tail = fresh;
-  }
+  const fresh = await pages
+    .load(id, "tail", (cached) => {
+      if (!stillOpening() || app.view?.session.id !== id || !app.view.loading) return;
+      app.view = pagedView(session, cached);
+      scheduleRender();
+    })
+    .catch(() => undefined);
+  if (!stillOpening()) return;
+  const shown = shownView();
+  // Paging failed: keep a cached paint, otherwise fall back to the whole-window fetch below.
+  let view: SessionView | undefined =
+    fresh === undefined ? (shown?.paging == null ? undefined : shown) : mergeTail(shown, fresh, session);
+  const tail: Loaded | undefined = fresh;
   if (view === undefined) {
     const whole = await api.listMessages(id).catch(() => []);
     if (!stillOpening()) return;

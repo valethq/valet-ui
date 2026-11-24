@@ -48,7 +48,7 @@
               {
                 "id": "chunkMessages",
                 "label": "Messages per page",
-                "summary": "Messages loaded per page (Experimental).",
+                "summary": "Messages loaded per page.",
                 "input": {
                   "type": "int",
                   "min": 5,
