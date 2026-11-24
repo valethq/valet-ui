@@ -3,6 +3,7 @@ import { chipButton, icon, iconButton, type IconName } from "../icons";
 import { logoFor, logoMark, logoMarks, logosFor } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import type { FileRef } from "../file-ref";
+import { loadDraft, saveDraft } from "../drafts";
 import { renderMarkdown } from "../markdown";
 import { enter, focusDuration, glide, streamIn } from "../motion";
 import { groupModels, type ModelFamily, pickEffort } from "../models";
@@ -750,6 +751,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   let stickToBottom = true;
   let connOpen = false;
   let draftId: string | null = null;
+  /** Sends still waiting on the server. */
+  let sending = 0;
   let families: ModelFamily[] = [];
   let activeFamily: ModelFamily | null = null;
   let activeEffort: string | null = null;
@@ -853,6 +856,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     if (text === "" && sent.length === 0) return;
     draftId ??= crypto.randomUUID();
     const id = draftId;
+    const from = sessionId;
+    sending++;
     const files = Promise.all(sent.map(async (a) => filePart(await a.blob, a.file)));
     void files
       .then((fileParts) => {
@@ -865,13 +870,16 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
           if (textarea.value.trim() === text) {
             textarea.value = "";
             textarea.style.height = "";
+            saveDraft(sessionId, "");
           }
+          if (from !== sessionId && loadDraft(from).trim() === text) saveDraft(from, "");
           attachments.drop(sent);
           if (draftId === id) draftId = null;
           syncSend();
         },
         () => {},
-      );
+      )
+      .finally(() => sending--);
   };
   send.addEventListener("click", doSend);
   stop.addEventListener("click", () => cb.onStop());
@@ -887,12 +895,16 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   });
   // `field-sizing: content` (page.ts) grows the box without a layout read per keystroke; browsers without it get the script.
   const growsByCss = typeof CSS !== "undefined" && CSS.supports("field-sizing", "content");
+  const fit = (): void => {
+    if (growsByCss) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+  };
+  textarea.value = loadDraft(null);
   textarea.addEventListener("input", () => {
-    if (!growsByCss) {
-      textarea.style.height = "auto";
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-    }
+    fit();
     syncSend();
+    saveDraft(sessionId, textarea.value);
   });
   textarea.addEventListener("paste", (ev) => {
     const files = Array.from(ev.clipboardData?.files ?? []);
@@ -1333,7 +1345,17 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       const composerFrom =
         landing === main.hasAttribute("data-landing") ? null : composerWrap.getBoundingClientRect().top;
       if (switched) {
+        // A message sent from the new-chat page creates its session mid-send; its text goes along.
+        const carry = sessionId === null && sending > 0;
+        if (carry) saveDraft(null, "");
         sessionId = sid;
+        if (carry) saveDraft(sid, textarea.value);
+        else {
+          textarea.value = loadDraft(sid);
+          textarea.style.height = "";
+          fit();
+          syncSend();
+        }
         openState.clear();
         showAll.clear();
         bodyStick.clear();

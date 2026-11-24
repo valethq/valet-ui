@@ -1684,3 +1684,106 @@ describe("model chip logos", () => {
     expect(chipFor("cursor", "claude-sonnet-5").rows).toEqual([["claude"], ["claude"]]);
   });
 });
+
+describe("composer drafts", () => {
+  const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+  const withDom = (run: () => Promise<void>): (() => Promise<void>) => {
+    return async () => {
+      const g = globalThis as Record<string, unknown>;
+      const saved = { document: g.document, localStorage: g.localStorage };
+      const store = new Map<string, string>();
+      g.document = { createElement: (tag: string) => new FakeEl(tag) };
+      g.localStorage = {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => store.set(k, v),
+        removeItem: (k: string) => store.delete(k),
+      };
+      try {
+        await run();
+      } finally {
+        g.document = saved.document;
+        g.localStorage = saved.localStorage;
+      }
+    };
+  };
+  const make = (onSend: (parts: unknown) => Promise<boolean> = () => Promise.resolve(true)) => {
+    const root = new FakeEl("div");
+    const chat = createChat(root as unknown as HTMLElement, {
+      onSend,
+      onUpload: () => Promise.resolve("blb_1"),
+      onStop() {},
+      onModel() {},
+      onRename() {},
+      onDelete() {},
+      onFork() {},
+      onMove() {},
+      onCompact() {},
+      onToggleNav() {},
+      onOpenSession() {},
+      onLoadOlder() {},
+      onOpenFile: async () => true,
+    });
+    const textarea = findTag(root, "textarea") as FakeEl;
+    const type = (text: string) => {
+      textarea.value = text;
+      textarea.dispatch("input", {});
+    };
+    return { root, chat, textarea, type };
+  };
+  const other = { ...viewWith([]), session: { ...session, id: "ses_other" } };
+
+  test(
+    "each session keeps what was typed in it across switches and a fresh composer",
+    withDom(async () => {
+      const { chat, textarea, type } = make();
+      chat.update(viewWith([]), []);
+      type("half a thought");
+      chat.update(other, []);
+      expect(textarea.value).toBe("");
+      type("something else");
+      chat.update(viewWith([]), []);
+      expect(textarea.value).toBe("half a thought");
+
+      const reloaded = make();
+      reloaded.chat.update(other, []);
+      expect(reloaded.textarea.value).toBe("something else");
+    }),
+  );
+
+  test(
+    "sending clears the session's draft, even after switching away mid-send",
+    withDom(async () => {
+      let finish: (ok: boolean) => void = () => {};
+      const { root, chat, textarea, type } = make(() => new Promise((r) => (finish = r)));
+      chat.update(viewWith([]), []);
+      type("ship it");
+      (findByClass(root, "send") as FakeEl).dispatch("click", {});
+      await tick();
+      chat.update(other, []);
+      finish(true);
+      await tick();
+      chat.update(viewWith([]), []);
+      expect(textarea.value).toBe("");
+    }),
+  );
+
+  test(
+    "text sent from the new-chat page goes along into the session it creates",
+    withDom(async () => {
+      const { root, chat, textarea, type } = make(async () => {
+        chat.update(viewWith([]), []);
+        expect(textarea.value).toBe("first message");
+        return false;
+      });
+      type("first message");
+      (findByClass(root, "send") as FakeEl).dispatch("click", {});
+      await tick();
+      await tick();
+      expect(textarea.value).toBe("first message");
+      const reloaded = make();
+      expect(reloaded.textarea.value).toBe("");
+      reloaded.chat.update(viewWith([]), []);
+      expect(reloaded.textarea.value).toBe("first message");
+    }),
+  );
+});
