@@ -107,6 +107,12 @@ export function logosFor(model: string, provider = "", icon?: string): LogoId[] 
   return own === undefined ? [harness] : [harness, own];
 }
 
+/** The harness mark for an inference provider's `icon` key, when it names one.
+ * Unlike `logosFor` it stands even where the model has the same mark. */
+export function harnessMark(icon: string | undefined): HTMLSpanElement | undefined {
+  return icon !== undefined && isLogo(icon) ? logoMark(icon, "harness") : undefined;
+}
+
 const logoUrl = (id: LogoId): string => `url("data:image/svg+xml,${encodeURIComponent(LOGOS[id].svg)}")`;
 
 /** One mark, or for [harness, model] a `.logo-pair`: harness first, the model

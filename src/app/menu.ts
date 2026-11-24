@@ -24,6 +24,8 @@ export interface MenuItem {
 }
 
 export interface MenuSection {
+  /** A mark beside the title, for sections named after something with a logo. */
+  lead?: HTMLElement;
   title?: string;
   /** Rows can be dragged (or moved with Alt+Arrow) to a new index within the section. */
   reorder?(from: number, to: number): void;
@@ -250,7 +252,14 @@ export function popover(
                 [si]?.querySelectorAll<HTMLElement>(".menu-item")
                 [to]?.focus();
             };
-      if (s.title !== undefined) group.append(el("div", { class: "menu-title", text: s.title }));
+      if (s.title !== undefined)
+        group.append(
+          el(
+            "div",
+            { class: "menu-title" },
+            ...[s.lead, el("span", { text: s.title })].filter((n) => n !== undefined),
+          ),
+        );
       for (const [index, it] of s.items.entries()) {
         const toggled = it.toggle !== undefined;
         const b = el("button", {

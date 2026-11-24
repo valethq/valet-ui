@@ -71,4 +71,12 @@ describe("page css", () => {
     expect(head).toContain('localStorage.getItem("valet-ui.theme")');
     expect(head).toContain('html[data-theme="paper"]');
   });
+
+  test("the model picker names its harness with a small greyed mark", () => {
+    const title = /\.menu-title \{[^}]*\}/.exec(html)?.[0] ?? "";
+    expect(title).toContain("display: flex");
+    expect(title).toContain("align-items: center");
+    expect(title).toContain("gap: 6px");
+    expect(html).toContain(".menu-title .logo { width: 14px; height: 14px; filter: grayscale(1); }");
+  });
 });

@@ -276,11 +276,15 @@ button.chip:active:not(:disabled) { transform: none; }
   position: sticky;
   top: 0;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 10px 4px;
   font-size: 11.5px;
   color: var(--faint);
   background: var(--surface);
 }
+.menu-title .logo { width: 14px; height: 14px; filter: grayscale(1); }
 .menu-item {
   display: flex;
   align-items: center;

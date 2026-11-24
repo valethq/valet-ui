@@ -1,6 +1,6 @@
 import { clear, el, morph, reconcile, sameChildren, setShown } from "../dom";
 import { chipButton, icon, iconButton, type IconName } from "../icons";
-import { logoFor, logoMark, logoMarks, logosFor } from "../logos";
+import { logoFor, logoMark, logoMarks, logosFor, harnessMark } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import type { FileRef } from "../file-ref";
 import { loadDraft, saveDraft } from "../drafts";
@@ -785,6 +785,8 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
         let s = sections.get(f.provider);
         if (s === undefined) {
           s = { title: f.providerLabel, items: [] };
+          const lead = harnessMark(f.providerIcon);
+          if (lead !== undefined) s.lead = lead;
           sections.set(f.provider, s);
         }
         s.items.push({
