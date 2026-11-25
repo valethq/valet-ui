@@ -4,6 +4,7 @@ import { logoFor, logoMark, logoMarks, logosFor, harnessMark } from "../logos";
 import { type MenuSection, popover } from "../menu";
 import type { FileRef } from "../file-ref";
 import { loadDraft, saveDraft } from "../drafts";
+import { expandOutgoingEmoji } from "../emoji-send";
 import { renderMarkdown } from "../markdown";
 import { enter, focusDuration, glide, streamIn } from "../motion";
 import { groupModels, type ModelFamily, pickEffort } from "../models";
@@ -870,6 +871,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     const sent = attachments.list();
     if (text === "" && sent.length === 0) return;
     emojiMenu.reset();
+    const outgoing = expandOutgoingEmoji(text);
     draftId ??= crypto.randomUUID();
     const id = draftId;
     const from = sessionId;
@@ -877,7 +879,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     const files = Promise.all(sent.map(async (a) => filePart(await a.blob, a.file)));
     void files
       .then((fileParts) => {
-        const textParts: PartInput[] = text === "" ? [] : [{ type: "text", text }];
+        const textParts: PartInput[] = outgoing === "" ? [] : [{ type: "text", text: outgoing }];
         return cb.onSend([...textParts, ...fileParts], id);
       })
       .then(

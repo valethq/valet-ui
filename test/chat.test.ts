@@ -1779,6 +1779,28 @@ describe("composer drafts", () => {
   const other = { ...viewWith([]), session: { ...session, id: "ses_other" } };
 
   test(
+    "Enter sends Unicode emoji while preserving literal shortcodes and clearing the draft",
+    withDom(async () => {
+      const { window: savedWindow } = globalThis;
+      Object.assign(globalThis, { window: { matchMedia: () => ({ matches: false }) } });
+      try {
+        let sent: unknown;
+        const { textarea, type } = make(async (parts) => {
+          sent = parts;
+          return true;
+        });
+        type("Still :sob:ing :+1: \\:sob: `:sob:` :unknown_emoji:");
+        textarea.dispatch("keydown", { key: "Enter", preventDefault() {} });
+        await tick();
+        expect(sent).toEqual([{ type: "text", text: "Still 😭ing 👍 \\:sob: `:sob:` :unknown_emoji:" }]);
+        expect(textarea.value).toBe("");
+      } finally {
+        Object.assign(globalThis, { window: savedWindow });
+      }
+    }),
+  );
+
+  test(
     "emoji suggestions replace the query at the caret without sending the draft",
     withDom(async () => {
       let sends = 0;

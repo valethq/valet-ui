@@ -6,7 +6,7 @@ A [valet](https://github.com/valethq/valet-core) plugin. Imports `@valethq/sdk` 
 
 The browser only ever talks to this plugin's port. The plugin relays `/api/*`, `/plugins/*` and `/ws` to core (`coreUrl`, default `http://127.0.0.1:7417`), so core's port needn't be reachable from the device and the UI's origin needn't be in `server.allowedOrigins`.
 
-Chat messages display GitHub-style emoji shortcodes such as `:sob:` and `:+1:`. Use backticks or escape the opening colon to display a shortcode literally.
+The composer converts GitHub-style emoji shortcodes such as `:sob:` and `:+1:` to Unicode when you send a message. Use backticks or escape the opening colon to write a shortcode literally.
 
 ## Compression and paged chats
 
