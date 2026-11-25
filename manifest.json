@@ -13,7 +13,8 @@
         "summary": "Run plugin settings actions and save runtime subsections",
         "resource": "plugin",
         "requireVerifiedLogin": true
-      }
+      },
+      "model.read": { "summary": "Read the agent model catalog" }
     }
   },
   "settings": {
@@ -70,5 +71,6 @@
         ]
       }
     }
-  }
+  },
+  "optionalRequires": ["agent@1"]
 }
