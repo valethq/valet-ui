@@ -19,6 +19,7 @@ import {
 } from "../subagents";
 import type { ChatMessage, Part, PartData, PartInput, PartType, Project, ProviderModels } from "../types";
 import { createAttachments, filePart } from "./attachments";
+import { emojiSuggestions } from "./emoji-suggestions";
 import {
   copyImage,
   type FileData,
@@ -740,6 +741,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   const sendErr = el("div", { class: "hint send-error" });
   sendErr.style.display = "none";
   const textarea = el("textarea", { placeholder: "Message…", rows: "1", enterkeyhint: "enter" });
+  const emojiMenu = emojiSuggestions(textarea);
   const send = iconButton("send", "Send", "send");
   const stop = iconButton("stop", "Stop", "stop");
   stop.style.display = "none";
@@ -867,6 +869,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     const text = textarea.value.trim();
     const sent = attachments.list();
     if (text === "" && sent.length === 0) return;
+    emojiMenu.reset();
     draftId ??= crypto.randomUUID();
     const id = draftId;
     const from = sessionId;
@@ -898,6 +901,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
   stop.addEventListener("click", () => cb.onStop());
   navToggle.addEventListener("click", () => cb.onToggleNav());
   textarea.addEventListener("keydown", (ev) => {
+    if (emojiMenu.keydown(ev)) return;
     if (ev.key !== "Enter" || ev.isComposing) return;
     // Touch keyboards: Enter inserts a newline; the Send button sends.
     if (window.matchMedia("(pointer: coarse)").matches) return;
@@ -1061,6 +1065,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
     el(
       "div",
       { class: "composer" },
+      emojiMenu.panel,
       attachments.row,
       textarea,
       el(
@@ -1358,6 +1363,7 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       const composerFrom =
         landing === main.hasAttribute("data-landing") ? null : composerWrap.getBoundingClientRect().top;
       if (switched) {
+        emojiMenu.reset();
         // A message sent from the new-chat page creates its session mid-send; its text goes along.
         const carry = sessionId === null && sending > 0;
         if (carry) saveDraft(null, "");

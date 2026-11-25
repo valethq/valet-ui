@@ -754,6 +754,7 @@ button.sub-row:hover .icon { color: var(--accent); transform: translateX(3px); }
 }
 .main[data-landing] .composer-wrap::before { display: none; }
 .composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -777,6 +778,11 @@ button.sub-row:hover .icon { color: var(--accent); transform: translateX(3px); }
   line-height: 1.5;
 }
 .composer textarea::placeholder { color: var(--faint); }
+.emoji-suggestions { left: 8px; width: min(320px, calc(100% - 16px)); min-width: 0; max-height: min(320px, 32dvh); }
+.emoji-suggestions:not([hidden]) { display: flex; flex-direction: column; overflow: hidden; }
+.emoji-suggestions .menu-title { flex: none; }
+.emoji-suggestions .menu-item[aria-selected="true"] { background: var(--tint); }
+.emoji-suggestions .emoji-glyph { flex: 0 0 24px; text-align: center; font-size: 20px; line-height: 1; }
 @supports (field-sizing: content) { .composer textarea { field-sizing: content; width: 100%; } }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 8px; }
 .composer-bar .controls { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1 1 auto; }

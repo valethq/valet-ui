@@ -170,9 +170,21 @@ class FakeEl {
   readonly style: Record<string, string> = {};
   textContent = "";
   value = "";
+  selectionStart = 0;
+  selectionEnd = 0;
   /** `<details>` reflection: `.open` is the `open` attribute. */
   get open(): boolean {
     return this.attrs.has("open");
+  }
+  get hidden(): boolean {
+    return this.attrs.has("hidden");
+  }
+  set hidden(on: boolean) {
+    if (on) this.attrs.set("hidden", "");
+    else this.attrs.delete("hidden");
+  }
+  get id(): string {
+    return this.attrs.get("id") ?? "";
   }
   set open(on: boolean) {
     if (on) this.attrs.set("open", "");
@@ -217,6 +229,19 @@ class FakeEl {
   }
   dispatch(type: string, ev: unknown): void {
     for (const fn of this.listeners.get(type) ?? []) fn(ev);
+  }
+  dispatchEvent(ev: Event): boolean {
+    this.dispatch(ev.type, ev);
+    return !ev.defaultPrevented;
+  }
+  click(): void {
+    this.dispatch("click", {});
+  }
+  focus(): void {}
+  scrollIntoView(): void {}
+  setRangeText(text: string, start: number, end: number): void {
+    this.value = this.value.slice(0, start) + text + this.value.slice(end);
+    this.selectionStart = this.selectionEnd = start + text.length;
   }
   remove(): void {
     const i = this.#parent?.children.indexOf(this) ?? -1;
@@ -1669,7 +1694,8 @@ describe("model chip logos", () => {
         sub: sub.style.display === "none" ? undefined : sub.textContent,
       };
       (findTag(chip, "button") as FakeEl).dispatch("click", {});
-      const rows = (findByClass(root, "menu") as FakeEl).querySelectorAll(".menu-lead").map(logos);
+      const picker = findByClass(root, "model-pop") as FakeEl;
+      const rows = (findByClass(picker, "menu") as FakeEl).querySelectorAll(".menu-lead").map(logos);
       return { ...shown, cutout: shown.cutout?.attrs.get("data-logo"), rows };
     } finally {
       g.document = savedDocument;
@@ -1751,6 +1777,43 @@ describe("composer drafts", () => {
     return { root, chat, textarea, type };
   };
   const other = { ...viewWith([]), session: { ...session, id: "ses_other" } };
+
+  test(
+    "emoji suggestions replace the query at the caret without sending the draft",
+    withDom(async () => {
+      let sends = 0;
+      const { root, textarea, type } = make(async () => {
+        sends++;
+        return true;
+      });
+      Object.assign(document, { activeElement: textarea });
+      textarea.selectionStart = textarea.selectionEnd = 7;
+      type("hey :so friend");
+      const menu = findByClass(root, "emoji-suggestions");
+      expect(menu?.hidden).toBe(false);
+      expect(menu?.querySelector(".menu-label")?.textContent).toBe(":sob:");
+      const press = (key: string) => {
+        let prevented = false;
+        textarea.dispatch("keydown", { key, preventDefault: () => (prevented = true) });
+        return prevented;
+      };
+      expect(press("ArrowDown")).toBe(true);
+      expect(textarea.getAttribute("aria-activedescendant")).toBe("emoji-suggestion-1");
+      expect(press("ArrowUp")).toBe(true);
+      expect(press("Enter")).toBe(true);
+      expect(textarea.value).toBe("hey :sob: friend");
+      expect(textarea.selectionEnd).toBe(9);
+      expect(menu?.hidden).toBe(true);
+      expect(sends).toBe(0);
+
+      textarea.selectionStart = textarea.selectionEnd = 3;
+      type(":he");
+      expect(menu?.hidden).toBe(false);
+      expect(press("Escape")).toBe(true);
+      textarea.dispatch("selectionchange", {});
+      expect(menu?.hidden).toBe(true);
+    }),
+  );
 
   test(
     "each session keeps what was typed in it across switches and a fresh composer",
