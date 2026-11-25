@@ -32,7 +32,7 @@ interface Task {
 
 const FOOTER = /\[subagent session (ses_[\w-]+);/g;
 
-/** valet-agent's tool is `subagent`; a harness may prefix it (`mcp__valet__subagent`). */
+/** The agent tool is `subagent`; a harness may prefix it (`mcp__valet__subagent`). */
 export const isSubagentCall = (d: ToolData): boolean => /(^|[^a-z])subagent$/i.test(d.name);
 
 const obj = (v: unknown): Record<string, unknown> =>
@@ -54,7 +54,7 @@ function tasksOf(d: ToolData): Task[] {
     .map(({ t }) => t);
 }
 
-/** Child sessions the finished call names: its result's meta, or the footer valet-agent appends to each reply. */
+/** Child sessions the finished call names: its result's meta, or the footer older stored replies carry. */
 function namedBy(d: ToolData): string[] {
   const meta = obj(obj(d.result).meta);
   const fromMeta = Array.isArray(meta.sessions)
