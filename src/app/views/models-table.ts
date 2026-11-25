@@ -13,7 +13,7 @@ interface Group {
   count: HTMLElement;
 }
 
-/** valet-agent's model list: models grouped by provider, each opening an editor under its row. */
+/** The agent model catalog: models grouped by provider, each opening an editor under its row. */
 export function modelsTable(
   value: unknown,
   load: CatalogLoader,

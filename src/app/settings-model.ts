@@ -73,6 +73,10 @@ export const isSetting = (item: ItemDef): item is SettingDef =>
   "input" in item && typeof item.input === "object";
 export const isDisplay = (item: ItemDef): item is DisplayDef => !isSetting(item);
 
+/** The schema marker for the hand-written model catalog editor; independent of the provider plugin's id. */
+export const isModelCatalog = (s: SettingDef): boolean =>
+  s.input.type === "list" && s.input.style === "model-catalog";
+
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
