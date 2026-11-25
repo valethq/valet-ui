@@ -211,11 +211,12 @@ export const sendMessage = (
   sessionId: string,
   parts: PartInput[],
   clientMessageId: string,
+  delivery?: "queue" | "interrupt",
 ): Promise<ChatMessage> =>
   req(
     "POST",
     `/api/core/sessions/${encodeURIComponent(sessionId)}/messages`,
-    { role: "user", parts, clientMessageId },
+    { role: "user", parts, clientMessageId, ...(delivery === undefined ? {} : { delivery }) },
     8_000,
   );
 
@@ -366,10 +367,10 @@ export async function listPartTypes(): Promise<PartType[]> {
   return types.map((t) => ({ ...t, loaded: active.has(t.plugin.id) }));
 }
 
-// ---- valet-agent (11.1). Normalized like authStatus. ----
+// ---- agent@1, proxied by valet-ui so no provider id reaches the browser. ----
 
 const agentSession = (id: string, action: string): string =>
-  `/plugins/valet-agent/sessions/${encodeURIComponent(id)}/${action}`;
+  `/plugins/valet-ui/agent/sessions/${encodeURIComponent(id)}/${action}`;
 
 /** A new session holding the chat up to `messageId` (default: the latest message). */
 export const forkSession = (id: string, messageId?: string): Promise<Session> =>
@@ -381,13 +382,8 @@ export const moveSession = (id: string, projectId: string): Promise<Session> =>
 
 export const getSessionState = (id: string): Promise<SessionState> => get(agentSession(id, "state"));
 
-/** Runs `/compact` through the message hook. It answers 409 once the command has run, which counts as sent. */
-export async function compactSession(id: string, instructions: string): Promise<void> {
-  const text = instructions === "" ? "/compact" : `/compact ${instructions}`;
-  await sendMessage(id, [{ type: "text", text }], crypto.randomUUID()).catch((e: unknown) => {
-    if (!isCommandHandled(e)) throw e;
-  });
-}
+export const compactSession = (id: string, instructions: string): Promise<void> =>
+  req("POST", agentSession(id, "compact"), instructions === "" ? {} : { instructions });
 
 export type { CorePluginSettings };
 
@@ -455,7 +451,7 @@ function catalogEntries(d: unknown): Record<string, unknown>[] {
 }
 
 export async function listModels(): Promise<ProviderModels[]> {
-  const d = (await get("/plugins/valet-agent/models")) as unknown;
+  const d = (await get("/plugins/valet-ui/agent/models")) as unknown;
   const out: ProviderModels[] = [];
   for (const e of catalogEntries(d)) {
     const provider = String(e.provider ?? e.key ?? e.id ?? "");
