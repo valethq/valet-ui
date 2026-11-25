@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   deriveGroup,
   evalCond,
+  isModelCatalog,
   pasteName,
   patchFor,
   renderAs,
@@ -33,6 +34,20 @@ describe("renderAs: a type this UI doesn't know renders its base", () => {
     });
     expect(renderAs({ type: "mystery" }).type).toBe("string");
     expect(renderAs({ type: "a" }, { a: { base: "a" } }).type).toBe("string");
+  });
+});
+
+describe("model catalog discriminator", () => {
+  test("the schema style marks the editor, not the plugin id or setting id", () => {
+    const setting = (id: string, type: string, style?: string) => ({
+      id,
+      label: id,
+      input: { type, ...(style === undefined ? {} : { style }) },
+    });
+    expect(isModelCatalog(setting("models", "list", "model-catalog"))).toBe(true);
+    expect(isModelCatalog(setting("anything", "list", "model-catalog"))).toBe(true);
+    expect(isModelCatalog(setting("models", "list", "table"))).toBe(false);
+    expect(isModelCatalog(setting("models", "list"))).toBe(false);
   });
 });
 

@@ -21,7 +21,11 @@ const agent: CorePluginSettings = {
       inference: {
         order: 900,
         subsections: [
-          { id: "models", label: "Models", items: [{ id: "models", label: "M", input: { type: "list" } }] },
+          {
+            id: "models",
+            label: "Models",
+            items: [{ id: "models", label: "M", input: { type: "list", style: "model-catalog" } }],
+          },
         ],
       },
     },

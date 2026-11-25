@@ -3,6 +3,7 @@ import { el } from "../dom";
 import { iconButton, selectChip } from "../icons";
 import {
   evalCond,
+  isModelCatalog,
   isSetting,
   patchFor,
   resolveArgs,
@@ -51,10 +52,6 @@ export interface FormDeps {
 }
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
-/** The hand-written models table stays for valet-agent's model list (12.1). */
-const isModelsTable = (plugin: string | undefined, s: SettingDef) =>
-  plugin === "valet-agent" && s.id === "models";
 
 interface Field {
   setting: SettingDef;
@@ -309,7 +306,7 @@ export function configPage(page: SettingsPage, deps: FormDeps): HTMLElement {
       const value = stored ? layer[s.id] : effective[s.id];
       const id = nextId();
       const projectLocked = project !== undefined && !s.scopes?.includes("project");
-      const models = isModelsTable(page.plugin, s);
+      const models = isModelCatalog(s);
       let ctl: Control;
       if (models) {
         const table = modelsTable(value, deps.listCatalog);
