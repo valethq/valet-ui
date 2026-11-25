@@ -5,6 +5,38 @@ const p = (text: string): Block => ({ type: "p", children: [{ type: "text", text
 const li = (text: string, checked: boolean | null = null): ListItem => ({ checked, children: [p(text)] });
 
 describe("parseMarkdown", () => {
+  test("chat shortcodes work in prose and emphasis, including adjacent aliases and suffixes", () => {
+    expect(
+      parseMarkdown("I’m :sob:ing **:+1:** :heart::joy: :unknown_emoji:", { emojiShortcodes: true }),
+    ).toEqual([
+      {
+        type: "p",
+        children: [
+          { type: "text", text: "I’m 😭ing " },
+          { type: "strong", children: [{ type: "text", text: "👍" }] },
+          { type: "text", text: " ❤️😂 :unknown_emoji:" },
+        ],
+      },
+    ]);
+    expect(parseMarkdown(":sob:")).toEqual([p(":sob:")]);
+  });
+
+  test("chat shortcodes preserve escapes, code, and link destinations", () => {
+    const input = "\\:sob: `:sob:` [:sob:](https://example.org/:sob:)\n\n```\n:sob:\n```";
+    expect(parseMarkdown(input, { emojiShortcodes: true })).toEqual([
+      {
+        type: "p",
+        children: [
+          { type: "text", text: ":sob: " },
+          { type: "code", text: ":sob:" },
+          { type: "text", text: " " },
+          { type: "link", href: "https://example.org/:sob:", children: [{ type: "text", text: "😭" }] },
+        ],
+      },
+      { type: "pre", text: ":sob:" },
+    ]);
+  });
+
   test("plain text becomes paragraphs split on blank lines", () => {
     const blocks = parseMarkdown("one\nline\n\ntwo");
     expect(blocks).toEqual([

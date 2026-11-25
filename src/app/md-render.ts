@@ -5,7 +5,7 @@ import type { Block, ListItem } from "./md-blocks";
 import type { Inline } from "./md-inline";
 import { baseName, lineLabel } from "./file-ref";
 import { icon, iconButton } from "./icons";
-import { parseMarkdown } from "./md-blocks";
+import { type MarkdownOptions, parseMarkdown } from "./md-blocks";
 
 const plainText = (inlines: Inline[]): string | null =>
   inlines.every((n) => n.type === "text" || n.type === "code")
@@ -222,8 +222,8 @@ function renderBlocks(blocks: Block[], parent: HTMLElement): void {
   }
 }
 
-export function renderMarkdown(text: string): HTMLElement {
+export function renderMarkdown(text: string, options?: MarkdownOptions): HTMLElement {
   const root = document.createElement("div");
-  renderBlocks(parseMarkdown(text), root);
+  renderBlocks(parseMarkdown(text, options), root);
   return root;
 }

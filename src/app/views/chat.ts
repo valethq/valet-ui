@@ -381,7 +381,8 @@ function renderPart(part: Part, ui: PartUi): HTMLElement | null {
   if (d.type === "tool-call" && isSubagentCall(d)) return subagentCard(part, d, ui.subs.get(part.id) ?? []);
   switch (d.type) {
     case "text":
-      return renderMarkdown(d.text);
+      // spec-gap: chat shortcode expansion is a display convention.
+      return renderMarkdown(d.text, { emojiShortcodes: true });
     case "reasoning": {
       const row = partRow(
         part,

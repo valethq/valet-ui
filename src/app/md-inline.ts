@@ -2,6 +2,7 @@
 // images (rendered as links, never loaded), footnote refs, escapes, entities
 // and CommonMark-style emphasis. Pure: it returns a tree and builds no markup.
 
+import { emoji } from "./emoji";
 import { type FileRef, fileRef, withLabelLines } from "./file-ref";
 
 export type Inline =
@@ -25,9 +26,15 @@ export interface MdContext {
   refs: Map<string, LinkDef>;
   fnDefs: Map<string, string[]>;
   fnOrder: string[];
+  emojiShortcodes: boolean;
 }
 
-export const newContext = (): MdContext => ({ refs: new Map(), fnDefs: new Map(), fnOrder: [] });
+export const newContext = (emojiShortcodes: boolean): MdContext => ({
+  refs: new Map(),
+  fnDefs: new Map(),
+  fnOrder: [],
+  emojiShortcodes,
+});
 export const normLabel = (s: string): string => s.trim().replace(/\s+/g, " ").toLowerCase();
 
 interface Delim {
@@ -44,6 +51,7 @@ const MAX_DEST = 4096;
 const MAX_TITLE = 1000;
 const MAX_PAREN_DEPTH = 32;
 const MAX_DEPTH = 6;
+const EMOJI_RE = /:([a-z0-9_+-]{1,64}):/y;
 const SAFE_HREF = /^(https?:\/\/|mailto:)/i;
 const PUNCT = /[\p{P}\p{S}]/u;
 const SPACE = /\s/u;
@@ -516,6 +524,16 @@ export function parseInline(s: string, ctx: MdContext, noLinks = false, depth = 
       if (url !== null && url !== "") {
         push(linkNode(href, undefined, [{ type: "text", text: url }]));
         i += url.length;
+        continue;
+      }
+    }
+
+    if (c === ":" && ctx.emojiShortcodes) {
+      const shortcode = sticky(EMOJI_RE, s, i);
+      const glyph = shortcode?.[1] === undefined ? undefined : emoji.get(shortcode[1]);
+      if (shortcode !== null && glyph !== undefined) {
+        buf.push(glyph);
+        i += shortcode[0].length;
         continue;
       }
     }

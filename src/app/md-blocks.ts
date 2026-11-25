@@ -361,8 +361,12 @@ function prepare(text: string, ctx: MdContext): string[] {
   return out;
 }
 
-export function parseMarkdown(text: string): Block[] {
-  const ctx = newContext();
+export interface MarkdownOptions {
+  emojiShortcodes?: boolean;
+}
+
+export function parseMarkdown(text: string, options: MarkdownOptions = {}): Block[] {
+  const ctx = newContext(options.emojiShortcodes === true);
   const blocks = parseBlocks(prepare(text, ctx), ctx, 0);
   const notes: Block[][] = [];
   for (let k = 0; k < ctx.fnOrder.length; k++) {
