@@ -169,6 +169,8 @@ button.chip:active:not(:disabled) { transform: none; }
   animation: focus-in var(--dur-focus-sm) var(--ease-focus);
 }
 .menu.end { left: auto; right: 0; transform-origin: calc(100% - 18px) bottom; }
+.session-actions .menu { left: auto; right: 0; transform-origin: calc(100% - 18px) bottom; }
+.session-actions .menu.below { transform-origin: calc(100% - 18px) top; }
 .menu.below { --fx-from: translateY(-6px) scale(.97); bottom: auto; top: calc(100% + 8px); transform-origin: 18px top; }
 .menu.below.end { transform-origin: calc(100% - 18px) top; }
 .menu.searchable {
