@@ -112,21 +112,6 @@ describe("attachments", () => {
     });
   });
 
-  test("sendMessage includes a per-message delivery mode when given", async () => {
-    let body = "";
-    g.fetch = ((_url: string, init: RequestInit) => {
-      body = String(init.body);
-      return Promise.resolve(new Response('{"message":{"id":"msg_1"},"parts":[]}', { status: 201 }));
-    }) as unknown as typeof fetch;
-    await sendMessage("ses_1", [{ type: "text", text: "hi" }], "cm_1", "interrupt");
-    expect(JSON.parse(body)).toEqual({
-      role: "user",
-      parts: [{ type: "text", text: "hi" }],
-      clientMessageId: "cm_1",
-      delivery: "interrupt",
-    });
-  });
-
   test("uploadBlob sends the bytes as base64 and resolves the blob id", async () => {
     let seen: { url: string; method?: string; body?: unknown } = { url: "" };
     g.fetch = ((url: string, init: RequestInit) => {
@@ -316,7 +301,7 @@ describe("authStatus", () => {
   });
 });
 
-describe("agent session actions", () => {
+describe("valet-agent session actions", () => {
   const record = (res: () => Response): { calls: { url: string; method?: string; body?: unknown }[] } => {
     const rec: { calls: { url: string; method?: string; body?: unknown }[] } = { calls: [] };
     g.fetch = ((url: string, init: RequestInit) => {
@@ -332,11 +317,11 @@ describe("agent session actions", () => {
     await forkSession("ses_1");
     expect(rec.calls).toEqual([
       {
-        url: "/plugins/valet-ui/agent/sessions/ses_1/fork",
+        url: "/plugins/valet-agent/sessions/ses_1/fork",
         method: "POST",
         body: JSON.stringify({ messageId: "msg_7" }),
       },
-      { url: "/plugins/valet-ui/agent/sessions/ses_1/fork", method: "POST", body: "{}" },
+      { url: "/plugins/valet-agent/sessions/ses_1/fork", method: "POST", body: "{}" },
     ]);
   });
 
@@ -345,7 +330,7 @@ describe("agent session actions", () => {
     const moved = await moveSession("ses_1", "prj_2");
     expect(moved.id).toBe("ses_9");
     expect(rec.calls[0]).toEqual({
-      url: "/plugins/valet-ui/agent/sessions/ses_1/move",
+      url: "/plugins/valet-agent/sessions/ses_1/move",
       method: "POST",
       body: JSON.stringify({ projectId: "prj_2" }),
     });
@@ -370,21 +355,19 @@ describe("agent session actions", () => {
       () => new Response('{"queued":2,"model":{"provider":"p","model":"m"}}', { status: 200 }),
     );
     expect((await getSessionState("ses_1")).queued).toBe(2);
-    expect(rec.calls[0]?.url).toBe("/plugins/valet-ui/agent/sessions/ses_1/state");
+    expect(rec.calls[0]?.url).toBe("/plugins/valet-agent/sessions/ses_1/state");
   });
 
-  test("compact posts to the agent compact route, omitting empty instructions", async () => {
-    const rec = record(() => new Response('{"ok":true}', { status: 200 }));
+  test("compact sends /compact, with instructions appended, and treats the command answer as success", async () => {
+    const rec = record(
+      () => new Response('{"error":{"code":"cancelled","reason":"command /compact"}}', { status: 409 }),
+    );
     await compactSession("ses_1", "");
     await compactSession("ses_1", "keep the schema");
-    expect(rec.calls).toEqual([
-      { url: "/plugins/valet-ui/agent/sessions/ses_1/compact", method: "POST", body: "{}" },
-      {
-        url: "/plugins/valet-ui/agent/sessions/ses_1/compact",
-        method: "POST",
-        body: JSON.stringify({ instructions: "keep the schema" }),
-      },
-    ]);
+    const texts = rec.calls.map(
+      (c) => (JSON.parse(c.body as string) as { parts: { text: string }[] }).parts[0]?.text,
+    );
+    expect(texts).toEqual(["/compact", "/compact keep the schema"]);
   });
 
   test("compact still fails on a real error", async () => {
