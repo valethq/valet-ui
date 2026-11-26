@@ -36,7 +36,7 @@ export interface SessionSettings {
   [key: string]: unknown;
 }
 
-/** GET /plugins/valet-ui/agent/sessions/:id/state. */
+/** GET /plugins/valet-agent/sessions/:id/state. */
 export interface SessionState {
   activeRunId?: string;
   queued: number;
@@ -130,7 +130,7 @@ export interface ModelInfo {
   hidden?: boolean;
   /** Catalog: false → omitted from the picker. */
   show?: boolean;
-  /** Added by hand in the agent provider's models config. */
+  /** Added by hand in valet-agent's models config. */
   custom?: boolean;
   /** Catalog: what the provider lists, before overrides; absent for custom models. */
   base?: ModelInfo;

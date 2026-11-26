@@ -1,6 +1,6 @@
 import type { ModelInfo, ProviderModels } from "./types";
 
-/** One row written to the agent provider's `models` config. */
+/** One row written to valet-agent's `models` config. */
 export interface CatalogRow {
   provider: string;
   id: string;
