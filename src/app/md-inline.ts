@@ -2,6 +2,7 @@
 // images (rendered as links, never loaded), footnote refs, escapes, entities
 // and CommonMark-style emphasis. Pure: it returns a tree and builds no markup.
 
+import { vncRef, type VncRef } from "../vnc";
 import { emoji } from "./emoji";
 import { type FileRef, fileRef, withLabelLines } from "./file-ref";
 
@@ -14,6 +15,8 @@ export type Inline =
   | { type: "link"; href: string; title?: string; children: Inline[] }
   /** A link to a local file; `auto` when its text just repeats the destination. */
   | { type: "file"; ref: FileRef; auto: boolean; children: Inline[] }
+  /** A loopback live stream link; `auto` when its text just repeats the destination. */
+  | { type: "stream"; ref: VncRef; auto: boolean; children: Inline[] }
   | { type: "footnote"; n: number };
 
 export interface LinkDef {
@@ -59,6 +62,7 @@ const ESCAPABLE = /[!-/:-@[-`{-~]/;
 const isWord = (ch: string | undefined): boolean => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 
 const URL_RE = /https?:\/\/[^\s<>"']+/iy;
+const VNC_URL_RE = /vnc:\/\/[^\s<>"']+/iy;
 const WWW_RE = /www\.[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::\d+)?(?:[/?#][^\s<>"']*)?/iy;
 const EMAIL_RE = /[A-Za-z0-9._+-]+@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/y;
 const ANGLE_URL = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*)>/y;
@@ -354,6 +358,13 @@ const linkNode = (href: string, title: string | undefined, children: Inline[]): 
   children,
 });
 
+const streamNode = (ref: VncRef, auto: boolean, children: Inline[]): Inline => ({
+  type: "stream",
+  ref,
+  auto,
+  children,
+});
+
 /** `noLinks` is set inside link text so links never nest. */
 export function parseInline(s: string, ctx: MdContext, noLinks = false, depth = 0): Inline[] {
   if (depth > MAX_DEPTH) return s === "" ? [] : [{ type: "text", text: s }];
@@ -460,18 +471,22 @@ export function parseInline(s: string, ctx: MdContext, noLinks = false, depth = 
       const link = matchLink(s, open, bracketPairs().get(open), ctx);
       if (link !== null) {
         const href = link.href.trim();
-        const file = SAFE_HREF.test(href) ? null : fileRef(href);
-        if (SAFE_HREF.test(href) || file !== null) {
+        const safe = SAFE_HREF.test(href);
+        const stream = safe ? undefined : vncRef(href);
+        const file = safe || stream !== undefined ? null : fileRef(href);
+        if (safe || stream !== undefined || file !== null) {
           const label = s.slice(open + 1, link.close);
           const kids = parseInline(label, ctx, true, depth + 1);
           const shown: Inline[] = kids.length > 0 || !image ? kids : [{ type: "text", text: "image" }];
+          const bare = label.trim().replace(/^`+|`+$/g, "");
+          const auto = bare === "" || bare === href;
           if (image && noLinks) push(...shown);
+          else if (stream !== undefined) push(streamNode(stream, auto, shown));
           else if (file !== null) {
-            const bare = label.trim().replace(/^`+|`+$/g, "");
             push({
               type: "file",
               ref: withLabelLines(file, bare),
-              auto: bare === "" || bare === href,
+              auto,
               children: shown,
             });
           } else push(linkNode(href, link.title, shown));
@@ -488,7 +503,9 @@ export function parseInline(s: string, ctx: MdContext, noLinks = false, depth = 
       const mail = m === null ? sticky(ANGLE_MAIL, s, i) : null;
       if (m !== null) {
         const href = m[1] as string;
+        const stream = vncRef(href);
         if (SAFE_HREF.test(href)) push(linkNode(href, undefined, [{ type: "text", text: href }]));
+        else if (stream !== undefined) push(streamNode(stream, true, [{ type: "text", text: href }]));
         else buf.push(m[0]);
         i += m[0].length;
         continue;
@@ -507,6 +524,9 @@ export function parseInline(s: string, ctx: MdContext, noLinks = false, depth = 
       if (c === "h" || c === "H") {
         const m = sticky(URL_RE, s, i);
         if (m !== null) href = url = trimUrl(m[0]);
+      } else if (c === "v" || c === "V") {
+        const m = sticky(VNC_URL_RE, s, i);
+        if (m !== null) href = url = trimUrl(m[0]);
       } else if (c === "w" || c === "W") {
         const m = sticky(WWW_RE, s, i);
         if (m !== null) {
@@ -522,7 +542,9 @@ export function parseInline(s: string, ctx: MdContext, noLinks = false, depth = 
         }
       }
       if (url !== null && url !== "") {
-        push(linkNode(href, undefined, [{ type: "text", text: url }]));
+        const stream = vncRef(href);
+        if (stream !== undefined) push(streamNode(stream, true, [{ type: "text", text: url }]));
+        else push(linkNode(href, undefined, [{ type: "text", text: url }]));
         i += url.length;
         continue;
       }

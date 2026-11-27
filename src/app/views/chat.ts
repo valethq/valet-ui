@@ -1,3 +1,4 @@
+import { vncTarget, type VncRef } from "../../vnc";
 import { clear, el, morph, reconcile, sameChildren, setShown } from "../dom";
 import { chipButton, icon, iconButton, type IconName } from "../icons";
 import { logoFor, logoMark, logoMarks, logosFor, harnessMark } from "../logos";
@@ -58,6 +59,7 @@ export interface ChatCallbacks {
   onLoadOlder(): void;
   /** A file chip was clicked; resolves false when the file does not exist. */
   onOpenFile(ref: FileRef): Promise<boolean>;
+  onOpenStream?(ref: VncRef): void;
   /** An image was clicked: show it, with the rest of its message's images. */
   onOpenImages(items: FileData[], index: number, source: string): void;
 }
@@ -966,11 +968,23 @@ export function createChat(root: HTMLElement, cb: ChatCallbacks): ChatHandle {
       .then((found) => chip.classList.toggle("missing", !found));
     return true;
   };
+  const streamClick = (ev: Event): boolean => {
+    const chip = (ev.target as Element | null)?.closest<HTMLElement>(".stream-link");
+    if (chip === null || chip === undefined || chip.closest(".msg") === null) return false;
+    const ref = vncTarget(chip.getAttribute("data-stream-host"), chip.getAttribute("data-stream-port"));
+    if (ref === undefined) return false;
+    ev.preventDefault();
+    cb.onOpenStream?.(ref);
+    return true;
+  };
   messages.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter" || ev.key === " ") fileClick(ev);
+    if (ev.key === "Enter" || ev.key === " ") {
+      if (fileClick(ev)) return;
+      streamClick(ev);
+    }
   });
   messages.addEventListener("click", (ev) => {
-    if (fileClick(ev)) return;
+    if (fileClick(ev) || streamClick(ev)) return;
     const open = (ev.target as Element | null)?.closest<HTMLElement>(".sub-row")?.dataset.openSession;
     if (open !== undefined) {
       cb.onOpenSession(open);

@@ -624,6 +624,31 @@ button.chip:active:not(:disabled) { transform: none; }
 .file-link:hover { background: var(--tint-strong); border-color: var(--strong); }
 .file-link:focus-visible { outline-offset: 1px; }
 .msg .bubble a.file-link.missing { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--strong); }
+.stream-link {
+  display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; vertical-align: baseline;
+  padding: 0 7px 0 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--raised);
+  color: var(--text); text-decoration: none; font-size: .95em; line-height: 1.5; cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+.msg .bubble a.stream-link { color: var(--text); }
+.stream-link.mono { font-family: var(--mono); font-size: .86em; }
+.stream-link .icon { width: 12px; height: 12px; align-self: center; color: var(--faint); }
+.stream-link > span:not(.icon) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stream-link:hover { background: var(--tint-strong); border-color: var(--strong); }
+.stream-link:focus-visible { outline-offset: 1px; }
+.stream-link[data-probe="checking"] .icon { animation: pulse 1.4s ease-in-out infinite; }
+.stream-link[data-probe="home"] {
+  color: color-mix(in srgb, var(--ok) 38%, var(--text));
+  border-color: color-mix(in srgb, var(--ok) 30%, var(--border));
+  background: color-mix(in srgb, var(--ok) 7%, var(--raised));
+}
+.stream-link[data-probe="home"] .icon { color: color-mix(in srgb, var(--ok) 68%, var(--muted)); }
+.stream-link[data-probe="away"] {
+  color: color-mix(in srgb, var(--danger) 30%, var(--muted));
+  border-color: color-mix(in srgb, var(--danger) 24%, var(--border));
+  background: color-mix(in srgb, var(--danger) 5%, var(--raised));
+}
+.stream-link[data-probe="away"] .icon { color: color-mix(in srgb, var(--danger) 58%, var(--muted)); }
 .msg .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); margin: 5px 4px 0; }
 .msg .meta .logo { width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
@@ -1616,6 +1641,14 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .fv-status:empty { display: none; }
 .fv-video { display: block; max-width: 100%; max-height: calc(100cqh - 44px); border-radius: 10px; background: #000; }
 .fv-audio { width: min(100%, 420px); }
+.fv-body:has(> .fv-vnc) { overflow: hidden; }
+.fv-vnc { position: relative; width: 100%; height: 100%; min-height: 100%; overflow: hidden; background: #090909; }
+.fv-vnc-target { position: absolute; inset: 0; }
+.fv-vnc-note {
+  position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; padding: 24px;
+  color: #d0d0d0; background: rgba(9, 9, 9, .72); font-size: 13px; text-align: center;
+}
+.fv-vnc-note[hidden] { display: none; }
 .fv-empty { display: grid; place-items: center; height: 100%; padding: 30px; text-align: center; color: var(--faint); font-size: 13px; }
 .fv-empty b { display: block; margin-bottom: 4px; color: var(--text); font-weight: 600; }
 .fv-loading { animation: pulse 1.4s ease-in-out infinite; }

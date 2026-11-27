@@ -1,4 +1,5 @@
 /// <reference lib="dom" />
+import { vncUrl } from "../vnc";
 import * as api from "./api";
 import { createPageLoader, type Loaded } from "./chat-pages";
 import { el, leave } from "./dom";
@@ -1061,6 +1062,11 @@ async function startApp(): Promise<void> {
     onOpenFile: async (ref) => {
       const sessionId = app.view?.session.id;
       return sessionId === undefined ? true : (viewer?.open({ sessionId, ...ref }) ?? true);
+    },
+    onOpenStream: (ref) => {
+      const sessionId = app.view?.session.id;
+      if (sessionId === undefined) return;
+      void viewer?.open({ kind: "stream", stream: ref, sessionId, path: vncUrl(ref) });
     },
     onOpenImages: (items, index, source) => {
       const sessionId = app.view?.session.id;

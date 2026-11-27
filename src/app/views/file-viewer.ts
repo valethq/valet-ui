@@ -1,3 +1,4 @@
+import { vncKey, vncLabel, vncUrl, type VncRef } from "../../vnc";
 import * as api from "../api";
 import { el } from "../dom";
 import { baseName, type FileRef, joinPath } from "../file-ref";
@@ -6,6 +7,7 @@ import { type IconName, icon, iconButton } from "../icons";
 import { renderMarkdown } from "../markdown";
 import { type ImageStage, imageStage } from "./image-stage";
 import { copyImage, copyImageUrl, type FileData, saveBlob, saveUrl } from "./media";
+import { createVncView, type StreamView } from "../stream-view";
 
 /** A message's images, shown one at a time in a single tab. */
 export interface Gallery {
@@ -17,15 +19,28 @@ export interface Gallery {
 
 /** A file to show, resolved against the project of `sessionId`, or one of a chat's images. */
 export interface FileTarget extends FileRef {
+  kind?: "file";
   sessionId: string;
   gallery?: Gallery;
 }
+
+export interface StreamTarget {
+  kind: "stream";
+  stream: VncRef;
+  sessionId: string;
+  path: string;
+  line?: undefined;
+  end?: undefined;
+  gallery?: undefined;
+}
+
+export type ViewerTarget = FileTarget | StreamTarget;
 
 export interface FileViewer {
   /** The panel and its narrow-screen scrim, to mount inside the app root. */
   readonly nodes: HTMLElement[];
   /** Resolves false when the file does not exist. */
-  open(target: FileTarget): Promise<boolean>;
+  open(target: ViewerTarget): Promise<boolean>;
   close(): void;
   /** Shows only the tabs opened in this session, and the panel only if it was open there. */
   setSession(sessionId: string | null): void;
@@ -33,7 +48,7 @@ export interface FileViewer {
 
 interface Tab {
   key: string;
-  target: FileTarget;
+  target: ViewerTarget;
   button: HTMLButtonElement;
   file?: api.ProjectFile;
   error?: string;
@@ -43,6 +58,8 @@ interface Tab {
   /** An image's natural size, once it has loaded. */
   dims?: string;
   stage?: ImageStage;
+  stream?: StreamView;
+  streamStatus?: string;
 }
 
 const WIDTH_KEY = "valet-ui.viewer-width";
@@ -51,8 +68,12 @@ const WIDTH_DEFAULT = 560;
 const WIDTH_MIN = 340;
 
 const isMarkdown = (path: string): boolean => langFor(path)?.name === "Markdown";
-const keyOf = (t: FileTarget): string =>
-  `${t.sessionId}\n${t.gallery === undefined ? t.path : `gallery:${t.gallery.items.map((i) => i.blobId).join(",")}`}`;
+const isStream = (target: ViewerTarget): target is StreamTarget => target.kind === "stream";
+const keyOf = (t: ViewerTarget): string =>
+  isStream(t)
+    ? `${t.sessionId}\nstream:${vncKey(t.stream)}`
+    : `${t.sessionId}\n${t.gallery === undefined ? t.path : `gallery:${t.gallery.items.map((i) => i.blobId).join(",")}`}`;
+const targetName = (t: ViewerTarget): string => (isStream(t) ? vncLabel(t.stream) : baseName(t.path));
 const imageAt = (g: Gallery): FileData => g.items[g.index] as FileData;
 const dirOf = (rel: string): string => rel.split("/").slice(0, -1).join("/");
 
@@ -174,6 +195,28 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
   applyWrap();
 
   function renderHead(tab: Tab): void {
+    if (isStream(tab.target)) {
+      path.replaceChildren(
+        el("span", { class: "fv-dir", text: "Live stream/" }),
+        el("b", { text: vncLabel(tab.target.stream) }),
+      );
+      path.title = vncUrl(tab.target.stream);
+      meta.textContent = "VNC · view only";
+      seg.hidden = true;
+      nav.hidden = true;
+      status.textContent = tab.streamStatus ?? "Connecting…";
+      wrapBtn.hidden = true;
+      copyImgBtn.hidden = true;
+      saveBtn.hidden = true;
+      copyBtn.hidden = false;
+      copyBtn.disabled = false;
+      copyBtn.title = "Copy stream link";
+      copyBtn.setAttribute("aria-label", "Copy stream link");
+      renderZoom(tab);
+      return;
+    }
+    copyBtn.title = "Copy path";
+    copyBtn.setAttribute("aria-label", "Copy path");
     const file = tab.file;
     const gallery = tab.target.gallery;
     const rel = file?.rel ?? tab.target.path;
@@ -255,7 +298,7 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
   /** A gallery tab's file record for its current image (blobs have no project path or size). */
   function galleryFile(tab: Tab, g: Gallery): void {
     const it = imageAt(g);
-    tab.target = { ...tab.target, path: it.name, gallery: g };
+    tab.target = { path: it.name, sessionId: tab.target.sessionId, gallery: g };
     tab.file = { path: it.name, rel: it.name, root: g.source, size: 0, kind: "image", mime: it.mime };
     tab.dims = undefined;
     tab.error = undefined;
@@ -273,7 +316,22 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     tab.stage?.img.classList.add(dir);
   }
 
+  function closeStream(tab: Tab): void {
+    tab.stream?.close();
+    tab.stream = undefined;
+    tab.streamStatus = undefined;
+  }
+
   function buildBody(tab: Tab): HTMLElement {
+    closeStream(tab);
+    if (isStream(tab.target)) {
+      const view = createVncView(tab.target.stream, (state) => {
+        tab.streamStatus = state.text;
+        if (active === tab) renderHead(tab);
+      });
+      tab.stream = view;
+      return view.node;
+    }
     if (tab.file === undefined) {
       return el(
         "div",
@@ -338,6 +396,12 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
 
   function show(tab: Tab, fresh = false): void {
     active = tab;
+    for (const other of tabs) {
+      if (other !== tab && other.stream !== undefined) {
+        closeStream(other);
+        other.body = undefined;
+      }
+    }
     stateOf(tab.target.sessionId).active = tab.key;
     for (const t of tabs) {
       t.button.classList.toggle("on", t === tab);
@@ -355,6 +419,7 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
   function removeTab(tab: Tab, settle = true): void {
     const at = tabs.indexOf(tab);
     if (at < 0) return;
+    closeStream(tab);
     tabs.splice(at, 1);
     tab.button.remove();
     if (!settle || tab.target.sessionId !== session) return;
@@ -365,7 +430,7 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     } else if (active === tab) show(left.find((t) => tabs.indexOf(t) >= at) ?? (left.at(-1) as Tab));
   }
 
-  function addTab(target: FileTarget): Tab {
+  function addTab(target: ViewerTarget): Tab {
     const x = el(
       "span",
       { class: "fv-tab-x", role: "button", "aria-label": "Close tab", title: "Close tab" },
@@ -373,8 +438,13 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     );
     const button = el(
       "button",
-      { class: "fv-tab", type: "button", role: "tab", title: target.path },
-      el("span", { class: "fv-tab-name", text: baseName(target.path) }),
+      {
+        class: "fv-tab",
+        type: "button",
+        role: "tab",
+        title: isStream(target) ? vncUrl(target.stream) : target.path,
+      },
+      el("span", { class: "fv-tab-name", text: targetName(target) }),
       x,
     );
     const tab: Tab = {
@@ -405,6 +475,10 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
 
   function hide(): void {
     if (!isOpen) return;
+    if (active?.stream !== undefined) {
+      closeStream(active);
+      active.body = undefined;
+    }
     isOpen = false;
     panel.hidden = true;
     setOpen(false);
@@ -432,10 +506,17 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     show(tab, tab.target.gallery !== undefined);
   }
 
-  async function open(target: FileTarget): Promise<boolean> {
+  async function open(target: ViewerTarget): Promise<boolean> {
     setSession(target.sessionId);
     stateOf(target.sessionId).open = true;
     reveal();
+    if (isStream(target)) {
+      const tab = tabs.find((t) => t.key === keyOf(target)) ?? addTab(target);
+      tab.target = target;
+      show(tab);
+      panel.focus({ preventScroll: true });
+      return true;
+    }
     if (target.gallery !== undefined) {
       const tab = tabs.find((t) => t.key === keyOf(target)) ?? addTab(target);
       galleryFile(tab, target.gallery);
@@ -545,9 +626,10 @@ export function createFileViewer(app: HTMLElement, setOpen: (open: boolean) => v
     applyWrap();
   });
   copyBtn.addEventListener("click", () => {
-    const file = active?.file;
-    if (file === undefined) return;
-    navigator.clipboard.writeText(file.path).then(
+    if (active === null) return;
+    const text = isStream(active.target) ? vncUrl(active.target.stream) : active.file?.path;
+    if (text === undefined) return;
+    navigator.clipboard.writeText(text).then(
       () => flash(copyBtn, "link", true),
       () => flash(copyBtn, "link", false),
     );

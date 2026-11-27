@@ -1,11 +1,13 @@
 // DOM builder for the markdown tree. Everything goes through textContent, so
 // untrusted text can never become markup.
 
+import { vncLabel } from "../vnc";
 import type { Block, ListItem } from "./md-blocks";
 import type { Inline } from "./md-inline";
 import { baseName, lineLabel } from "./file-ref";
 import { icon, iconButton } from "./icons";
 import { type MarkdownOptions, parseMarkdown } from "./md-blocks";
+import { probeStream, streamProbe, streamTitle } from "./stream-probe";
 
 const plainText = (inlines: Inline[]): string | null =>
   inlines.every((n) => n.type === "text" || n.type === "code")
@@ -44,6 +46,29 @@ function renderFile(inline: Extract<Inline, { type: "file" }>, parent: HTMLEleme
   parent.append(a);
 }
 
+/** A live-stream chip; its probe state is a data attribute so a re-render can restore it. */
+function renderStream(inline: Extract<Inline, { type: "stream" }>, parent: HTMLElement): void {
+  const { ref } = inline;
+  const state = streamProbe(ref);
+  const a = document.createElement("a");
+  a.setAttribute("role", "button");
+  a.setAttribute("tabindex", "0");
+  a.setAttribute("data-stream-kind", ref.kind);
+  a.setAttribute("data-stream-host", ref.host);
+  a.setAttribute("data-stream-port", String(ref.port));
+  a.setAttribute("data-probe", state);
+  a.title = streamTitle(ref, state);
+  a.append(icon("display"));
+  const plain = plainText(inline.children);
+  a.className = inline.auto || plain === null || !/\s/.test(plain) ? "stream-link mono" : "stream-link";
+  const label = document.createElement("span");
+  if (inline.auto || plain !== null) label.textContent = inline.auto ? vncLabel(ref) : (plain as string);
+  else renderInlines(inline.children, label);
+  a.append(label);
+  parent.append(a);
+  probeStream(ref);
+}
+
 function renderInlines(inlines: Inline[], parent: HTMLElement): void {
   for (const inline of inlines) {
     switch (inline.type) {
@@ -69,6 +94,9 @@ function renderInlines(inlines: Inline[], parent: HTMLElement): void {
       }
       case "file":
         renderFile(inline, parent);
+        break;
+      case "stream":
+        renderStream(inline, parent);
         break;
       case "footnote": {
         const sup = document.createElement("sup");

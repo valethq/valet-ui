@@ -40,6 +40,8 @@ function ser(n: FakeEl | FakeText): string {
     n.attrs["data-path"] && ` path=${n.attrs["data-path"]}`,
     n.attrs["data-line"] && ` line=${n.attrs["data-line"]}`,
     n.attrs["data-end"] && ` end=${n.attrs["data-end"]}`,
+    n.attrs["data-stream-host"] && ` stream-host=${n.attrs["data-stream-host"]}`,
+    n.attrs["data-stream-port"] && ` stream-port=${n.attrs["data-stream-port"]}`,
     n.style.listStyle && " bare",
   ];
   return `<${n.tag}${flags.filter(Boolean).join("")}>${n.children.map(ser).join("")}</${n.tag}>`;
@@ -101,6 +103,14 @@ describe("renderMarkdown", () => {
   test("markup in the input is only ever text", () => {
     expect(html("<img src=x onerror=alert(1)> &lt;b&gt;")).toBe(
       "<div><p><img src=x onerror=alert(1)> <b></p></div>",
+    );
+  });
+});
+
+describe("stream rendering", () => {
+  test("vnc links render as stream chips carrying their target", () => {
+    expect(html("[watch](vnc://127.0.0.1:5920)")).toBe(
+      "<div><p><a.stream-link mono title=vnc://127.0.0.1:5920 · not checked stream-host=127.0.0.1 stream-port=5920><span></span><span>watch</span></a></p></div>",
     );
   });
 });

@@ -5,6 +5,8 @@ import { type ChunkConfig, chunkConfig } from "./paging";
 import { indexHtml, bootScript } from "./page";
 import { isPagePath, pageResponse } from "./pages";
 import { isProxied, openUpstream, proxyRequest, sameOrigin, type WsData, wsHandlers } from "./proxy";
+import { probeVnc, type VncWsData, vncWsData, vncWsHandlers } from "./stream";
+import { vncFromQuery } from "./vnc";
 
 export interface UiConfig extends Partial<ChunkConfig> {
   host?: string;
@@ -18,14 +20,40 @@ export interface UiServer {
   stop(): void;
 }
 
+export type StreamAuthorizer = (req: Request) => boolean | Promise<boolean>;
+
 export interface UiServerOptions extends UiConfig {
   /** SPA entrypoint; defaults to src/app/main.ts next to this file. */
   entrypoint?: string;
+  /** Live streams fail closed when this is absent or denies the request. */
+  authorizeStream?: StreamAuthorizer;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 7418;
 const DEFAULT_CORE_URL = "http://127.0.0.1:7417";
+
+type SocketData = WsData | VncWsData;
+const controlSocket = (ws: Bun.ServerWebSocket<SocketData>) => ws as unknown as Bun.ServerWebSocket<WsData>;
+const streamSocket = (ws: Bun.ServerWebSocket<SocketData>) => ws as unknown as Bun.ServerWebSocket<VncWsData>;
+
+const socketHandlers: Bun.WebSocketHandler<SocketData> = {
+  open(ws) {
+    if (ws.data.kind === "vnc") return vncWsHandlers.open?.(streamSocket(ws));
+    return wsHandlers.open?.(controlSocket(ws));
+  },
+  message(ws, frame) {
+    if (ws.data.kind === "vnc") return vncWsHandlers.message?.(streamSocket(ws), frame);
+    return wsHandlers.message?.(controlSocket(ws), frame);
+  },
+  drain(ws) {
+    if (ws.data.kind === "vnc") return vncWsHandlers.drain?.(streamSocket(ws));
+  },
+  close(ws, code, reason) {
+    if (ws.data.kind === "vnc") return vncWsHandlers.close?.(streamSocket(ws), code, reason);
+    return wsHandlers.close?.(controlSocket(ws), code, reason);
+  },
+};
 
 function csp(): string {
   const scriptHash = createHash("sha256").update(bootScript).digest("base64");
@@ -66,12 +94,40 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
   const headers = { "content-security-policy": csp() };
   const bundleAsset = asset("text/javascript; charset=utf-8", bundle);
 
-  const server = Bun.serve<WsData>({
+  const authorizeStream = async (req: Request): Promise<boolean> => {
+    try {
+      return opts.authorizeStream !== undefined && (await opts.authorizeStream(req));
+    } catch {
+      return false;
+    }
+  };
+
+  const server = Bun.serve<SocketData>({
     hostname: host,
     port,
-    websocket: wsHandlers,
-    fetch(req, srv) {
-      const path = new URL(req.url).pathname;
+    websocket: socketHandlers,
+    async fetch(req, srv) {
+      const url = new URL(req.url);
+      const path = url.pathname;
+      if (path === "/stream/vnc/probe") {
+        if (req.method !== "GET") return new Response("not found", { status: 404 });
+        if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
+        if (!(await authorizeStream(req)))
+          return Response.json({ error: "stream access denied" }, { status: 403 });
+        const target = vncFromQuery(url.searchParams);
+        if (target === undefined) return Response.json({ error: "invalid VNC target" }, { status: 400 });
+        return Response.json(await probeVnc(target), { headers: { "cache-control": "no-store" } });
+      }
+      if (path === "/stream/vnc") {
+        if (req.method !== "GET") return new Response("not found", { status: 404 });
+        if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
+        if (!(await authorizeStream(req)))
+          return Response.json({ error: "stream access denied" }, { status: 403 });
+        const target = vncFromQuery(url.searchParams);
+        if (target === undefined) return Response.json({ error: "invalid VNC target" }, { status: 400 });
+        const upgraded = srv.upgrade(req, { data: vncWsData(target) });
+        return upgraded ? undefined : Response.json({ error: "websocket upgrade required" }, { status: 400 });
+      }
       if (isProxied(path)) {
         if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
         if (path !== "/ws") return proxyRequest(req, coreUrl);

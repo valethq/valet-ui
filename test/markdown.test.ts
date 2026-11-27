@@ -664,3 +664,32 @@ describe("safety and limits", () => {
     expect(inner.rows[0]).toEqual([[{ type: "code", text: "x|y" }], [link("https://x.com", "l")]]);
   });
 });
+
+describe("stream links", () => {
+  const ref = { kind: "vnc" as const, host: "127.0.0.1", port: 5920 };
+
+  test("explicit and bare vnc links become stream nodes", () => {
+    expect(parseMarkdown("[watch](vnc://127.0.0.1:5920)")[0]).toEqual({
+      type: "p",
+      children: [{ type: "stream", ref, auto: false, children: [{ type: "text", text: "watch" }] }],
+    });
+    expect(parseMarkdown("watch vnc://127.0.0.1:5920 now")[0]).toEqual({
+      type: "p",
+      children: [
+        { type: "text", text: "watch " },
+        {
+          type: "stream",
+          ref,
+          auto: true,
+          children: [{ type: "text", text: "vnc://127.0.0.1:5920" }],
+        },
+        { type: "text", text: " now" },
+      ],
+    });
+  });
+
+  test("non-loopback vnc links stay literal", () => {
+    const s = "[watch](vnc://example.com:5920)";
+    expect(parseMarkdown(s)).toEqual([{ type: "p", children: [{ type: "text", text: s }] }]);
+  });
+});

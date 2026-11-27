@@ -15,6 +15,7 @@ const DROP_REQUEST = ["host", "origin", "referer", "accept-encoding", ...HOP_BY_
 type BunWebSocket = new (url: string, opts: { headers: Record<string, string> }) => WebSocket;
 
 export interface WsData {
+  kind: "control";
   upstream: WebSocket;
   pending: string[];
 }
@@ -64,7 +65,7 @@ export function openUpstream(req: Request, coreUrl: string): WsData {
   const upstream = new (WebSocket as unknown as BunWebSocket)(`${coreUrl.replace(/^http/, "ws")}/ws`, {
     headers,
   });
-  return { upstream, pending: [] };
+  return { kind: "control", upstream, pending: [] };
 }
 
 export const wsHandlers: Bun.WebSocketHandler<WsData> = {

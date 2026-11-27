@@ -13,7 +13,8 @@
         "summary": "Run plugin settings actions and save runtime subsections",
         "resource": "plugin",
         "requireVerifiedLogin": true
-      }
+      },
+      "stream.read": { "summary": "Probe and watch loopback live streams", "default": "owner" }
     }
   },
   "settings": {
