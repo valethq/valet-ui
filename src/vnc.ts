@@ -55,6 +55,23 @@ export const vncLabel = (ref: VncRef): string => `${ref.host}:${ref.port}`;
 export const vncQuery = (ref: VncRef): string =>
   new URLSearchParams({ host: ref.host, port: String(ref.port) }).toString();
 
+/** Path-addressed stream endpoints; unlike query strings, these survive WebSocket reverse proxies. */
+export const vncPath = (ref: VncRef): string => `/stream/vnc/${encodeURIComponent(ref.host)}/${ref.port}`;
+export const vncProbePath = (ref: VncRef): string => `${vncPath(ref)}/probe`;
+
 export function vncFromQuery(params: URLSearchParams): VncRef | undefined {
   return vncTarget(params.get("host"), params.get("port"));
+}
+
+export function vncFromPath(path: string): { target: VncRef; probe: boolean } | undefined {
+  const match = /^\/stream\/vnc\/([^/]+)\/([^/]+)(\/probe)?\/?$/.exec(path);
+  if (match === null) return undefined;
+  let host: string;
+  try {
+    host = decodeURIComponent(match[1] as string);
+  } catch {
+    return undefined;
+  }
+  const target = vncTarget(host, match[2]);
+  return target === undefined ? undefined : { target, probe: match[3] !== undefined };
 }

@@ -2,12 +2,13 @@ import { definePlugin } from "@valethq/sdk";
 import { registerFiles } from "./files";
 import { registerSettings } from "./settings";
 import { startUiServer, type UiConfig, type UiServer } from "./server";
-import { authorizeStreamRequest } from "./stream-auth";
+import { authorizeStreamRequest, registerStreamAuth } from "./stream-auth";
 
 export default definePlugin<UiConfig>({
   async activate(ctx) {
     registerSettings(ctx);
     registerFiles(ctx);
+    registerStreamAuth(ctx);
     const start = (config: UiConfig) =>
       startUiServer({ ...config, authorizeStream: (req) => authorizeStreamRequest(ctx, req) });
     let server: UiServer = await start(ctx.config);

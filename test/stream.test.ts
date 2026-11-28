@@ -48,7 +48,7 @@ describe("vnc stream endpoints", () => {
   });
 
   test("probe knocks and reports the RFB version when somebody is home", async () => {
-    const res = await fetch(`${ui.url}/stream/vnc/probe?host=127.0.0.1&port=${rfbPort}`);
+    const res = await fetch(`${ui.url}/stream/vnc/127.0.0.1/${rfbPort}/probe`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, version: "003.008" });
   });
@@ -73,7 +73,7 @@ describe("vnc stream endpoints", () => {
 
   test("the websocket bridges binary stream bytes after validating RFB", async () => {
     received.length = 0;
-    const ws = new WebSocket(`${ui.url.replace(/^http/, "ws")}/stream/vnc?host=127.0.0.1&port=${rfbPort}`);
+    const ws = new WebSocket(`${ui.url.replace(/^http/, "ws")}/stream/vnc/127.0.0.1/${rfbPort}`);
     const frames: Buffer[] = [];
     const closed = new Promise<number>((resolve) => {
       ws.onclose = (ev) => resolve(ev.code);

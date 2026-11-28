@@ -1,38 +1,41 @@
 import { describe, expect, test } from "bun:test";
-import type { AuthResult, PluginContext } from "@valethq/sdk";
+import type { PluginContext } from "@valethq/sdk";
 import { authorizeStreamRequest } from "../src/stream-auth";
 
-function ctxWith(auth: AuthResult | undefined, role: "owner" | "guest" = "owner"): PluginContext {
-  const principal = { id: "p1", displayName: "Owner", role };
+function ctxWith(status: number, seen: { req?: Request }): PluginContext {
   return {
-    plugin: { id: "valet-ui" },
-    log: { error: () => undefined },
-    scopes: {
-      all: (scope: string) =>
-        scope === "identity" && auth !== undefined
-          ? [{ key: "valet-auth", plugin: "valet-auth", impl: { authenticate: () => auth } }]
-          : [],
-      maybe: () => undefined,
-    },
-    store: { principals: { get: (id: string) => (id === "p1" ? principal : undefined) } },
-    acl: {
-      permission: (name: string) =>
-        name === "ui:stream.read" ? { summary: "stream", default: "owner" } : undefined,
-      credential: () => ({ active: true }),
+    log: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined },
+    http: { url: (path: string) => `http://core/plugins/valet-ui${path}` },
+    control: {
+      dispatch: async (req: Request) => {
+        seen.req = req;
+        return new Response(null, { status });
+      },
     },
   } as unknown as PluginContext;
 }
 
 describe("stream authorization", () => {
-  test("an authenticated owner may open streams", async () => {
-    const ok = await authorizeStreamRequest(ctxWith({ principalId: "p1" }), new Request("http://ui/stream"));
-    expect(ok).toBe(true);
+  test("core's permission decision is the stream decision", async () => {
+    const seen: { req?: Request } = {};
+    expect(await authorizeStreamRequest(ctxWith(200, seen), new Request("http://ui/stream"))).toBe(true);
+    expect(await authorizeStreamRequest(ctxWith(403, seen), new Request("http://ui/stream"))).toBe(false);
   });
 
-  test("anonymous and lower-role principals may not", async () => {
-    expect(await authorizeStreamRequest(ctxWith(undefined), new Request("http://ui/stream"))).toBe(false);
-    expect(
-      await authorizeStreamRequest(ctxWith({ principalId: "p1" }, "guest"), new Request("http://ui/stream")),
-    ).toBe(false);
+  test("authentication evidence is forwarded without websocket transport headers", async () => {
+    const seen: { req?: Request } = {};
+    const req = new Request("http://ui/stream", {
+      headers: {
+        cookie: "valet_session=secret",
+        authorization: "Bearer token",
+        "sec-websocket-key": "drop-me",
+        origin: "https://ui",
+      },
+    });
+    expect(await authorizeStreamRequest(ctxWith(200, seen), req)).toBe(true);
+    expect(seen.req?.headers.get("cookie")).toBe("valet_session=secret");
+    expect(seen.req?.headers.get("authorization")).toBe("Bearer token");
+    expect(seen.req?.headers.get("sec-websocket-key")).toBeNull();
+    expect(seen.req?.headers.get("origin")).toBeNull();
   });
 });

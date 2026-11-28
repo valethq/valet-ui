@@ -649,6 +649,12 @@ button.chip:active:not(:disabled) { transform: none; }
   background: color-mix(in srgb, var(--danger) 5%, var(--raised));
 }
 .stream-link[data-probe="away"] .icon { color: color-mix(in srgb, var(--danger) 58%, var(--muted)); }
+.stream-link[data-probe="error"] {
+  color: color-mix(in srgb, var(--warn) 32%, var(--muted));
+  border-color: color-mix(in srgb, var(--warn) 26%, var(--border));
+  background: color-mix(in srgb, var(--warn) 6%, var(--raised));
+}
+.stream-link[data-probe="error"] .icon { color: color-mix(in srgb, var(--warn) 62%, var(--muted)); }
 .msg .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); margin: 5px 4px 0; }
 .msg .meta .logo { width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }

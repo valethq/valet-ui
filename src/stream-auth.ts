@@ -1,32 +1,37 @@
-import { can, type AuthResult, type Caller, type PluginContext, ServiceDeniedError } from "@valethq/sdk";
+import type { PluginContext } from "@valethq/sdk";
 
-/** Authenticates the UI server's own stream endpoints exactly like a control-plane request, then checks ui:stream.read. */
+const DROP_HEADERS = new Set([
+  "host",
+  "origin",
+  "referer",
+  "content-length",
+  "connection",
+  "upgrade",
+  "sec-websocket-key",
+  "sec-websocket-version",
+  "sec-websocket-protocol",
+  "sec-websocket-extensions",
+]);
+
+/** Core identifies and permission-checks this route; the handler only runs after ui:stream.read is granted. */
+export function registerStreamAuth(ctx: PluginContext): void {
+  ctx.http.route("GET", "/stream-auth", () => Response.json({ ok: true }), { permission: "ui:stream.read" });
+}
+
+/** Authorizes the UI server's own endpoints through core rather than replicating control-plane authentication. */
 export async function authorizeStreamRequest(ctx: PluginContext, req: Request): Promise<boolean> {
-  for (const provider of ctx.scopes.all("identity")) {
-    let auth: AuthResult | undefined;
-    try {
-      auth = await provider.impl.authenticate(req);
-    } catch (error) {
-      if (error instanceof ServiceDeniedError) return false;
-      ctx.log.error("identity provider failed", { plugin: provider.plugin, error: String(error) });
-      continue;
-    }
-    if (auth === undefined) continue;
-    const principal = ctx.store.principals.get(auth.principalId);
-    if (principal === undefined) continue;
-    const caller: Caller = {
-      plugin: "core",
-      actor: {
-        principalId: principal.id,
-        role: principal.role,
-        ...(auth.tags === undefined ? {} : { tags: auth.tags }),
-        ...(auth.cap === undefined ? {} : { cap: auth.cap }),
-      },
-      authenticatedBy: provider.key,
-      ...(auth.credentialId === undefined ? {} : { credentialId: `${provider.key}:${auth.credentialId}` }),
-      ...(auth.verifiedLogin === true ? { verifiedLogin: true } : {}),
-    };
-    return can(ctx, caller, "ui:stream.read").allow;
+  const headers = new Headers();
+  for (const [name, value] of req.headers) {
+    if (!DROP_HEADERS.has(name.toLowerCase())) headers.set(name, value);
   }
-  return false;
+  try {
+    const res = await ctx.control.dispatch(
+      new Request(ctx.http.url("/stream-auth"), { method: "GET", headers }),
+    );
+    if (!res.ok) ctx.log.debug("stream authorization refused", { status: res.status });
+    return res.ok;
+  } catch (error) {
+    ctx.log.warn("stream authorization failed", { error: String(error) });
+    return false;
+  }
 }

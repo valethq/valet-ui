@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { vncKey, vncRef, vncTarget, vncUrl } from "../src/vnc";
+import { vncFromPath, vncKey, vncPath, vncProbePath, vncRef, vncTarget, vncUrl } from "../src/vnc";
 
 describe("vnc refs", () => {
   test("parses loopback vnc links and normalizes them to IPv4 loopback", () => {
@@ -22,5 +22,16 @@ describe("vnc refs", () => {
     const ref = vncRef("vnc://localhost:5920");
     expect(ref === undefined ? "" : vncKey(ref)).toBe("127.0.0.1:5920");
     expect(ref === undefined ? "" : vncUrl(ref)).toBe("vnc://127.0.0.1:5920");
+  });
+});
+
+describe("vnc stream paths", () => {
+  test("path-addressed endpoints carry the target without a query string", () => {
+    const ref = { kind: "vnc" as const, host: "127.0.0.1", port: 5920 };
+    expect(vncPath(ref)).toBe("/stream/vnc/127.0.0.1/5920");
+    expect(vncProbePath(ref)).toBe("/stream/vnc/127.0.0.1/5920/probe");
+    expect(vncFromPath(vncPath(ref))).toEqual({ target: ref, probe: false });
+    expect(vncFromPath(vncProbePath(ref))).toEqual({ target: ref, probe: true });
+    expect(vncFromPath("/stream/vnc/example.com/5920")).toBeUndefined();
   });
 });

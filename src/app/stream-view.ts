@@ -1,5 +1,5 @@
 import RFB from "@novnc/novnc";
-import { vncQuery, type VncRef } from "../vnc";
+import { vncPath, type VncRef } from "../vnc";
 import { el } from "./dom";
 
 export type StreamConnection = "connecting" | "connected" | "disconnected" | "failed";
@@ -28,7 +28,7 @@ export function createVncView(ref: VncRef, onState: (state: StreamState) => void
     onState({ connection, text });
   };
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  const url = `${scheme}://${window.location.host}/stream/vnc?${vncQuery(ref)}`;
+  const url = `${scheme}://${window.location.host}${vncPath(ref)}`;
 
   try {
     rfb = new RFB(target, url, { shared: true });

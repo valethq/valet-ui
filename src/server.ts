@@ -6,7 +6,7 @@ import { indexHtml, bootScript } from "./page";
 import { isPagePath, pageResponse } from "./pages";
 import { isProxied, openUpstream, proxyRequest, sameOrigin, type WsData, wsHandlers } from "./proxy";
 import { probeVnc, type VncWsData, vncWsData, vncWsHandlers } from "./stream";
-import { vncFromQuery } from "./vnc";
+import { vncFromPath, vncFromQuery } from "./vnc";
 
 export interface UiConfig extends Partial<ChunkConfig> {
   host?: string;
@@ -109,22 +109,16 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
     async fetch(req, srv) {
       const url = new URL(req.url);
       const path = url.pathname;
-      if (path === "/stream/vnc/probe") {
+      const routedStream = vncFromPath(path);
+      if (routedStream !== undefined || path === "/stream/vnc" || path === "/stream/vnc/probe") {
         if (req.method !== "GET") return new Response("not found", { status: 404 });
         if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
         if (!(await authorizeStream(req)))
           return Response.json({ error: "stream access denied" }, { status: 403 });
-        const target = vncFromQuery(url.searchParams);
+        const probe = routedStream?.probe ?? path === "/stream/vnc/probe";
+        const target = routedStream?.target ?? vncFromQuery(url.searchParams);
         if (target === undefined) return Response.json({ error: "invalid VNC target" }, { status: 400 });
-        return Response.json(await probeVnc(target), { headers: { "cache-control": "no-store" } });
-      }
-      if (path === "/stream/vnc") {
-        if (req.method !== "GET") return new Response("not found", { status: 404 });
-        if (!sameOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
-        if (!(await authorizeStream(req)))
-          return Response.json({ error: "stream access denied" }, { status: 403 });
-        const target = vncFromQuery(url.searchParams);
-        if (target === undefined) return Response.json({ error: "invalid VNC target" }, { status: 400 });
+        if (probe) return Response.json(await probeVnc(target), { headers: { "cache-control": "no-store" } });
         const upgraded = srv.upgrade(req, { data: vncWsData(target) });
         return upgraded ? undefined : Response.json({ error: "websocket upgrade required" }, { status: 400 });
       }

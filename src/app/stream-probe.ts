@@ -1,6 +1,6 @@
-import { vncKey, vncQuery, vncTarget, vncUrl, type VncRef } from "../vnc";
+import { vncKey, vncProbePath, vncTarget, vncUrl, type VncRef } from "../vnc";
 
-export type ProbeState = "unknown" | "checking" | "home" | "away";
+export type ProbeState = "unknown" | "checking" | "home" | "away" | "error";
 
 interface Probe {
   state: ProbeState;
@@ -26,6 +26,8 @@ function label(state: ProbeState): string {
       return "home";
     case "away":
       return "nobody home";
+    case "error":
+      return "can't tell";
     default:
       return "not checked";
   }
@@ -63,7 +65,7 @@ export function probeStream(ref: VncRef, force = false): void {
   };
   probes.set(key, probe);
   paint(ref, probe);
-  void fetch(`/stream/vnc/probe?${vncQuery(ref)}`, { credentials: "include", cache: "no-store" })
+  void fetch(vncProbePath(ref), { credentials: "include", cache: "no-store" })
     .then(async (res) => {
       const body: unknown = await res.json().catch(() => undefined);
       const error =
@@ -72,18 +74,20 @@ export function probeStream(ref: VncRef, force = false): void {
           : undefined;
       const ok =
         res.ok && typeof body === "object" && body !== null && (body as { ok?: unknown }).ok === true;
+      const state: ProbeState = ok ? "home" : res.ok ? "away" : "error";
+      const detail = error ?? (state === "error" ? `probe failed with HTTP ${res.status}` : undefined);
       const done: Probe = {
-        state: ok ? "home" : "away",
+        state,
         at: Date.now(),
         inflight: false,
-        ...(ok || error === undefined ? {} : { error }),
+        ...(detail === undefined ? {} : { error: detail }),
       };
       probes.set(key, done);
       paint(ref, done);
     })
     .catch((error: unknown) => {
       const done: Probe = {
-        state: "away",
+        state: "error",
         at: Date.now(),
         inflight: false,
         error: error instanceof Error ? error.message : "probe failed",
